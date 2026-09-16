@@ -1,0 +1,77 @@
+#!/bin/sh
+# Safe read-only descriptor capture for HP LaserJet M1522n (03f0:4517).
+# No interface claim, no control/bulk writes.
+set -eu
+
+VID=03f0
+PID=4517
+OUT=${1:-/tmp/minibox-m1522-descriptors.txt}
+TRANSPORT=${M1522_TRANSPORT:-/usr/sbin/m1522_usb_transport}
+
+umask 077
+TMP="${OUT}.tmp.$$"
+trap 'rm -f "$TMP"' EXIT INT TERM
+
+{
+    echo "MINIBOX_M1522_DESCRIPTOR_CAPTURE=1"
+    echo "EXPECTED_USB_ID=${VID}:${PID}"
+    echo "DATE_UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true)"
+    echo
+
+    found=0
+    for d in /sys/bus/usb/devices/*; do
+        [ -r "$d/idVendor" ] || continue
+        [ -r "$d/idProduct" ] || continue
+        v=$(cat "$d/idVendor" 2>/dev/null || true)
+        p=$(cat "$d/idProduct" 2>/dev/null || true)
+        [ "$v" = "$VID" ] && [ "$p" = "$PID" ] || continue
+        found=1
+        echo "SYSFS_DEVICE=$d"
+        for f in busnum devnum speed bcdDevice bDeviceClass bDeviceSubClass bDeviceProtocol manufacturer product serial; do
+            if [ -r "$d/$f" ]; then
+                printf '%s=' "$f"
+                cat "$d/$f" 2>/dev/null || true
+            fi
+        done
+        echo
+        echo "SYSFS_INTERFACES_BEGIN"
+        for i in "$d":*; do
+            [ -d "$i" ] || continue
+            printf 'INTERFACE path=%s' "$i"
+            for f in bInterfaceNumber bAlternateSetting bNumEndpoints bInterfaceClass bInterfaceSubClass bInterfaceProtocol; do
+                if [ -r "$i/$f" ]; then
+                    val=$(cat "$i/$f" 2>/dev/null || true)
+                    printf ' %s=%s' "$f" "$val"
+                fi
+            done
+            if [ -L "$i/driver" ]; then
+                printf ' driver=%s' "$(basename "$(readlink "$i/driver")")"
+            else
+                printf ' driver=none'
+            fi
+            echo
+        done
+        echo "SYSFS_INTERFACES_END"
+        echo
+    done
+
+    if [ "$found" -ne 1 ]; then
+        echo "ERROR=HP_M1522_03f0_4517_NOT_FOUND"
+        exit 4
+    fi
+
+    echo "LIBUSB_DESCRIPTORS_BEGIN"
+    if [ -x "$TRANSPORT" ]; then
+        "$TRANSPORT" descriptors
+        rc=$?
+        echo "LIBUSB_DESCRIPTORS_RC=$rc"
+    else
+        echo "ERROR=m1522_usb_transport_not_installed"
+        echo "LIBUSB_DESCRIPTORS_RC=127"
+    fi
+    echo "LIBUSB_DESCRIPTORS_END"
+} >"$TMP" 2>&1
+
+mv "$TMP" "$OUT"
+trap - EXIT INT TERM
+printf '%s\n' "$OUT"
