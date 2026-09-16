@@ -1,0 +1,57 @@
+#!/bin/sh
+# Read-only HP LaserJet M1522n USB presence/interface probe.
+# No interface claim and no USB writes.
+set -u
+
+VID=03f0
+PID=4517
+CMD=${1:-probe}
+
+find_device() {
+    for d in /sys/bus/usb/devices/*; do
+        [ -r "$d/idVendor" ] || continue
+        [ -r "$d/idProduct" ] || continue
+        v=$(cat "$d/idVendor" 2>/dev/null || true)
+        p=$(cat "$d/idProduct" 2>/dev/null || true)
+        if [ "$v" = "$VID" ] && [ "$p" = "$PID" ]; then
+            printf '%s\n' "$d"
+            return 0
+        fi
+    done
+    return 1
+}
+
+DEV=$(find_device) || {
+    [ "$CMD" = status ] && printf '{"present":false,"usb_id":"%s:%s"}\n' "$VID" "$PID"
+    exit 1
+}
+
+case "$CMD" in
+    probe)
+        exit 0
+        ;;
+    status)
+        printf '{"present":true,"usb_id":"%s:%s","sysfs":"%s"}\n' "$VID" "$PID" "$DEV"
+        ;;
+    interfaces)
+        for i in "$DEV":*; do
+            [ -d "$i" ] || continue
+            printf 'path=%s' "$i"
+            for f in bInterfaceNumber bAlternateSetting bNumEndpoints bInterfaceClass bInterfaceSubClass bInterfaceProtocol; do
+                [ -r "$i/$f" ] || continue
+                val=$(cat "$i/$f" 2>/dev/null || true)
+                printf ' %s=%s' "$f" "$val"
+            done
+            if [ -L "$i/driver" ]; then
+                printf ' driver=%s' "$(basename "$(readlink "$i/driver")")"
+            else
+                printf ' driver=none'
+            fi
+            echo
+        done
+        ;;
+    *)
+        echo "usage: $0 {probe|status|interfaces}" >&2
+        exit 64
+        ;;
+esac
