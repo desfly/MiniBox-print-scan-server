@@ -1,4 +1,4 @@
-name: Build MiniBox Build-0106 current runtime
+name: Build MiniBox Build-0107 verified scanner runtime
 on:
   workflow_dispatch:
   push:
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: minibox-web-upgrade-0106
+  group: minibox-web-upgrade-0107
   cancel-in-progress: false
 env:
   ARCHIVE: MiniBox-MFP-Firmware-Build-0104-AR9330-OPENWRT-25.12.5-CANDIDATE-BUILD-KIT.zip
@@ -29,6 +29,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential autoconf automake autopoint bison clang cmake cpio curl device-tree-compiler file flex g++ g++-multilib gawk gcc-multilib gettext git jq libelf-dev libgmp-dev libmpc-dev libmpfr-dev libncurses-dev libssl-dev libtool libzstd-dev ninja-build patch perl pkgconf python3 python3-pyelftools python3-setuptools rsync subversion swig tar unzip wget xz-utils zlib1g-dev zstd
+      - name: Test MFP runtime
+        run: |
+          ./tests/test-mfp-core.sh
+          ./tests/test_scan_contract.sh
       - name: Extract board kit
         run: |
           rm -rf extracted && mkdir extracted && unzip -q "$ARCHIVE" -d extracted
@@ -50,7 +54,7 @@ jobs:
           cp -a "$GITHUB_WORKSPACE/package/minibox-mfp" "$DEST/package/minibox-mfp"
           cp -a "$GITHUB_WORKSPACE/src" "$DEST/src"
           grep -q 'minibox-scan-diag' "$DEST/package/minibox-mfp/Makefile"
-          grep -Eq 'minibox_soapht_codec[[:space:]]*=[[:space:]]*0' "$DEST/src/minibox-scan/soapht_codec.c"
+          grep -Eq 'minibox_soapht_codec[[:space:]]*=[[:space:]]*&verified_m1522_codec' "$DEST/src/minibox-scan/soapht_codec.c"
           test ! -e "$DEST/package/minibox-mfp/files/usr/libexec/minibox-mfp/soapht-usb"
       - name: Feeds
         working-directory: openwrt-src
@@ -72,7 +76,7 @@ jobs:
         run: |
           make -j"$(nproc)" download
           make -j"$(nproc)" || make -j1 V=s
-      - name: Collect Build-0106
+      - name: Collect Build-0107
         run: |
           set -euo pipefail
           T="$OPENWRT_DIR/bin/targets/ath79/generic"; mkdir -p "$DIST_DIR"
@@ -81,12 +85,12 @@ jobs:
           test -f "$F" && test -f "$S" && test "$(stat -c%s "$F")" -le 16580608
           cp "$F" "$S" "$DIST_DIR/"
           find "$OPENWRT_DIR/bin/packages" -type f -name 'minibox-mfp*.apk' -exec cp {} "$DIST_DIR/" \;
-          printf '%s\n' 'Build-0106 current runtime-v2. Run: minibox-scan-diag ; minibox-scan-diag --claim. These diagnostics send no scan payload.' > "$DIST_DIR/READ-ME-FIRST.txt"
-          (cd "$DIST_DIR" && sha256sum ./* > BUILD-0106-SHA256SUMS.txt)
-      - name: Upload Build-0106
+          printf '%s\n' 'Build-0107 runtime-v2 with verified M1522 SOAP/HTTP/DIME scanning. Package minibox-mfp 0.3.0-r11.' > "$DIST_DIR/READ-ME-FIRST.txt"
+          (cd "$DIST_DIR" && sha256sum ./* > BUILD-0107-SHA256SUMS.txt)
+      - name: Upload Build-0107
         uses: actions/upload-artifact@v5
         with:
-          name: minibox-v1-openwrt-25.12.5-build0106-current-runtime
+          name: minibox-v1-openwrt-25.12.5-build0107-scanner-r11
           path: dist-web-upgrade/
           if-no-files-found: error
           retention-days: 30
