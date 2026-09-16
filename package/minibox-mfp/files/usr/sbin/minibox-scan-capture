@@ -1,0 +1,43 @@
+#!/bin/sh
+# Capture the USB facts needed to implement the HP M1522n scanner codec.
+# Read-only diagnostics: no vendor control transfers are guessed here.
+set -eu
+VID=03f0
+PID=4517
+OUT=${1:-/tmp/minibox-m1522-usb.txt}
+SYS=/sys/bus/usb/devices
+
+finddev() {
+  for d in "$SYS"/*; do
+    [ -r "$d/idVendor" ] || continue
+    [ -r "$d/idProduct" ] || continue
+    [ "$(cat "$d/idVendor")" = "$VID" ] || continue
+    [ "$(cat "$d/idProduct")" = "$PID" ] || continue
+    echo "$d"; return 0
+  done
+  return 1
+}
+
+D=$(finddev) || { echo "M1522 $VID:$PID not found" >&2; exit 2; }
+B=${D##*/}
+{
+  echo "# MiniBox HP M1522n USB capture"
+  echo "device=$B"
+  for f in busnum devnum speed bDeviceClass bDeviceSubClass bDeviceProtocol bNumConfigurations; do
+    [ -r "$D/$f" ] && echo "$f=$(cat "$D/$f")"
+  done
+  for I in "$SYS/$B":*; do
+    [ -d "$I" ] || continue
+    echo "[interface ${I##*:}]"
+    for f in bInterfaceNumber bAlternateSetting bNumEndpoints bInterfaceClass bInterfaceSubClass bInterfaceProtocol; do
+      [ -r "$I/$f" ] && echo "$f=$(cat "$I/$f")"
+    done
+    if [ -L "$I/driver" ]; then echo "driver=$(basename "$(readlink "$I/driver")")"; else echo "driver=none"; fi
+  done
+  if command -v lsusb >/dev/null 2>&1; then
+    echo "[lsusb-v]"
+    lsusb -d "$VID:$PID" -v 2>&1 || true
+  fi
+} >"$OUT"
+chmod 600 "$OUT"
+echo "$OUT"
