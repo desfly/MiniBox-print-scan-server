@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -10,7 +10,7 @@ define Package/minibox-mfp
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=MiniBox HP M1522n print/scan bridge
-  DEPENDS:=+libusb-1.0
+  DEPENDS:=+libusb-1.0 +avahi-utils
 endef
 
 define Package/minibox-mfp/description
