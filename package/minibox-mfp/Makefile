@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -46,6 +46,7 @@ define Package/minibox-mfp/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_capture_parser $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_scan_session $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-discovery $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-usb $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-capture $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-endpoints $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scand $(1)/usr/sbin/
