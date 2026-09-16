@@ -19,8 +19,9 @@ Do not re-prove completed layers unless a regression is detected.
 
 - Repository: `desfly/MiniBox-print-scan-server`
 - Working branch: `minibox-network-mfp-runtime-v2`
-- Verified source HEAD before tracker creation: `ba6bf53aa7ef965f0164b69cc1d968ad42610a9d`
-- HEAD message: `build: make Build-0106 consume current runtime-v2 source`
+- Current code HEAD before this tracker update: `14905aafa0900def4aed7cefd24dc8c8e0ae2630`
+- Latest code change: `scan: add offline SOAPHT transcript analyzer`
+- Canonical tracker introduced at: `88800b0b81e7fb5a5bfb4c19959c9bfa21dbe2d2`
 - Firmware line: Build-0106 / OpenWrt 25.12.5 / Gainstrong MiniBox V1.0 / AR9330
 - Runtime package physically installed on MiniBox: `minibox-mfp-0.3.0-r10.apk`
 - r10 source commit: `9cf0a79a539e47c657a240eaf6ec8dcece1e3e1f`
@@ -50,56 +51,30 @@ A real test page printed. Correct PJL/UEL close framing was proven to clear the 
 
 ### Scanner network layer
 
-From Windows, these endpoints have returned valid responses:
-
-- `http://192.168.55.250:8080/eSCL/ScannerCapabilities`
-- `http://192.168.55.250:8080/eSCL/ScannerStatus`
-
-Scanner status returned `Idle`.
-
-Therefore this layer is proven:
-
-`Windows -> Wi-Fi -> MiniBox -> eSCL :8080`
+Windows has successfully reached eSCL `ScannerCapabilities` and `ScannerStatus`; status returned `Idle`.
 
 ### Scanner USB layer
 
 M1522 scanner transport identified:
-
 - interface 0: SOAPHT `ff/02/01`
 - bulk OUT: `0x03`
 - bulk IN: `0x83`
 - interrupt IN: `0x84`
 - printer interface: interface 1, `07/01/02`
 
-Physical command `/usr/sbin/minibox-scan-diag --claim` succeeded on r10:
-
-- SOAPHT claim OK
-- SOAPHT release OK
-- no scan command/payload sent
-
-Thus userspace libusb can safely own the physical scanner interface.
+Physical `/usr/sbin/minibox-scan-diag --claim` succeeded on r10 and released safely without sending a scan payload.
 
 ## Current CI state
 
-For verified HEAD `ba6bf53aa7ef965f0164b69cc1d968ad42610a9d`, GitHub reported four workflow runs. Contract workflows observed include:
+Verified source HEAD `ba6bf53aa7ef965f0164b69cc1d968ad42610a9d` had four workflow runs; observed contract workflows were green. Build-0106 was changed there to consume current runtime-v2 source.
 
-- `MiniBox network MFP contract` — success
-- `MiniBox print scan server contract` — success
-
-Build-0106 workflow was changed at `ba6bf53` to consume the current `runtime-v2` package/src instead of stale package source.
+Documentation/tool-only commits after that do not change the installed MiniBox runtime yet.
 
 ## Current scanner blocker
 
-Real M1522 image acquisition is NOT implemented.
-
-The production code intentionally keeps:
-
-`minibox_soapht_codec = 0`
-
-This is fail-closed: no guessed/unverified HorseThief/SOAPHT scan command may be sent to the physical MFP.
+Real M1522 image acquisition is NOT implemented. Production remains intentionally fail-closed with `minibox_soapht_codec = 0`.
 
 Known old HPLIP wrapper ABI:
-
 - `bb_open`
 - `bb_close`
 - `bb_get_parameters`
@@ -111,18 +86,33 @@ Known old HPLIP wrapper ABI:
 
 Low-level command framing/bytes still require verified evidence.
 
-## Existing reverse-engineering tool
+## Reverse-engineering tooling
+
+### Capture extractor
 
 `tools/extract_soapht_usbpcap.py`
 
-Existing commit: `c1af75f6f54bbb9fde29de7ba2b8a734f21867e0`
+Filters real capture traffic for `0x03 OUT` / `0x83 IN`, writes chronological TSV and concatenated streams. It intentionally does not decode or replay unknown commands.
 
-Purpose: parse a real Windows USBPcap capture, filter SOAPHT endpoints `0x03 OUT` / `0x83 IN`, preserve chronology, and extract input/output streams.
+### Transcript analyzer — NEW
+
+`tools/analyze_soapht_transcript.py`
+
+Code commit: `14905aafa0900def4aed7cefd24dc8c8e0ae2630`
+
+It consumes the extractor TSV and, without assigning guessed protocol meanings:
+- coalesces adjacent same-direction payload transfers into exchanges
+- preserves first/last frame and transfer counts
+- emits exact per-exchange `.bin` fixtures
+- records byte lengths and SHA256
+- writes a JSON manifest for regression/codec tests
+- prints a short hex preview for inspection
+
+This creates the fixture-first path required before enabling any real SOAPHT command encoder.
 
 ## Hardware evidence still needed
 
 Capture one known-good direct USB scan from Windows with USBPcap/Wireshark:
-
 - M1522 directly connected to Windows laptop by USB
 - platen
 - one page
@@ -131,24 +121,7 @@ Capture one known-good direct USB scan from Windows with USBPcap/Wireshark:
 - capture starts before scan and stops immediately after scan
 - save `.pcapng`
 
-Then run the existing extractor and identify verified:
-
-`start_scan -> settings -> image stream -> end_page -> end_scan`
-
 Only verified protocol evidence may be used to implement/enable the SOAPHT codec.
-
-## Remaining print/discovery verification
-
-Not yet physically confirmed:
-
-- Windows automatic printer discovery after persistent mDNS fix
-- Windows automatic scanner discovery
-
-Still to improve:
-
-- normal IPP job framing/finish robustness
-- Windows IPP required attributes/compatibility
-- discovery TXT must not advertise PDF unless runtime can actually convert/accept it
 
 ## Truth table
 
@@ -157,10 +130,11 @@ Still to improve:
 - IPP endpoint: YES
 - Correct PJL/UEL close: YES
 - Persistent mDNS code: YES
-- eSCL capabilities from Windows: YES
-- eSCL status from Windows: YES (`Idle`)
+- eSCL capabilities/status from Windows: YES
 - SOAPHT interface/endpoints identified: YES
 - libusb scanner claim/release on hardware: YES
+- Capture extractor: YES
+- Offline transcript -> fixture analyzer: YES
 - Real scan movement/image: NO
 - Verified SOAPHT codec: NO
 - Automatic Windows printer discovery: NOT YET PHYSICALLY CONFIRMED
@@ -168,11 +142,9 @@ Still to improve:
 
 ## NEXT STEP
 
-1. Treat this file + current GitHub HEAD/CI as the starting point for every session.
-2. Do not create another scanner transport or redo eSCL/libusb claim work.
-3. Obtain or locate a real M1522 USB scan capture (`.pcapng`).
-4. Analyze it with `tools/extract_soapht_usbpcap.py`.
-5. Derive the SOAPHT/HorseThief codec only from captured/verified protocol evidence.
-6. Add codec tests/fixtures first, then implement `start/read_image/end_page/end_scan`.
-7. Keep fail-closed until those tests and Build CI are green.
-8. Update this tracker immediately after each completed step.
+1. Add deterministic tests for `analyze_soapht_transcript.py` using synthetic TSV data only; this tests tooling, not protocol assumptions.
+2. Wire that test into the existing contract CI so the reverse-engineering pipeline cannot silently regress.
+3. Keep `minibox_soapht_codec = 0`.
+4. Obtain real M1522 `.pcapng`, run extractor + analyzer, then commit only sanitized protocol fixtures/manifest needed for codec tests.
+5. Derive and implement `start/read_image/end_page/end_scan` only after real transcript evidence.
+6. Update this tracker after each step.
