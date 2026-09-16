@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: minibox-build-0104
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   ARCHIVE: MiniBox-MFP-Firmware-Build-0104-AR9330-OPENWRT-25.12.5-CANDIDATE-BUILD-KIT.zip
@@ -70,13 +70,22 @@ jobs:
           set -euo pipefail
           git clone --depth 1 --branch "$OPENWRT_TAG" https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
 
+      - name: Enable OpenWrt package feeds
+        shell: bash
+        working-directory: openwrt-src
+        run: |
+          set -euo pipefail
+          ./scripts/feeds update packages
+          ./scripts/feeds install -p packages libusb1 avahi
+          test -e package/feeds/packages/avahi
+
       - name: Inject board port and live MiniBox package
         shell: bash
         run: |
           set -euo pipefail
           DEST="$(realpath "$OPENWRT_DIR")"
           INJECTOR="$KIT_ROOT/scripts/inject-openwrt-tree.py"
-          reset_openwrt() { git -C "$DEST" reset --hard HEAD >/dev/null; git -C "$DEST" clean -fdx >/dev/null; }
+          reset_openwrt() { git -C "$DEST" reset --hard HEAD >/dev/null; git -C "$DEST" clean -fdx -e feeds -e package/feeds >/dev/null; }
           profile_present() { grep -Rqs 'gainstrong_minibox-v1' "$DEST/target/linux/ath79"; }
           attempt() {
             local description="$1"; shift
@@ -91,8 +100,6 @@ jobs:
           elif attempt kit "$KIT_ROOT" "$DEST"; then :
           else echo 'ERROR: board injector failed'; exit 1; fi
 
-          # IMPORTANT: firmware must use the current repository package, not
-          # the stale package embedded in the historical Build-0104 ZIP.
           rm -rf "$DEST/package/minibox-mfp"
           cp -a "$GITHUB_WORKSPACE/package/minibox-mfp" "$DEST/package/minibox-mfp"
           test -f "$DEST/package/minibox-mfp/Makefile"
@@ -125,7 +132,7 @@ jobs:
             openwrt-src/dl
             openwrt-src/staging_dir
             openwrt-src/build_dir
-          key: minibox-openwrt-v25.12.5-ath79-livepkg-v1-${{ runner.os }}
+          key: minibox-openwrt-v25.12.5-ath79-livepkg-v2-${{ runner.os }}
           restore-keys: |
             minibox-openwrt-v25.12.5-ath79-livepkg-
 
