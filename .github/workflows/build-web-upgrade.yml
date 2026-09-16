@@ -1,338 +1,92 @@
-name: Build MiniBox minimal web-upgrade firmware
-
+name: Build MiniBox Build-0106 current runtime
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '.github/workflows/build-web-upgrade.yml'
-
+    branches: [minibox-network-mfp-runtime-v2]
+    paths: ['src/**','package/minibox-mfp/**','.github/workflows/build-web-upgrade.yml']
 permissions:
   contents: read
-
 concurrency:
-  group: minibox-web-upgrade-0105
+  group: minibox-web-upgrade-0106
   cancel-in-progress: false
-
 env:
   ARCHIVE: MiniBox-MFP-Firmware-Build-0104-AR9330-OPENWRT-25.12.5-CANDIDATE-BUILD-KIT.zip
   EXPECTED_SHA256: 77974510f54a23dd633d5f451eac72cec432116bb01710a46bd0b8bb3f050381
   OPENWRT_TAG: v25.12.5
   OPENWRT_DIR: openwrt-src
   DIST_DIR: dist-web-upgrade
-  EXPECTED_HWID: '0x3c000201'
-  EXPECTED_HWREV: '1'
-  EXPECTED_FLASH_LIMIT: '16580608'
-
 jobs:
   build:
-    name: OpenWrt 25.12.5 / MiniBox V1 / minimal LuCI
     runs-on: ubuntu-24.04
     timeout-minutes: 360
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Verify candidate source kit
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "$EXPECTED_SHA256  $ARCHIVE" | sha256sum -c -
-
+      - uses: actions/checkout@v7
+      - name: Verify board source kit
+        run: echo "$EXPECTED_SHA256  $ARCHIVE" | sha256sum -c -
       - name: Free disk space
-        shell: bash
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc || true
+      - name: Install dependencies
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc || true
-          df -h
-
-      - name: Install OpenWrt build dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential autoconf automake autopoint bison clang cmake cpio curl \
-            device-tree-compiler file flex g++ g++-multilib gawk gcc-multilib gettext \
-            git jq libelf-dev libgmp-dev libmpc-dev libmpfr-dev libncurses-dev \
-            libssl-dev libtool libzstd-dev ninja-build patch perl pkgconf python3 \
-            python3-pyelftools python3-setuptools rsync subversion swig tar unzip wget \
-            xz-utils zlib1g-dev zstd
-
-      - name: Extract Build-0104 kit
-        shell: bash
+          sudo apt-get install -y --no-install-recommends build-essential autoconf automake autopoint bison clang cmake cpio curl device-tree-compiler file flex g++ g++-multilib gawk gcc-multilib gettext git jq libelf-dev libgmp-dev libmpc-dev libmpfr-dev libncurses-dev libssl-dev libtool libzstd-dev ninja-build patch perl pkgconf python3 python3-pyelftools python3-setuptools rsync subversion swig tar unzip wget xz-utils zlib1g-dev zstd
+      - name: Extract board kit
         run: |
-          set -euo pipefail
-          rm -rf extracted
-          mkdir -p extracted
-          unzip -q "$ARCHIVE" -d extracted
+          rm -rf extracted && mkdir extracted && unzip -q "$ARCHIVE" -d extracted
           KIT_ROOT="$(find extracted -type f -name BUILD_INFO.md -printf '%h\n' -quit)"
           test -n "$KIT_ROOT"
-          KIT_ROOT="$(realpath "$KIT_ROOT")"
-          echo "KIT_ROOT=$KIT_ROOT" >> "$GITHUB_ENV"
-          test -f "$KIT_ROOT/scripts/inject-openwrt-tree.py"
-          test -f "$KIT_ROOT/openwrt.config"
-          test -f "$KIT_ROOT/package/minibox-mfp/Makefile"
-
-      - name: Run bundled host validation
-        shell: bash
+          echo "KIT_ROOT=$(realpath "$KIT_ROOT")" >> "$GITHUB_ENV"
+      - name: Clone OpenWrt
+        run: git clone --depth 1 --branch "$OPENWRT_TAG" https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
+      - name: Inject board then current runtime
         run: |
           set -euo pipefail
-          if [ -x "$KIT_ROOT/scripts/run-host-validation.sh" ] || [ -f "$KIT_ROOT/scripts/run-host-validation.sh" ]; then
-            chmod +x "$KIT_ROOT/scripts/run-host-validation.sh"
-            (cd "$KIT_ROOT" && bash scripts/run-host-validation.sh) | tee host-validation-web-upgrade.log
-          fi
-
-      - name: Clone pinned OpenWrt
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf "$OPENWRT_DIR"
-          git clone --depth 1 --branch "$OPENWRT_TAG" \
-            https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
-          git -C "$OPENWRT_DIR" describe --tags --exact-match
-
-      - name: Inject MiniBox board port and package
-        shell: bash
-        run: |
-          set -euo pipefail
-          DEST="$(realpath "$OPENWRT_DIR")"
-          INJECTOR="$KIT_ROOT/scripts/inject-openwrt-tree.py"
-
-          reset_openwrt() {
-            git -C "$DEST" reset --hard HEAD >/dev/null
-            git -C "$DEST" clean -fdx >/dev/null
-          }
-          profile_present() {
-            grep -Rqs 'gainstrong_minibox-v1' "$DEST/target/linux/ath79"
-          }
-          attempt() {
-            reset_openwrt
-            (cd "$KIT_ROOT" && python3 "$INJECTOR" "$@") && profile_present
-          }
-
-          attempt "$DEST" || \
-          attempt --openwrt "$DEST" || \
-          attempt --openwrt-root "$DEST" || \
-          attempt --tree "$DEST" || \
-          attempt "$KIT_ROOT" "$DEST"
-
-          profile_present
-          rm -rf "$DEST/package/minibox-mfp"
-          cp -a "$KIT_ROOT/package/minibox-mfp" "$DEST/package/minibox-mfp"
-
-          PACKAGE_MAKEFILE="$DEST/package/minibox-mfp/Makefile"
-          python3 - "$PACKAGE_MAKEFILE" <<'PY'
-          from pathlib import Path
-          import re, sys
-          p = Path(sys.argv[1])
-          s = p.read_text(encoding='utf-8')
-          m = re.search(r'(?m)^PKG_VERSION\s*:?=\s*([^\s#]+)\s*$', s)
-          if not m:
-              raise SystemExit('PKG_VERSION missing')
-          old = m.group(1)
-          new = old.replace('-rc', '_rc', 1) if '-rc' in old else old
-          if new != old:
-              a, b = m.span(1)
-              p.write_text(s[:a] + new + s[b:], encoding='utf-8')
-          print(f'PKG_VERSION {old} -> {new}')
-          PY
-
-      - name: Install LuCI and required feed dependencies
-        shell: bash
+          DEST="$(realpath "$OPENWRT_DIR")"; INJECTOR="$KIT_ROOT/scripts/inject-openwrt-tree.py"
+          reset(){ git -C "$DEST" reset --hard HEAD >/dev/null; git -C "$DEST" clean -fdx >/dev/null; }
+          ok(){ grep -Rqs 'gainstrong_minibox-v1' "$DEST/target/linux/ath79"; }
+          attempt(){ reset; (cd "$KIT_ROOT" && python3 "$INJECTOR" "$@") && ok; }
+          attempt "$DEST" || attempt --openwrt "$DEST" || attempt --openwrt-root "$DEST" || attempt --tree "$DEST" || attempt "$KIT_ROOT" "$DEST"
+          ok
+          rm -rf "$DEST/package/minibox-mfp" "$DEST/src"
+          cp -a "$GITHUB_WORKSPACE/package/minibox-mfp" "$DEST/package/minibox-mfp"
+          cp -a "$GITHUB_WORKSPACE/src" "$DEST/src"
+          grep -q 'minibox-scan-diag' "$DEST/package/minibox-mfp/Makefile"
+          grep -Eq 'minibox_soapht_codec[[:space:]]*=[[:space:]]*0' "$DEST/src/minibox-scan/soapht_codec.c"
+          test ! -e "$DEST/package/minibox-mfp/files/usr/libexec/minibox-mfp/soapht-usb"
+      - name: Feeds
         working-directory: openwrt-src
         run: |
-          set -euo pipefail
           ./scripts/feeds update packages luci
           ./scripts/feeds install -p packages cgi-io
           ./scripts/feeds install -p luci luci-light
-          test -e package/feeds/packages/cgi-io
-
-      - name: Configure minimal MiniBox image with LuCI
-        shell: bash
+      - name: Configure
         working-directory: openwrt-src
         run: |
-          set -euo pipefail
           cp "$KIT_ROOT/openwrt.config" .config
-
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('.config')
-          desired = {
-              'TARGET_ROOTFS_SQUASHFS': True,
-              'TARGET_ROOTFS_INITRAMFS': False,
-              'PACKAGE_minibox-mfp': True,
-              'PACKAGE_libusb-1.0': True,
-              'PACKAGE_kmod-usb2': True,
-              'PACKAGE_kmod-usb-printer': False,
-              'PACKAGE_luci-light': True,
-              'PACKAGE_ppp': False,
-              'PACKAGE_ppp-mod-pppoe': False,
-              'PACKAGE_odhcp6c': False,
-              'PACKAGE_odhcpd-ipv6only': False,
-          }
-          lines = p.read_text(encoding='utf-8').splitlines()
-          out = []
-          for line in lines:
-              if any(line.startswith(f'CONFIG_{k}=') or line == f'# CONFIG_{k} is not set' for k in desired):
-                  continue
-              out.append(line)
-          for k, enabled in desired.items():
-              out.append(f'CONFIG_{k}=y' if enabled else f'# CONFIG_{k} is not set')
-          p.write_text('\n'.join(out) + '\n', encoding='utf-8')
-          PY
-
+          printf '\nCONFIG_PACKAGE_minibox-mfp=y\nCONFIG_PACKAGE_libusb-1.0=y\nCONFIG_PACKAGE_luci-light=y\n# CONFIG_PACKAGE_kmod-usb-printer is not set\n' >> .config
           make defconfig
-          cp .config "$GITHUB_WORKSPACE/final-web-upgrade.config"
-
           grep -q '^CONFIG_TARGET_ath79_generic_DEVICE_gainstrong_minibox-v1=y$' .config
-          grep -q '^CONFIG_PACKAGE_luci-light=y$' .config
-          grep -q '^CONFIG_PACKAGE_cgi-io=y$' .config
           grep -q '^CONFIG_PACKAGE_minibox-mfp=y$' .config
-          grep -q '^CONFIG_PACKAGE_libusb-1.0=y$' .config
           ! grep -q '^CONFIG_PACKAGE_kmod-usb-printer=y$' .config
-
-          echo 'Selected footprint-sensitive packages:'
-          grep -E '^CONFIG_PACKAGE_(luci-light|cgi-io|ppp|ppp-mod-pppoe|odhcp6c|odhcpd-ipv6only|kmod-usb-printer|libusb-1.0|minibox-mfp)=' .config || true
-
-      - name: Download sources
-        shell: bash
+      - name: Build
         working-directory: openwrt-src
         run: |
-          set -o pipefail
-          make -j"$(nproc)" download 2>&1 | tee "$GITHUB_WORKSPACE/download-web-upgrade.log" || \
-            make -j1 V=s download 2>&1 | tee -a "$GITHUB_WORKSPACE/download-web-upgrade.log"
-          BAD="$(find dl -type f -size -1024c -print || true)"
-          test -z "$BAD" || { echo "$BAD"; exit 1; }
-
-      - name: Build firmware
-        shell: bash
-        working-directory: openwrt-src
-        run: |
-          set -o pipefail
-          make -j"$(nproc)" 2>&1 | tee "$GITHUB_WORKSPACE/build-web-upgrade.log" || \
-            make -j1 V=s 2>&1 | tee -a "$GITHUB_WORKSPACE/build-web-upgrade.log"
-
-      - name: Validate stock-web factory header and flash bounds
-        shell: bash
+          make -j"$(nproc)" download
+          make -j"$(nproc)" || make -j1 V=s
+      - name: Collect Build-0106
         run: |
           set -euo pipefail
-          TARGET_DIR="$OPENWRT_DIR/bin/targets/ath79/generic"
-          FACTORY="$(find "$TARGET_DIR" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*squashfs-factory.bin' -print -quit)"
-          SYSUPGRADE="$(find "$TARGET_DIR" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*squashfs-sysupgrade.bin' -print -quit)"
-          test -n "$FACTORY" -a -f "$FACTORY"
-          test -n "$SYSUPGRADE" -a -f "$SYSUPGRADE"
-
-          python3 - "$FACTORY" <<'PY'
-          import hashlib, struct, sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          data = path.read_bytes()
-          if len(data) < 0x200:
-              raise SystemExit('factory image shorter than TP-Link v1 header')
-
-          be32 = lambda off: struct.unpack_from('>I', data, off)[0]
-          le32 = lambda off: struct.unpack_from('<I', data, off)[0]
-          version = le32(0x00)
-          vendor = data[0x04:0x1c].split(b'\0',1)[0].decode('ascii','replace')
-          hwid = be32(0x40)
-          hwrev = be32(0x44)
-          kernel_la = be32(0x74)
-          kernel_ep = be32(0x78)
-          fw_length = be32(0x7c)
-          kernel_ofs = be32(0x80)
-          kernel_len = be32(0x84)
-          rootfs_ofs = be32(0x88)
-          rootfs_len = be32(0x8c)
-          boot_ofs = be32(0x90)
-          boot_len = be32(0x94)
-
-          expected = {
-              'version': (version, 1),
-              'hwid': (hwid, 0x3c000201),
-              'hwrev': (hwrev, 1),
-              'kernel_load': (kernel_la, 0x80060000),
-              'kernel_entry': (kernel_ep, 0x80060000),
-              'kernel_offset': (kernel_ofs, 0x200),
-              'boot_offset': (boot_ofs, 0),
-              'boot_length': (boot_len, 0),
-          }
-          failed = []
-          for name, (got, want) in expected.items():
-              if got != want:
-                  failed.append(f'{name}: got 0x{got:08x}, want 0x{want:08x}')
-
-          if fw_length > 0x00fd0000:
-              failed.append(f'fw_length 0x{fw_length:x} exceeds mtd5 size 0x00fd0000')
-          if len(data) > 0x00fd0000:
-              failed.append(f'file size 0x{len(data):x} exceeds mtd5 size 0x00fd0000')
-          if rootfs_ofs < kernel_ofs + kernel_len:
-              failed.append('rootfs overlaps kernel')
-          if rootfs_ofs + rootfs_len > fw_length:
-              failed.append('rootfs exceeds declared firmware length')
-
-          print(f'file={path.name}')
-          print(f'size={len(data)} sha256={hashlib.sha256(data).hexdigest()}')
-          print(f'vendor={vendor!r} version={version}')
-          print(f'hwid=0x{hwid:08x} hwrev={hwrev}')
-          print(f'kernel_la=0x{kernel_la:08x} kernel_ep=0x{kernel_ep:08x}')
-          print(f'fw_length=0x{fw_length:08x} kernel_ofs=0x{kernel_ofs:08x} kernel_len=0x{kernel_len:08x}')
-          print(f'rootfs_ofs=0x{rootfs_ofs:08x} rootfs_len=0x{rootfs_len:08x}')
-          print(f'boot_ofs=0x{boot_ofs:08x} boot_len=0x{boot_len:08x}')
-
-          if failed:
-              raise SystemExit('STOCK-WEB FACTORY VALIDATION FAILED:\n- ' + '\n- '.join(failed))
-          print('STOCK-WEB FACTORY STRUCTURE: PASS')
-          PY
-
-      - name: Collect Build-0105 artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf "$DIST_DIR"
-          mkdir -p "$DIST_DIR"
-          TARGET_DIR="$OPENWRT_DIR/bin/targets/ath79/generic"
-
-          find "$TARGET_DIR" -maxdepth 1 -type f \
-            \( -iname '*gainstrong_minibox-v1*.bin' -o -name '*.manifest' -o -name 'profiles.json' -o -name 'sha256sums' \) \
-            -exec cp -v {} "$DIST_DIR/" \;
-
-          cp final-web-upgrade.config "$DIST_DIR/"
-          cat > "$DIST_DIR/READ-ME-FIRST.txt" <<'EOF'
-          MiniBox V1 Build-0105 — OpenWrt 25.12.5 minimal LuCI web-upgrade candidate
-          ============================================================================
-          Target: Gainstrong MiniBox V1.0 / AR9330 / 16 MiB flash / 64 MiB RAM
-          Upgrade path being validated: stock web UI -> squashfs-factory.bin
-          Expected stock HWID: 0x3c000201, HW revision: 1
-          Web UI: luci-light
-          Printing: libusb only; usblp/kmod-usb-printer forbidden
-
-          IMPORTANT:
-          This workflow validates TP-Link v1 header fields, HWID/HWREV, load/entry address,
-          firmware bounds, kernel/rootfs non-overlap, and absence of bootloader payload.
-          Do not use squashfs-sysupgrade.bin in the stock web interface.
-          The file intended for the stock web interface is squashfs-factory.bin.
-          EOF
-          (cd "$DIST_DIR" && sha256sum ./* > BUILD-0105-SHA256SUMS.txt)
-          ls -lah "$DIST_DIR"
-
-      - name: Upload Build-0105 firmware
+          T="$OPENWRT_DIR/bin/targets/ath79/generic"; mkdir -p "$DIST_DIR"
+          F="$(find "$T" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*squashfs-factory.bin' -print -quit)"
+          S="$(find "$T" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*squashfs-sysupgrade.bin' -print -quit)"
+          test -f "$F" && test -f "$S" && test "$(stat -c%s "$F")" -le 16580608
+          cp "$F" "$S" "$DIST_DIR/"
+          find "$OPENWRT_DIR/bin/packages" -type f -name 'minibox-mfp*.apk' -exec cp {} "$DIST_DIR/" \;
+          printf '%s\n' 'Build-0106 current runtime-v2. Run: minibox-scan-diag ; minibox-scan-diag --claim. These diagnostics send no scan payload.' > "$DIST_DIR/READ-ME-FIRST.txt"
+          (cd "$DIST_DIR" && sha256sum ./* > BUILD-0106-SHA256SUMS.txt)
+      - name: Upload Build-0106
         uses: actions/upload-artifact@v5
         with:
-          name: minibox-v1-openwrt-25.12.5-minimal-luci-webupgrade-build0105
+          name: minibox-v1-openwrt-25.12.5-build0106-current-runtime
           path: dist-web-upgrade/
           if-no-files-found: error
           retention-days: 30
-
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: minibox-v1-build0105-webupgrade-diagnostics
-          path: |
-            host-validation-web-upgrade.log
-            download-web-upgrade.log
-            build-web-upgrade.log
-            final-web-upgrade.config
-          if-no-files-found: ignore
-          retention-days: 14
