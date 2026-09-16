@@ -1,0 +1,48 @@
+#!/bin/sh
+# Derive a machine-readable endpoint map for HP M1522n without guessing protocol commands.
+set -eu
+VID=03f0
+PID=4517
+SYS=/sys/bus/usb/devices
+OUT=${1:-/tmp/minibox-scan-endpoints.env}
+
+finddev() {
+  for d in "$SYS"/*; do
+    [ -r "$d/idVendor" ] || continue
+    [ -r "$d/idProduct" ] || continue
+    [ "$(cat "$d/idVendor")" = "$VID" ] || continue
+    [ "$(cat "$d/idProduct")" = "$PID" ] || continue
+    echo "$d"; return 0
+  done
+  return 1
+}
+
+D=$(finddev) || exit 2
+B=${D##*/}
+TMP="$OUT.tmp"
+: >"$TMP"
+echo "USB_DEVICE=$B" >>"$TMP"
+echo "USB_VID=$VID" >>"$TMP"
+echo "USB_PID=$PID" >>"$TMP"
+
+n=0
+for I in "$SYS/$B":*; do
+  [ -d "$I" ] || continue
+  num=$(cat "$I/bInterfaceNumber" 2>/dev/null || continue)
+  cls=$(cat "$I/bInterfaceClass" 2>/dev/null || echo '')
+  sub=$(cat "$I/bInterfaceSubClass" 2>/dev/null || echo '')
+  proto=$(cat "$I/bInterfaceProtocol" 2>/dev/null || echo '')
+  eps=$(cat "$I/bNumEndpoints" 2>/dev/null || echo 0)
+  drv=none; [ -L "$I/driver" ] && drv=$(basename "$(readlink "$I/driver")")
+  echo "IF${n}_NUMBER=$num" >>"$TMP"
+  echo "IF${n}_CLASS=$cls" >>"$TMP"
+  echo "IF${n}_SUBCLASS=$sub" >>"$TMP"
+  echo "IF${n}_PROTOCOL=$proto" >>"$TMP"
+  echo "IF${n}_ENDPOINTS=$eps" >>"$TMP"
+  echo "IF${n}_DRIVER=$drv" >>"$TMP"
+  n=$((n+1))
+done
+echo "INTERFACE_COUNT=$n" >>"$TMP"
+mv "$TMP" "$OUT"
+chmod 600 "$OUT"
+cat "$OUT"
