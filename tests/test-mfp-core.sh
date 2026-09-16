@@ -8,6 +8,8 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-escl/escl.c tests/test-e
 /tmp/test-escl
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c tests/test-soapht-transport.c -o /tmp/test-soapht
 /tmp/test-soapht
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c src/minibox-scan/soapht_codec.c tests/test_soapht_codec.c -o /tmp/test-soapht-codec
+/tmp/test-soapht-codec
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_session.c tests/test-scan-session.c -o /tmp/test-scan-session
 /tmp/test-scan-session
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_backend.c tests/test-scan-backend.c -o /tmp/test-scan-backend
