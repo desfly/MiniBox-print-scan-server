@@ -1,0 +1,55 @@
+#!/bin/sh
+# MiniBox MFP: HP LaserJet M1522n USB scanner transport diagnostic
+# Device: 03f0:4517. Userspace/libusb only; never bind usblp.
+set -eu
+
+VID="03f0"
+PID="4517"
+SYS="/sys/bus/usb/devices"
+
+log() { logger -t minibox-scan "$*" 2>/dev/null || true; printf '%s\n' "$*"; }
+
+find_m1522() {
+    for d in "$SYS"/*; do
+        [ -r "$d/idVendor" ] || continue
+        [ -r "$d/idProduct" ] || continue
+        v="$(cat "$d/idVendor" 2>/dev/null || true)"
+        p="$(cat "$d/idProduct" 2>/dev/null || true)"
+        [ "$v" = "$VID" ] && [ "$p" = "$PID" ] && { printf '%s\n' "$d"; return 0; }
+    done
+    return 1
+}
+
+show_interfaces() {
+    dev="$1"
+    base="${dev##*/}"
+    for i in "$SYS/$base":*; do
+        [ -d "$i" ] || continue
+        cls="$(cat "$i/bInterfaceClass" 2>/dev/null || echo ??)"
+        sub="$(cat "$i/bInterfaceSubClass" 2>/dev/null || echo ??)"
+        proto="$(cat "$i/bInterfaceProtocol" 2>/dev/null || echo ??)"
+        drv="none"
+        [ -L "$i/driver" ] && drv="$(basename "$(readlink "$i/driver")")"
+        printf 'interface=%s class=%s subclass=%s protocol=%s driver=%s\n' "${i##*:}" "$cls" "$sub" "$proto" "$drv"
+    done
+}
+
+case "${1:-probe}" in
+probe)
+    if dev="$(find_m1522)"; then
+        log "M1522 detected: ${dev##*/} usb=${VID}:${PID}"
+        show_interfaces "$dev"
+        exit 0
+    fi
+    log "M1522 not detected: usb=${VID}:${PID}"
+    exit 2
+    ;;
+status)
+    dev="$(find_m1522)" || { printf '{"present":false,"vid":"%s","pid":"%s"}\n' "$VID" "$PID"; exit 0; }
+    printf '{"present":true,"vid":"%s","pid":"%s","sysfs":"%s"}\n' "$VID" "$PID" "${dev##*/}"
+    ;;
+*)
+    echo "usage: $0 [probe|status]" >&2
+    exit 64
+    ;;
+esac
