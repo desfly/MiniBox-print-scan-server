@@ -1,0 +1,44 @@
+name: Scanner transport tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package/minibox-mfp/src/**'
+      - 'package/minibox-mfp/tests/**'
+      - '.github/workflows/scanner-transport-tests.yml'
+  pull_request:
+    paths:
+      - 'package/minibox-mfp/src/**'
+      - 'package/minibox-mfp/tests/**'
+
+jobs:
+  scanner-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libusb headers
+        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev
+      - name: Build scanner core with warnings as errors
+        run: |
+          set -eux
+          mkdir -p build/scanner
+          cc -std=c99 -Wall -Wextra -Werror -O2 package/minibox-mfp/src/m1522_capture_parser.c -o build/scanner/m1522_capture_parser
+          cc -std=c99 -Wall -Wextra -Werror -O2 package/minibox-mfp/src/m1522_scan_session.c -o build/scanner/m1522_scan_session
+          cc -std=c99 -Wall -Wextra -Werror -O2 package/minibox-mfp/src/m1522_usb_transport.c -lusb-1.0 -o build/scanner/m1522_usb_transport
+      - name: Replay capture parser fixture
+        run: PARSER="$PWD/build/scanner/m1522_capture_parser" sh package/minibox-mfp/tests/test_m1522_capture_replay.sh
+      - name: Verify handshake guard
+        run: |
+          set +e
+          build/scanner/m1522_scan_session >build/scanner/session.out 2>build/scanner/session.err
+          rc=$?
+          set -e
+          test "$rc" -eq 3
+          grep -q '^SCAN_STATE=handshake$' build/scanner/session.out
+          grep -q 'stream disabled' build/scanner/session.err
+      - name: Verify synthetic state-machine transition
+        run: |
+          build/scanner/m1522_scan_session verified-test >build/scanner/session-test.out
+          grep -q '^SCAN_STATE=done$' build/scanner/session-test.out
+          grep -q '^SCAN_BYTES=16$' build/scanner/session-test.out
