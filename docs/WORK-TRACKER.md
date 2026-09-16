@@ -21,4 +21,21 @@
 - [ ] Implement eSCL/AirScan + DNS-SD scanner advertisement and web scan fallback for Windows/Android.
 - [ ] Verify OpenWrt package dependencies/executable installation and produce the next flashable build.
 
-Rule: continue from the first unchecked item; do not redo validated printing/discovery work unless a regression requires it. Update this tracker after each verified milestone.
+## Change / logic trace
+
+- Scanner safety rule: never guess the HP M1522n scanner USB interface or send vendor protocol bytes until a physical descriptor/capture identifies the correct channel. Descriptor inspection is read-only; explicit interface selection is required for any claim/read test.
+- Printing architecture remains userspace/libusb: no CUPS and no `usblp`. Build-0105 is the physical printing baseline and must not be regressed while scanner/network work continues.
+- Device UX is one logical `HP LaserJet M1522n (MiniBox)` MFP with separate print and scan services. Discovery records must describe only capabilities that have a real listening backend; do not leave phantom IPP/eSCL services or unverified PDL claims enabled in a release build.
+- Package integration repair: `minibox-mfp` now includes the scanner probe required by `minibox-scand`; package also needs the mDNS publisher dependency used by `minibox-discovery`.
+- Firmware CI repair: run 35097361421 (Build #12) failed at `Build firmware` after package/dependency changes. Commit c37ee92d18d4f13848de515d7ddeed5dca987bf3 changed the workflow to enable/install OpenWrt package feeds before configuring/building the live package and prevents stale queued builds from blocking newer work.
+- Verification of that repair: run 35109584650 (Build #13) has successfully completed dependency installation, Build-0104 extraction, OpenWrt clone, package-feed enablement, live package injection, OpenWrt configuration, cache restore, and source download. `Build firmware` is currently in progress; no firmware artifact is claimed until collection/upload succeeds.
+- Do not push unrelated package/workflow changes while Build #13 is compiling because package-path commits trigger another full firmware build. Documentation-only tracker updates do not match the firmware workflow package-path trigger.
+
+## Current next step
+
+1. Let Build #13 finish the current `Build firmware` step without invalidating it.
+2. If green: verify `Collect firmware and package`, artifact upload, exact BIN/APK contents/sizes, then record the build as the next test candidate.
+3. If red: retrieve the exact failing job/log, fix only the verified root cause, and rerun.
+4. Physical scanner descriptor capture remains the first hardware-dependent unchecked milestone; protocol implementation stays blocked until that evidence exists.
+
+Rule: before coding or continuing, read this tracker first and compare it with live repository/CI state. Continue from the first unchecked actionable item; do not redo validated work unless a regression requires it. After every verified change, record the change, reason/logic, commit or CI evidence, next step, and known risk/blocker here.
