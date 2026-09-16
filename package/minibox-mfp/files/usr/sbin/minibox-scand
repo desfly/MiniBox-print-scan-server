@@ -1,0 +1,30 @@
+#!/bin/sh
+# MiniBox MFP scanner supervisor for HP LaserJet M1522n (03f0:4517)
+set -u
+TAG=minibox-scand
+PROBE=/usr/sbin/minibox-scan-usb
+STATE=/tmp/minibox-scan.state
+INTERVAL=${MINIBOX_SCAN_POLL:-3}
+
+log() { logger -t "$TAG" "$*" 2>/dev/null || true; echo "$TAG: $*" >&2; }
+write_state() { printf '%s\n' "$1" >"$STATE.tmp" && mv "$STATE.tmp" "$STATE"; }
+
+last=""
+log "scanner supervisor started"
+while :; do
+    if [ -x "$PROBE" ] && "$PROBE" probe >/tmp/minibox-scan.probe 2>&1; then
+        now=ready
+    else
+        now=absent
+    fi
+    if [ "$now" != "$last" ]; then
+        write_state "$now"
+        if [ "$now" = ready ]; then
+            log "HP M1522n scanner USB transport detected; ready for codec handshake"
+        else
+            log "HP M1522n scanner not available"
+        fi
+        last="$now"
+    fi
+    sleep "$INTERVAL"
+done
