@@ -1,13 +1,16 @@
 #!/bin/sh
-# MiniBox MFP service discovery for HP LaserJet M1522n.
-# Publishes driverless-friendly DNS-SD records without usblp/CUPS.
+# MiniBox MFP DNS-SD discovery contract for HP LaserJet M1522n.
+# One logical MFP identity; separate driverless print and scan services.
+# No CUPS and no usblp.
 
 set -eu
 
 HOST="${MINIBOX_HOSTNAME:-minibox-mfp}"
 MODEL="${MINIBOX_MODEL:-HP LaserJet M1522n}"
-PORT="${MINIBOX_PRINT_PORT:-9100}"
-SCAN_PORT="${MINIBOX_SCAN_PORT:-6566}"
+NAME="${MINIBOX_FRIENDLY_NAME:-HP LaserJet M1522n (MiniBox)}"
+RAW_PORT="${MINIBOX_PRINT_PORT:-9100}"
+IPP_PORT="${MINIBOX_IPP_PORT:-631}"
+ESCL_PORT="${MINIBOX_ESCL_PORT:-8080}"
 PIDDIR=/var/run/minibox-discovery
 
 mkdir -p "$PIDDIR"
@@ -32,17 +35,30 @@ command -v avahi-publish-service >/dev/null 2>&1 || {
     exit 1
 }
 
-# Raw JetDirect-compatible queue for Windows and legacy clients.
-publish "$MODEL @ $HOST" _pdl-datastream._tcp "$PORT" \
+# Driverless printer discovery for Windows 10/11 and Android print services.
+# The IPP endpoint itself is implemented separately; advertising it here locks
+# the network contract and friendly device identity.
+publish "$NAME" _ipp._tcp "$IPP_PORT" \
+    "txtvers=1" "qtotal=1" "rp=ipp/print" "ty=$MODEL" \
+    "product=($MODEL)" "note=MiniBox USB MFP bridge" \
+    "pdl=application/pdf,image/jpeg,image/pwg-raster" \
+    "Color=F" "Duplex=F" "usb_MFG=HP" "usb_MDL=LaserJet M1522n"
+
+# Keep the validated raw print path available as compatibility fallback.
+publish "$NAME" _pdl-datastream._tcp "$RAW_PORT" \
     "txtvers=1" "qtotal=1" "ty=$MODEL" "product=($MODEL)" \
-    "note=MiniBox MFP USB bridge" "pdl=application/octet-stream"
+    "note=MiniBox raw print fallback" "pdl=application/octet-stream"
 
-# Scanner advertisement. scand owns the actual network endpoint.
-publish "$MODEL Scanner @ $HOST" _sane-port._tcp "$SCAN_PORT" \
-    "txtvers=1" "ty=$MODEL" "note=MiniBox MFP scanner"
+# AirScan/eSCL discovery for compatible Windows/Android scan clients.
+# Scanner protocol stays disabled behind the backend until the physical
+# M1522 USB scanner interface and handshake are verified.
+publish "$NAME" _uscan._tcp "$ESCL_PORT" \
+    "txtvers=1" "ty=$MODEL" "rs=eSCL" "representation=images/printer.png" \
+    "note=MiniBox eSCL scanner" "usb_MFG=HP" "usb_MDL=LaserJet M1522n"
 
-# Generic device identity used by phone/desktop discovery.
-publish "$MODEL @ $HOST" _http._tcp 80 \
-    "path=/" "model=$MODEL" "usb_vid=03f0" "usb_pid=4517"
+# Web UI is the Android/browser scan fallback and local management surface.
+publish "$NAME" _http._tcp 80 \
+    "path=/" "model=$MODEL" "usb_vid=03f0" "usb_pid=4517" \
+    "mfp=printer,scanner"
 
 wait
