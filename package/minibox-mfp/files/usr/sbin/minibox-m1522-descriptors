@@ -62,8 +62,11 @@ trap 'rm -f "$TMP"' EXIT INT TERM
 
     echo "LIBUSB_DESCRIPTORS_BEGIN"
     if [ -x "$TRANSPORT" ]; then
-        "$TRANSPORT" descriptors
-        rc=$?
+        if "$TRANSPORT" descriptors; then
+            rc=0
+        else
+            rc=$?
+        fi
         echo "LIBUSB_DESCRIPTORS_RC=$rc"
     else
         echo "ERROR=m1522_usb_transport_not_installed"
