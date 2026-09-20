@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=11
+PKG_RELEASE:=12
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -10,7 +10,7 @@ define Package/minibox-mfp
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=MiniBox MFP Wi-Fi print and scan bridge
-  DEPENDS:=+libusb-1.0
+  DEPENDS:=+libusb-1.0 +avahi-utils
 endef
 
 define Package/minibox-mfp/description
@@ -55,6 +55,21 @@ define Build/Compile
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-scan-diag \
 		$(PKG_BUILD_DIR)/minibox-usb/scan_diag.c \
 		$(PKG_BUILD_DIR)/minibox-usb/scan_m1522.c -lusb-1.0
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
+		-Wall -Wextra -Werror \
+		$(CURDIR)/src/m1522_usb_transport.c \
+		-o $(PKG_BUILD_DIR)/m1522_usb_transport \
+		$(TARGET_LDFLAGS) -lusb-1.0
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
+		-Wall -Wextra -Werror \
+		$(CURDIR)/src/m1522_capture_parser.c \
+		-o $(PKG_BUILD_DIR)/m1522_capture_parser \
+		$(TARGET_LDFLAGS)
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
+		-Wall -Wextra -Werror \
+		$(CURDIR)/src/m1522_scan_session.c \
+		-o $(PKG_BUILD_DIR)/m1522_scan_session \
+		$(TARGET_LDFLAGS)
 endef
 
 define Package/minibox-mfp/install
@@ -63,6 +78,13 @@ define Package/minibox-mfp/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-scand $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-discoveryd $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-scan-diag $(1)/usr/sbin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_usb_transport $(1)/usr/sbin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_capture_parser $(1)/usr/sbin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_scan_session $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/minibox-m1522-descriptors $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-capture $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-endpoints $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-usb $(1)/usr/sbin/
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-printerd $(1)/etc/init.d/
