@@ -6,6 +6,7 @@ on:
     branches:
       - main
     paths:
+      - 'src/**'
       - 'package/minibox-mfp/**'
       - '.github/workflows/build-from-zip.yml'
 
@@ -100,9 +101,12 @@ jobs:
           elif attempt kit "$KIT_ROOT" "$DEST"; then :
           else echo 'ERROR: board injector failed'; exit 1; fi
 
-          rm -rf "$DEST/package/minibox-mfp"
+          rm -rf "$DEST/package/minibox-mfp" "$DEST/src"
           cp -a "$GITHUB_WORKSPACE/package/minibox-mfp" "$DEST/package/minibox-mfp"
+          cp -a "$GITHUB_WORKSPACE/src" "$DEST/src"
           test -f "$DEST/package/minibox-mfp/Makefile"
+          test -f "$DEST/src/minibox-printerd/main.c"
+          test -f "$DEST/src/minibox-scand/main.c"
           test -f "$DEST/package/minibox-mfp/src/m1522_usb_transport.c"
           test -f "$DEST/package/minibox-mfp/files/usr/sbin/minibox-m1522-descriptors"
 
@@ -157,6 +161,7 @@ jobs:
           rm -rf "$DIST_DIR"; mkdir -p "$DIST_DIR"
           TARGET_DIR="$OPENWRT_DIR/bin/targets/ath79/generic"
           find "$TARGET_DIR" -maxdepth 1 -type f -iname '*minibox*.bin' -exec cp -v {} "$DIST_DIR/" \;
+          find "$TARGET_DIR" -maxdepth 1 -type f \( -name '*.manifest' -o -name 'profiles.json' \) -exec cp -v {} "$DIST_DIR/" \;
           find "$OPENWRT_DIR/bin/packages" -type f -iname 'minibox-mfp*.apk' -exec cp -v {} "$DIST_DIR/" \; 2>/dev/null || true
           INITRAMFS="$(find "$DIST_DIR" -type f -iname '*minibox*initramfs-kernel.bin' -print -quit)"
           SYSUPGRADE="$(find "$DIST_DIR" -type f -iname '*minibox*squashfs-sysupgrade.bin' -print -quit)"
@@ -164,11 +169,31 @@ jobs:
           test -n "$INITRAMFS"
           test -n "$SYSUPGRADE"
           test -n "$APK"
-          sha256sum "$DIST_DIR"/* > "$DIST_DIR/BUILD-SHA256SUMS.txt"
+          git rev-parse HEAD > "$DIST_DIR/SOURCE-COMMIT.txt"
+          cp docs/FINALIZATION-AUDIT-2026-09-20.md "$DIST_DIR/ROLLBACK-AND-MANUAL-TEST.md"
+          printf '%s\n' 'TEST-ONLY: hardware validation pending; flash_allowed=false' > "$DIST_DIR/READ-ME-FIRST.txt"
+          cat > "$DIST_DIR/SBOM.spdx" <<EOF
+          SPDXVersion: SPDX-2.3
+          DataLicense: CC0-1.0
+          SPDXID: SPDXRef-DOCUMENT
+          DocumentName: MiniBox-post-merge-TEST
+          DocumentNamespace: https://github.com/desfly/MiniBox-print-scan-server/actions/runs/${GITHUB_RUN_ID}/sbom
+          Creator: Tool: GitHub-Actions
+          Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PackageName: minibox-firmware-test
+          SPDXID: SPDXRef-Package
+          PackageVersion: ${GITHUB_SHA}
+          PackageDownloadLocation: NOASSERTION
+          FilesAnalyzed: false
+          PackageLicenseConcluded: NOASSERTION
+          PackageLicenseDeclared: NOASSERTION
+          PackageCopyrightText: NOASSERTION
+          EOF
+          find "$DIST_DIR" -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$DIST_DIR/BUILD-SHA256SUMS.txt"
 
       - name: Upload MiniBox firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: minibox-v1-openwrt-25.12.5-live-package-${{ github.run_number }}
+          name: minibox-v1-openwrt-25.12.5-post-merge-TEST-${{ github.sha }}
           path: dist/
           if-no-files-found: error
