@@ -1,7 +1,8 @@
 name: MiniBox scan server contract
 on:
   push:
-    branches: [minibox-network-mfp-runtime-v2]
+    branches: [minibox-network-mfp-runtime-v2, audit/minibox-finalize-20260920]
+  pull_request:
   workflow_dispatch:
 jobs:
   scan-contract:

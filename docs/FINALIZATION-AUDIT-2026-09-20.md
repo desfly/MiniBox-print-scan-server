@@ -30,6 +30,7 @@ items remain `PENDING/MANUAL`; no flash write is authorized by this work.
 | F-008 | Concurrency | Print and scan daemons serialize clients; this avoids USB/session races but one slow client could monopolize a daemon. | Bounded by socket and USB timeouts. Multi-client concurrency remains intentionally serialized for 64 MiB target. | ACCEPTED |
 | F-009 | Hardware | USB interface selection, SOAPHT command behavior, mDNS visibility and end-to-end clients require the MiniBox/M1522. | Exact manual checklist included in the test-only artifact. | PENDING/MANUAL |
 | F-010 | Artifact safety | Previous workflow names/readme could be read as hardware-verified and checksums lacked source/rollback/SBOM evidence. | Build-0108 and r12 artifacts are marked TEST-ONLY, include source SHA, checksums, rollback/manual checklist and SPDX metadata; initramfs is preferred when produced. | RESOLVED |
+| F-011 | CI coverage | The dedicated scan-server workflow ran only on pushes to runtime-v2, not on PRs or the finalization branch. | Enable pull-request runs and finalization-branch pushes. | RESOLVED |
 
 ## Test log
 
