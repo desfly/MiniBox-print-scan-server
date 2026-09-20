@@ -10,7 +10,7 @@ define Package/minibox-mfp
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=MiniBox MFP Wi-Fi print and scan bridge
-  DEPENDS:=+libusb-1.0 +avahi-utils
+  DEPENDS:=+libusb-1.0
 endef
 
 define Package/minibox-mfp/description
