@@ -2,6 +2,8 @@
 
 This file is the canonical work checkpoint for ChatGPT-assisted development.
 
+Finalization audit and per-finding evidence: `docs/FINALIZATION-AUDIT-2026-09-20.md`.
+
 ## Mandatory workflow rule
 
 Before any code change:

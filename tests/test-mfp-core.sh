@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-printerd/http_body.c tests/test-http-body.c -o /tmp/test-http-body
+/tmp/test-http-body
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/stream.c src/minibox-ipp/print_job.c tests/test-print-job.c -o /tmp/test-print-job
 /tmp/test-print-job
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp.c -o /tmp/test-ipp
