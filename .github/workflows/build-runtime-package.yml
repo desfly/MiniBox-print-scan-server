@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - minibox-network-mfp-runtime-v2
+      - audit/minibox-finalize-20260920
     paths:
       - 'src/**'
       - 'package/minibox-mfp/**'
@@ -83,14 +84,16 @@ jobs:
           find sdk/bin -type f \( -name 'minibox-mfp-*.apk' -o -name 'minibox-mfp-*.ipk' \) -print -exec cp -v {} dist/ \;
           test "$(find dist -type f | wc -l)" -gt 0
           cp package/minibox-mfp/Makefile dist/package-Makefile.txt
-          git rev-parse HEAD > dist/GIT-SHA.txt
-          sha256sum dist/* > dist/SHA256SUMS.txt
+          git rev-parse HEAD > dist/SOURCE-COMMIT.txt
+          cp docs/FINALIZATION-AUDIT-2026-09-20.md dist/ROLLBACK-AND-MANUAL-TEST.md
+          printf '%s\n' 'TEST PACKAGE ONLY — hardware validation pending; do not treat as production-ready.' > dist/TEST-ONLY.txt
+          find dist -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS.txt
           ls -lh dist
 
       - name: Upload MiniBox runtime package
         uses: actions/upload-artifact@v4
         with:
-          name: minibox-mfp-runtime-v2-${{ github.sha }}
+          name: minibox-mfp-r12-TEST-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 14

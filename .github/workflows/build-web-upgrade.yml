@@ -1,8 +1,8 @@
-name: Build MiniBox Build-0107 verified scanner runtime
+name: Build MiniBox Build-0108 TEST-ONLY finalization candidate
 on:
   workflow_dispatch:
   push:
-    branches: [minibox-network-mfp-runtime-v2]
+    branches: [minibox-network-mfp-runtime-v2, audit/minibox-finalize-20260920]
     paths: ['src/**','package/minibox-mfp/**','.github/workflows/build-web-upgrade.yml']
 permissions:
   contents: read
@@ -76,21 +76,50 @@ jobs:
         run: |
           make -j"$(nproc)" download
           make -j"$(nproc)" || make -j1 V=s
-      - name: Collect Build-0107
+      - name: Collect Build-0108 TEST-ONLY
         run: |
           set -euo pipefail
           T="$OPENWRT_DIR/bin/targets/ath79/generic"; mkdir -p "$DIST_DIR"
+          I="$(find "$T" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*initramfs-kernel.bin' -print -quit)"
           F="$(find "$T" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*squashfs-factory.bin' -print -quit)"
           S="$(find "$T" -maxdepth 1 -type f -iname '*gainstrong_minibox-v1*squashfs-sysupgrade.bin' -print -quit)"
           test -f "$F" && test -f "$S" && test "$(stat -c%s "$F")" -le 16580608
+          if test -n "$I"; then cp "$I" "$DIST_DIR/"; fi
           cp "$F" "$S" "$DIST_DIR/"
           find "$OPENWRT_DIR/bin/packages" -type f -name 'minibox-mfp*.apk' -exec cp {} "$DIST_DIR/" \;
-          printf '%s\n' 'Build-0107 runtime-v2 with verified M1522 SOAP/HTTP/DIME scanning. Package minibox-mfp 0.3.0-r11.' > "$DIST_DIR/READ-ME-FIRST.txt"
-          (cd "$DIST_DIR" && sha256sum ./* > BUILD-0107-SHA256SUMS.txt)
-      - name: Upload Build-0107
+          find "$T" -maxdepth 1 -type f -name '*.manifest' -exec cp {} "$DIST_DIR/OPENWRT-PACKAGES.manifest" \; -quit
+          git rev-parse HEAD > "$DIST_DIR/SOURCE-COMMIT.txt"
+          cp docs/FINALIZATION-AUDIT-2026-09-20.md "$DIST_DIR/ROLLBACK-AND-MANUAL-TEST.md"
+          cat > "$DIST_DIR/READ-ME-FIRST.txt" <<'EOF'
+          MiniBox Build-0108 TEST-ONLY candidate. Hardware validation is pending.
+          flash_allowed=false
+          Preferred first test: RAM boot of initramfs, when present.
+          DO NOT write factory/sysupgrade images until the user explicitly chooses to test
+          after reviewing ROLLBACK-AND-MANUAL-TEST.md and confirming a recovery path.
+          Package: minibox-mfp 0.3.0-r12. No production secrets are included.
+          EOF
+          cat > "$DIST_DIR/SBOM.spdx" <<EOF
+          SPDXVersion: SPDX-2.3
+          DataLicense: CC0-1.0
+          SPDXID: SPDXRef-DOCUMENT
+          DocumentName: MiniBox-Build-0108-TEST
+          DocumentNamespace: https://github.com/desfly/MiniBox-print-scan-server/actions/runs/${GITHUB_RUN_ID}/sbom
+          Creator: Tool: GitHub-Actions
+          Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PackageName: minibox-firmware-test
+          SPDXID: SPDXRef-Package
+          PackageVersion: ${GITHUB_SHA}
+          PackageDownloadLocation: NOASSERTION
+          FilesAnalyzed: false
+          PackageLicenseConcluded: NOASSERTION
+          PackageLicenseDeclared: NOASSERTION
+          PackageCopyrightText: NOASSERTION
+          EOF
+          (cd "$DIST_DIR" && find . -maxdepth 1 -type f ! -name BUILD-0108-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > BUILD-0108-SHA256SUMS.txt)
+      - name: Upload Build-0108 TEST-ONLY
         uses: actions/upload-artifact@v5
         with:
-          name: minibox-v1-openwrt-25.12.5-build0107-scanner-r11
+          name: minibox-v1-openwrt-25.12.5-build0108-TEST-r12-${{ github.sha }}
           path: dist-web-upgrade/
           if-no-files-found: error
           retention-days: 30

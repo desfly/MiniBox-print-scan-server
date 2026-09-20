@@ -29,6 +29,7 @@ items remain `PENDING/MANUAL`; no flash write is authorized by this work.
 | F-007 | HTTP correctness | Scanner could emit `503` after already starting a `200 image/jpeg` response. | Distinguish pre-header and post-header stream failures; close connection after partial stream. | RESOLVED |
 | F-008 | Concurrency | Print and scan daemons serialize clients; this avoids USB/session races but one slow client could monopolize a daemon. | Bounded by socket and USB timeouts. Multi-client concurrency remains intentionally serialized for 64 MiB target. | ACCEPTED |
 | F-009 | Hardware | USB interface selection, SOAPHT command behavior, mDNS visibility and end-to-end clients require the MiniBox/M1522. | Exact manual checklist included in the test-only artifact. | PENDING/MANUAL |
+| F-010 | Artifact safety | Previous workflow names/readme could be read as hardware-verified and checksums lacked source/rollback/SBOM evidence. | Build-0108 and r12 artifacts are marked TEST-ONLY, include source SHA, checksums, rollback/manual checklist and SPDX metadata; initramfs is preferred when produced. | RESOLVED |
 
 ## Test log
 
@@ -55,4 +56,3 @@ Do not flash from this audit. A user-controlled RAM-boot or explicitly approved 
 6. Disconnect/reconnect USB and Wi-Fi during idle and active operations; verify bounded failure and recovery.
 7. Reboot twice and verify services, discovery and configuration persistence.
 8. Only after all checks pass may hardware readiness be claimed.
-
