@@ -1,0 +1,7 @@
+# MiniBox MFP scanner DNS-SD contract
+[service]
+name=HP LaserJet M1522n Scanner @ MiniBox
+type=_uscan._tcp
+port=8080
+path=/eSCL
+txt=txtvers=1;ty=HP LaserJet M1522n;rs=eSCL;representation=images;vers=2.63;duplex=T;is=platen,adf;cs=color,grayscale,binary;pdl=image/jpeg,application/pdf

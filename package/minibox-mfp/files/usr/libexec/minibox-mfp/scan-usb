@@ -1,0 +1,48 @@
+#!/bin/sh
+# HP LaserJet M1522n USB scan backend boundary.
+# Printing is libusb-only and scanning must use the device-specific
+# SOAPHT/HorseThief transport. Do not silently fall back to a generic
+# scanimage backend: that can make CI/service checks green without proving
+# that the M1522 hardware scan path exists.
+set -eu
+
+req="${1:-SCAN}"
+out="${2:?output path required}"
+SOAPHT_BACKEND="${MINIBOX_SOAPHT_BACKEND:-/usr/libexec/minibox-mfp/soapht-usb}"
+VID="${MINIBOX_USB_VID:-03f0}"
+PID="${MINIBOX_USB_PID:-4517}"
+
+case "$req" in
+  SCAN|'SCAN '*) ;;
+  *)
+    printf '%s\n' 'scan backend: bad request' >&2
+    exit 64
+    ;;
+esac
+
+# The adapter is deliberately a separate executable so its transport can be
+# transcript-tested before it is allowed to touch the physical USB device.
+if [ ! -x "$SOAPHT_BACKEND" ]; then
+  printf 'scan backend unavailable: M1522 SOAPHT adapter missing (%s:%s)\n' "$VID" "$PID" >&2
+  exit 69
+fi
+
+# Never leave a stale/partial document that could be exposed by eSCL.
+tmp="${out}.part.$$"
+rm -f "$tmp"
+cleanup() { rm -f "$tmp"; }
+trap cleanup EXIT INT TERM
+
+if "$SOAPHT_BACKEND" --vid "$VID" --pid "$PID" --request "$req" --output "$tmp"; then
+  [ -s "$tmp" ] || {
+    printf '%s\n' 'scan backend: SOAPHT returned no image bytes' >&2
+    exit 74
+  }
+  mv -f "$tmp" "$out"
+  trap - EXIT INT TERM
+  exit 0
+fi
+
+rc=$?
+printf 'scan backend: SOAPHT transport failed rc=%s\n' "$rc" >&2
+exit "$rc"

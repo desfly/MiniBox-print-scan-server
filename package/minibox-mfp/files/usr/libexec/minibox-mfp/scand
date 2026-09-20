@@ -1,0 +1,43 @@
+#!/bin/sh
+# MiniBox MFP scan service: network scan job -> libusb backend contract.
+set -eu
+
+RUNDIR=/var/run/minibox-mfp
+SPOOLDIR=/tmp/minibox-mfp/scan
+STATUS="$RUNDIR/scan.status"
+LOCK="$RUNDIR/scan.lock"
+PORT="${MINIBOX_SCAN_PORT:-9290}"
+BACKEND="${MINIBOX_SCAN_BACKEND:-/usr/libexec/minibox-mfp/scan-usb}"
+
+mkdir -p "$RUNDIR" "$SPOOLDIR"
+printf 'idle\n' > "$STATUS"
+
+cleanup() { rm -f "$LOCK"; printf 'idle\n' > "$STATUS"; }
+trap cleanup EXIT INT TERM
+
+scan_one() {
+  req="$1"
+  [ ! -e "$LOCK" ] || { printf 'busy\n'; return 75; }
+  : > "$LOCK"
+  printf 'scanning\n' > "$STATUS"
+  out="$SPOOLDIR/scan-$(date +%s)-$$.pnm"
+  if "$BACKEND" "$req" "$out"; then
+    size=$(wc -c < "$out")
+    printf 'ready %s %s\n' "$out" "$size" > "$STATUS"
+    printf 'OK %s %s\n' "$out" "$size"
+  else
+    rc=$?
+    rm -f "$out"
+    printf 'error %s\n' "$rc" > "$STATUS"
+    printf 'ERR %s\n' "$rc"
+  fi
+  rm -f "$LOCK"
+}
+
+# inetd/socat-style stdin mode keeps the daemon tiny on AR9330.
+IFS= read -r request || exit 0
+case "$request" in
+  'SCAN '*|'SCAN') scan_one "$request" ;;
+  STATUS) cat "$STATUS" ;;
+  *) printf 'ERR bad-request\n'; exit 64 ;;
+esac

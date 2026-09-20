@@ -1,0 +1,6 @@
+#!/bin/sh
+# Scanner policy contract: userspace USB transport only.
+# Kernel printer-class binding is deliberately not part of this runtime.
+set -eu
+printf '%s\n' 'scanner-transport=userspace-libusb'
+printf '%s\n' 'network-protocol=escl'

@@ -1,0 +1,33 @@
+name: MiniBox print scan server contract
+on:
+  push:
+    branches: [minibox-network-mfp-runtime-v2]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  server-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install libusb development headers
+        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev
+      - name: Compile and exercise IPP/eSCL server transports
+        run: sh tests/test-mfp-servers.sh
+      - name: Validate print and protocol core
+        run: sh tests/test-mfp-core.sh
+      - name: Validate M1522 USB identity backend
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/usb_backend.c tests/test-usb-backend.c -o /tmp/test-usb
+          /tmp/test-usb
+      - name: Validate bounded USB streaming
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/stream.c tests/test-usb-stream.c -o /tmp/test-stream
+          /tmp/test-stream
+      - name: Compile libusb M1522 backend
+        run: sh tests/compile-libusb-backend.sh
+      - name: Validate procd runtime definitions
+        run: sh tests/test-procd-runtime.sh
+      - name: Enforce no CUPS and no usblp
+        run: |
+          set -euo pipefail
+          ! grep -RniE '(^|[^A-Za-z])(cupsd|kmod-usb-printer)([^A-Za-z]|$)' src overlay tests --exclude='*.md'
