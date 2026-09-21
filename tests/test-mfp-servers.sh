@@ -48,6 +48,30 @@ for value in (
 assert b'ipp://' in data and b'.local/ipp/print' in data, 'printer URI not aligned with actual host name'
 assert data[-1:] == b'\x03', 'IPP response missing end-of-attributes tag'
 PY
+# A PDF is NOT supported by this raw USB bridge. Neither Print-Job nor
+# Validate-Job may advertise success, and unsupported bytes must not reach USB.
+python3 - <<'PY'
+from pathlib import Path
+def build(op):
+    key=b'document-format'
+    value=b'application/pdf'
+    attrs=(bytes((2,0,0,op,0,0,0,19,1,0x49))+
+           len(key).to_bytes(2,'big')+key+
+           len(value).to_bytes(2,'big')+value+b'\x03')
+    return attrs + (b'%PDF-1.4\nnot a printer language\n' if op == 2 else b'')
+Path('/tmp/unsupported-print.req').write_bytes(build(2))
+Path('/tmp/unsupported-validate.req').write_bytes(build(4))
+PY
+rm -f /tmp/printed.bin
+curl -fsS -o /tmp/unsupported-print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/unsupported-print.req http://127.0.0.1:18631/ipp/print
+curl -fsS -o /tmp/unsupported-validate.out -H 'Content-Type: application/ipp' --data-binary @/tmp/unsupported-validate.req http://127.0.0.1:18631/ipp/print
+python3 - <<'PY'
+from pathlib import Path
+for label in ('print','validate'):
+    wire=Path('/tmp/unsupported-'+label+'.out').read_bytes()
+    assert len(wire)>9 and wire[2:4]==b'\x04\x0a', (label,wire.hex())
+assert not Path('/tmp/printed.bin').exists(), 'unsupported document was sent to the print sink'
+PY
 printf '\002\000\000\002\000\000\000\002\003\033EHello MiniBox\014\033E' >/tmp/print.req
 printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
 curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
