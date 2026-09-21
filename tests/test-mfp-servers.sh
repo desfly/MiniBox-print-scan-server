@@ -16,7 +16,25 @@ from pathlib import Path
 data = Path('/tmp/ipp.out').read_bytes()
 assert len(data) > 9, f'Get-Printer-Attributes response too short: {len(data)}'
 assert data[:8] == b'\x02\x00\x00\x00\x00\x00\x00\x01', data[:8].hex()
-assert data[8] == 0x04, f'expected printer-attributes group, got 0x{data[8]:02x}'
+assert data[8] == 0x01, f'expected mandatory operation-attributes group, got 0x{data[8]:02x}'
+# Decode the first two operation attributes and demand their RFC 8011 order.
+pos = 9
+for expected_tag, expected_name, expected_value in (
+    (0x47, b'attributes-charset', b'utf-8'),
+    (0x48, b'attributes-natural-language', b'en'),
+):
+    tag = data[pos]
+    pos += 1
+    key_len = int.from_bytes(data[pos:pos+2], 'big')
+    pos += 2
+    key = data[pos:pos+key_len]
+    pos += key_len
+    value_len = int.from_bytes(data[pos:pos+2], 'big')
+    pos += 2
+    value = data[pos:pos+value_len]
+    pos += value_len
+    assert (tag, key, value) == (expected_tag, expected_name, expected_value), (tag, key, value)
+assert data[pos] == 0x04, f'missing printer-attributes group at {pos}'
 for value in (
     b'printer-name',
     b'HP LaserJet M1522n @ MiniBox',
