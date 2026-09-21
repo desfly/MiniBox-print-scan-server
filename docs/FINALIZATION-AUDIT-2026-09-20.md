@@ -32,6 +32,7 @@ items remain `PENDING/MANUAL`; no flash write is authorized by this work.
 | F-010 | Artifact safety | Previous workflow names/readme could be read as hardware-verified and checksums lacked source/rollback/SBOM evidence. | Build-0108 and r12 artifacts are marked TEST-ONLY, include source SHA, checksums, rollback/manual checklist and SPDX metadata; initramfs is preferred when produced. | RESOLVED |
 | F-011 | CI coverage | The dedicated scan-server workflow ran only on pushes to runtime-v2, not on PRs or the finalization branch. | Enable pull-request runs and finalization-branch pushes. | RESOLVED |
 | F-012 | Firmware packaging | Build-0108 failed at `package/install`: `avahi-utils (no such package)`. The dependency remained from the rejected legacy publisher even though the package uses native `minibox-discoveryd`. | Remove the unused `avahi-utils` dependency; keep `libusb-1.0`; rebuild all contracts and firmware. | RESOLVED; REBUILDING |
+| F-013 | Post-merge CI | Main-branch `Build firmware from ZIP` copied the package but not root `src`, causing `cp: cannot stat .../src/*`. | Copy root `src` into the OpenWrt tree, trigger on `src/**`, assert daemon sources, emit TEST-only traceability files, and run `tests/test-openwrt-source-injection.sh` against a temporary OpenWrt layout. | RESOLVED; REGRESSION COVERED; REBUILDING IN FIX PR |
 
 ## Test log
 
