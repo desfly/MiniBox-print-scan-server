@@ -23,7 +23,6 @@ for value in (
     b'printer-make-and-model',
     b'HP LaserJet M1522n',
     b'printer-uri-supported',
-    b'ipp-versions-supported',
     b'operations-supported',
     b'ipp-versions-supported',
 ):
