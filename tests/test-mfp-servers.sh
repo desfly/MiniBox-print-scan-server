@@ -28,7 +28,8 @@ for value in (
     b'ipp-versions-supported',
 ):
     assert value in data, f'missing IPP attribute/value: {value!r}'
-assert b'ipp://' in data and b'.local/ipp/print' in data, 'printer URI not aligned with actual host name'\nassert data[-1:] == b'\x03', 'IPP response missing end-of-attributes tag'
+assert b'ipp://' in data and b'.local/ipp/print' in data, 'printer URI not aligned with actual host name'
+assert data[-1:] == b'\x03', 'IPP response missing end-of-attributes tag'
 PY
 printf '\002\000\000\002\000\000\000\002\003\033EHello MiniBox\014\033E' >/tmp/print.req
 printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
