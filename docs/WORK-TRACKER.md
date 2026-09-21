@@ -58,3 +58,14 @@ Rule: before coding or continuing, read this tracker first and compare it with l
 - [ ] Separate end-to-end scan test: eSCL status/capabilities do NOT confirm USB image capture.
 
 Do not repeat USB/port/health tests without new firmware or a regression. Next actionable code task: mDNS query-answering/address record and tests on PR #4.
+
+
+### 2026-09-21 continued — PR #4 code and CI evidence
+- [x] IPP attributes corrected on the wire: nameWithoutLanguage/textWithoutLanguage/enum tags; complete printer model string, default format and conservative IPP version advertisement. Regression in tests/test-ipp.c.
+- [x] IPP printer-uri-supported now uses the current hostname, consistent with discovery target, rather than hard-coded minibox.local. Server contract updated.
+- [x] Discovery daemon now binds UDP 5353, joins multicast and handles bounded DNS-SD queries, advertises PTR/SRV/TXT plus a Wi-Fi IPv4 A record. Bounded query-response test added; production hardware verification is STILL REQUIRED.
+- [x] Network MFP CI for commit b952ca8b069d04f75c7f269a2fa453636c935809: success, run 35637166400 (includes DNS-SD regression); scan contract run 35637166343 success.
+- [ ] Verify all CI checks on final PR #4 HEAD; build artifacts generated from final HEAD, not an older cancelled run.
+- [ ] Review service discovery on actual Windows; query-based discovery, device IP/hostname, printer installation and real PCL/PCL6 job on M1522 all remain unverified.
+- [ ] If Windows IPP class driver requires an actual driverless PDL, implement truthful format support and conversion, not fake PDF/URF claims. Keep using native libusb; no CUPS/usblp.
+- [ ] RAM-boot/rollback gate before any full firmware flash; existing image on device has unverified recovery path and must not be overwritten just because CI passed.
