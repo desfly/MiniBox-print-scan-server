@@ -79,3 +79,11 @@ Do not repeat USB/port/health tests without new firmware or a regression. Next a
 - [ ] Current r12 on device DOES NOT include the new IPP response framing fix. Do not repeat the same Windows discovery wizard or misattribute that to a full test of the new code.
 - [ ] Protocol completion remains: IPP operations-required, actual PCL/PCL6 payload acceptance, accurate advertised document formats, Windows 10 auto discovery and physical print, and actual USB scan image.
 - [ ] Do NOT full-flash just to deploy these changes: UART remains nonfunctional and full-firmware recovery is unverified; if available, test a new verified APK on the current system, preserving rollback.
+
+
+### 2026-09-21 — Android acceptance gate (user requirement reaffirmed)
+- [ ] Android MUST automatically discover "HP LaserJet M1522n @ MiniBox" over the same Wi-Fi via a compatible Android print service (e.g., Mopria), with no manually entered MiniBox IP address, port, or printer URL. Confirm device and Android print-service version during hardware test. A DNS-SD response alone is insufficient proof of Android discovery.
+- [ ] Android MUST print a real document end-to-end to the HP M1522n through IPP and userspace/libusb. Do not falsely advertise PDF, PWG Raster, Apple URF, JPEG, or driverless IPP Everywhere support unless actual format handling/conversion into M1522-accepted printer data is implemented and tested. Current application/octet-stream only is NOT Android driverless printing readiness.
+- [ ] Android scanning: discover the _uscan._tcp/eSCL scanner automatically in a compatible scanner app, complete a physical platen scan and retrieve real JPEG/PDF output. As Android has no guaranteed universal built-in scanning flow, provide MiniBox Web scan fallback without manual IP in normal UX (discoverable name/link or a companion app if required).
+- [ ] Windows and Android discovery are distinct compatibility paths: implement/test Windows WS-Discovery as needed, while retaining DNS-SD/IPP for Android; do not treat passing one platform as passing the other.
+- [ ] Test same-Wi-Fi Android discovery, print/scan, reconnect after MiniBox reboot and changed DHCP address; record observed hardware results separately from simulator/CI contracts.
