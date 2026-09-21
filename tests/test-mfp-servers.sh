@@ -94,7 +94,7 @@ import socket
 import time
 from pathlib import Path
 body = Path('/tmp/scan.xml').read_bytes()
-head = (b'POST /eSCL/ScanJobs HTTP/1.1\\r\\nHost: minibox\\r\\nContent-Length: ' + str(len(body)).encode() + b'\\r\\n\\r\\n')
+head = (b'POST /eSCL/ScanJobs HTTP/1.1\r\nHost: minibox\r\nContent-Length: ' + str(len(body)).encode() + b'\r\n\r\n')
 for attempt in range(50):
     try:
         with socket.create_connection(('127.0.0.1', 18081), timeout=1) as s:
@@ -109,7 +109,7 @@ else:
 assert response.startswith(b'HTTP/1.1 201 '), response
 with socket.create_connection(('127.0.0.1', 18081), timeout=3) as s:
     s.settimeout(3)
-    s.sendall(b'GET /eSCL/ScanJobs/1/NextDocument HTTP/1.1\\r\\nHost: minibox\\r\\n\\r\\n')
+    s.sendall(b'GET /eSCL/ScanJobs/1/NextDocument HTTP/1.1\r\nHost: minibox\r\n\r\n')
     response = b''
     while True:
         chunk = s.recv(4096)
@@ -118,7 +118,7 @@ with socket.create_connection(('127.0.0.1', 18081), timeout=3) as s:
 assert response.startswith(b'HTTP/1.1 503 '), response[:200]
 assert b'HTTP/1.1 200 ' not in response, response[:200]
 with socket.create_connection(('127.0.0.1', 18081), timeout=3) as s:
-    s.sendall(b'GET /health HTTP/1.1\\r\\nHost: minibox\\r\\n\\r\\n')
+    s.sendall(b'GET /health HTTP/1.1\r\nHost: minibox\r\n\r\n')
     assert b'200 OK' in s.recv(4096)
 PY
 echo 'MFP server transport contract OK'
