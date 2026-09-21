@@ -43,3 +43,18 @@
 4. Keep network advertisements truthful: do not release phantom IPP/eSCL services before their actual listening backends exist.
 
 Rule: before coding or continuing, read this tracker first and compare it with live repository/CI state. Continue from the first unchecked actionable item; do not redo validated work unless a regression requires it. After every verified change, record the change, reason/logic, commit or CI evidence, next step, and known risk/blocker here.
+
+
+## 2026-09-21 — Windows IPP hardware finding and remediation (PR #4)
+
+- [x] Hardware: OpenWrt 25.12.5 boots on MiniBox; USB 03f0:4517 detected, usblp unloaded, printerd /health on 631 and scand /health and eSCL metadata/status on 8080 respond.
+- [x] Windows: existing HP Standard TCP/IP printer targeted 192.168.55.155 RAW:9100, NOT MiniBox 192.168.55.250:631; failed jobs on that old Windows queue do not prove a new IPP USB-print regression.
+- [x] Windows: manual IPP install at http://192.168.55.250:631/ipp/print failed. Automatic discovery and end-to-end printing NOT VALIDATED.
+- [x] Code audit: IPP printer-name and printer-make-and-model carried URI value tag 0x45; model lost final byte; operations-supported sent integer 0x21 instead of enum 0x23. Source: src/minibox-ipp/ipp.c main d7b8094543e4f29a2f2ca16618624d2c316acbc6.
+- [x] Draft PR #4 on fix/windows-ipp-discovery-20260921: correct IPP attribute tags and lengths, test binary wire fields. Package/firmware needs new build AFTER successful CI. This is NOT yet a validated Windows installer or flash-ready fix.
+- [ ] Implement query-response mDNS/DNS-SD including address resolution: current discoveryd emits unsolicited PTR/SRV/TXT once per minute, does not listen/respond to client queries, and does not publish an address record. A log line 'published 2 service(s)' is NOT proof of Windows discovery.
+- [ ] Confirm exact IPP capability negotiation and Windows printer driver/data format. application/octet-stream does NOT establish driverless PDF/AirPrint capability.
+- [ ] Obtain green PR CI and artifact, review flash recovery requirements, then validate from Windows Add Printer with NO manual IP or port and physically print on HP M1522n.
+- [ ] Separate end-to-end scan test: eSCL status/capabilities do NOT confirm USB image capture.
+
+Do not repeat USB/port/health tests without new firmware or a regression. Next actionable code task: mDNS query-answering/address record and tests on PR #4.
