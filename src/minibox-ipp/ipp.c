@@ -8,4 +8,40 @@ static int put(unsigned char*o,size_t c,size_t*p,const void*v,size_t n){if(*p+n>
 static int u16(unsigned char*o,size_t c,size_t*p,unsigned v){unsigned char b[2]={(unsigned char)(v>>8),(unsigned char)v};return put(o,c,p,b,2);}
 static int attr(unsigned char*o,size_t c,size_t*p,unsigned tag,const char*n,const void*v,size_t z){size_t nl=strlen(n);unsigned char t=(unsigned char)tag;if(nl>65535||z>65535||put(o,c,p,&t,1)||u16(o,c,p,(unsigned)nl)||put(o,c,p,n,nl)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
 static int attr_more(unsigned char*o,size_t c,size_t*p,unsigned tag,const void*v,size_t z){unsigned char t=(unsigned char)tag;if(z>65535||put(o,c,p,&t,1)||u16(o,c,p,0)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
-size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){size_t p=0;unsigned char group=0x04,end=0x03;unsigned char state[4]={0,0,0,3};unsigned char accepting=1;unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};if(!o||!r||!uri||c<9)return 0;if(!(p=ipp_build_status(o,c,r,0)))return 0;p--;if(put(o,c,&p,&group,1))return 0;if(attr(o,c,&p,0x45,"printer-name","HP LaserJet M1522n @ MiniBox",28))return 0;if(attr(o,c,&p,0x45,"printer-make-and-model","HP LaserJet M1522n",17))return 0;if(attr(o,c,&p,0x45,"printer-info","MiniBox network print server",28))return 0;if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;if(attr(o,c,&p,0x23,"printer-state",state,4))return 0;if(attr(o,c,&p,0x22,"printer-is-accepting-jobs",&accepting,1))return 0;if(attr(o,c,&p,0x44,"printer-state-reasons","none",4))return 0;if(attr(o,c,&p,0x47,"charset-configured","utf-8",5))return 0;if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;if(attr(o,c,&p,0x44,"ipp-versions-supported","2.0",3))return 0;if(attr(o,c,&p,0x21,"operations-supported",op_print,4))return 0;if(attr_more(o,c,&p,0x21,op_validate,4))return 0;if(attr_more(o,c,&p,0x21,op_attrs,4))return 0;if(attr(o,c,&p,0x49,"document-format-supported","application/octet-stream",24))return 0;if(put(o,c,&p,&end,1))return 0;return p;}
+size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){
+    size_t p=0;
+    const unsigned char group=0x04,end=0x03;
+    const unsigned char state[4]={0,0,0,3};
+    const unsigned char accepting=1;
+    const unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};
+    const unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};
+    const unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};
+    const char *printer_name="HP LaserJet M1522n @ MiniBox";
+    const char *model="HP LaserJet M1522n";
+    const char *info="MiniBox network print server";
+    const char *format="application/octet-stream";
+    if(!o||!r||!uri||c<9)return 0;
+    if(!(p=ipp_build_status(o,c,r,0)))return 0;
+    p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
+    if(put(o,c,&p,&group,1))return 0;
+    /* RFC 8011: nameWithoutLanguage=0x42, textWithoutLanguage=0x41,
+       enum=0x23. A URI tag (0x45) cannot describe a printer name. */
+    if(attr(o,c,&p,0x42,"printer-name",printer_name,strlen(printer_name)))return 0;
+    if(attr(o,c,&p,0x41,"printer-make-and-model",model,strlen(model)))return 0;
+    if(attr(o,c,&p,0x41,"printer-info",info,strlen(info)))return 0;
+    if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;
+    if(attr(o,c,&p,0x23,"printer-state",state,4))return 0;
+    if(attr(o,c,&p,0x22,"printer-is-accepting-jobs",&accepting,1))return 0;
+    if(attr(o,c,&p,0x44,"printer-state-reasons","none",4))return 0;
+    if(attr(o,c,&p,0x47,"charset-configured","utf-8",5))return 0;
+    if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;
+    /* A limited IPP implementation must not claim a fully supported IPP 2.0 feature set. */
+    if(attr(o,c,&p,0x44,"ipp-versions-supported","1.1",3))return 0;
+    if(attr(o,c,&p,0x23,"operations-supported",op_print,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_validate,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_attrs,4))return 0;
+    if(attr(o,c,&p,0x49,"document-format-supported",format,strlen(format)))return 0;
+    if(attr(o,c,&p,0x49,"document-format-default",format,strlen(format)))return 0;
+    if(put(o,c,&p,&end,1))return 0;
+    return p;
+}
