@@ -41,8 +41,11 @@ static int stream_document(int f){
  scan_backend_ctx=minibox_m1522_scan_backend_ctx;
 #endif
  if(!scan_backend||minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings)) return -1;
+ /* Do not commit HTTP 200 before the backend yields image data. */
+ if(minibox_scan_stream_read(&s,buf,sizeof buf,&got) || !got) goto fail;
  if(send_all(f,h,strlen(h))) goto fail;
  started=1;
+ if(send_all(f,buf,got)) goto fail;
  for(;;){
   if(minibox_scan_stream_read(&s,buf,sizeof buf,&got)) goto fail;
   if(!got) break;
