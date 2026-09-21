@@ -25,12 +25,12 @@ static void outx(int f,int code,const char*reason,const char*type,const char*ext
 static const char *reason_for(int code){switch(code){case 200:return "OK";case 201:return "Created";case 400:return "Bad Request";case 404:return "Not Found";case 409:return "Conflict";case 503:return "Service Unavailable";default:return "Error";}}
 static void out(int f,int code,const char*type,const char*body){outx(f,code,reason_for(code),type,NULL,body);}
 static int headers_complete(const char*b,size_t n){size_t i;for(i=0;i+3<n;i++)if(b[i]=='\r'&&b[i+1]=='\n'&&b[i+2]=='\r'&&b[i+3]=='\n')return 1;return 0;}
-static int receive_request(int f,char*b,size_t cap,size_t*used){struct minibox_http_body hb;size_t need;*used=0;while(!headers_complete(b,*used)){ssize_t n;if(*used==cap)return-2;n=minibox_recv_retry(f,b+*used,cap-*used);if(n<=0)return-1;*used+=(size_t)n;}b[*used]=0;if(strncmp(b,"POST ",5))return 0;if(minibox_http_parse_body((const unsigned char*)b,*used,&hb))return-3;if(hb.content_length>cap-hb.header_bytes)return-4;need=hb.header_bytes+hb.content_length;while(*used<need){ssize_t n=minibox_recv_retry(f,b+*used,need-*used);if(n<=0)return-1;*used+=(size_t)n;}b[*used]=0;return 0;}
+static int receive_request(int f,char*b,size_t cap,size_t*used){struct minibox_http_body hb;size_t need;*used=0;while(!headers_complete(b,*used)){ssize_t n;if(*used>=cap-1)return-2;n=minibox_recv_retry(f,b+*used,cap-1-*used);if(n<=0)return-1;*used+=(size_t)n;}b[*used]=0;if(strncmp(b,"POST ",5))return 0;if(minibox_http_parse_body((const unsigned char*)b,*used,&hb))return-3;if(hb.header_bytes>=cap||hb.content_length>=cap-hb.header_bytes)return-4;need=hb.header_bytes+hb.content_length;while(*used<need){ssize_t n=minibox_recv_retry(f,b+*used,need-*used);if(n<=0)return-1;*used+=(size_t)n;}b[*used]=0;return 0;}
 static const char*body_of(char*b,size_t n,size_t*len){size_t i;for(i=0;i+3<n;i++)if(b[i]=='\r'&&b[i+1]=='\n'&&b[i+2]=='\r'&&b[i+3]=='\n'){*len=n-i-4;return b+i+4;}*len=0;return NULL;}
 static int next_document_id(const char *p,unsigned *id){char tail;return sscanf(p,"/eSCL/ScanJobs/%u/NextDocument%c",id,&tail)==1?0:-1;}
 #ifdef MINIBOX_TEST_SCAN_BACKEND
 struct test_scan_ctx{size_t off;}; static struct test_scan_ctx test_ctx; static const unsigned char test_jpeg[]={0xff,0xd8,'M','I','N','I','B','O','X',0xff,0xd9};
-static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
+static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;if(getenv("MINIBOX_TEST_SCAN_FAIL_FIRST") && c->off==0){*got=0;return -1;}size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
 #else
 static const struct minibox_scan_backend *scan_backend=&minibox_m1522_scan_backend; static void *scan_backend_ctx;
 #endif
@@ -41,8 +41,11 @@ static int stream_document(int f){
  scan_backend_ctx=minibox_m1522_scan_backend_ctx;
 #endif
  if(!scan_backend||minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings)) return -1;
+ /* Do not commit HTTP 200 before the backend yields image data. */
+ if(minibox_scan_stream_read(&s,buf,sizeof buf,&got) || !got) goto fail;
  if(send_all(f,h,strlen(h))) goto fail;
  started=1;
+ if(send_all(f,buf,got)) goto fail;
  for(;;){
   if(minibox_scan_stream_read(&s,buf,sizeof buf,&got)) goto fail;
   if(!got) break;

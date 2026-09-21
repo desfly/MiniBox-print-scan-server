@@ -63,4 +63,62 @@ code=$(curl -sS -D /tmp/next.headers -o /tmp/next.out -w '%{http_code}' http://1
 grep -qi '^Content-Type: image/jpeg' /tmp/next.headers
 printf '\377\330MINIBOX\377\331' >/tmp/next.expected
 cmp /tmp/next.expected /tmp/next.out
+# Boundary regression: a complete 65536-byte request must not write past the NUL slot.
+python3 - <<'PY'
+import socket
+host = ('127.0.0.1', 18080)
+# Exactly SCAN_REQUEST_MAX bytes, including the HTTP header and body.
+base = b'POST /eSCL/ScanJobs HTTP/1.1\r\nHost: minibox\r\nContent-Length: '
+for digits in range(1, 8):
+    n = 65536 - len(base) - digits - 4
+    if len(str(n)) == digits:
+        break
+else:
+    raise AssertionError('could not construct boundary request')
+wire = base + str(n).encode() + b'\r\n\r\n' + b'X' * n
+assert len(wire) == 65536, len(wire)
+with socket.create_connection(host, timeout=5) as s:
+    s.settimeout(5)
+    s.sendall(wire)
+    response = s.recv(4096)
+assert b'413 ' in response or b'400 ' in response, response
+with socket.create_connection(host, timeout=5) as s:
+    s.sendall(b'GET /health HTTP/1.1\r\nHost: minibox\r\n\r\n')
+    assert b'200 OK' in s.recv(4096)
+PY
+# First backend read failure must produce HTTP 503, never a premature 200.
+MINIBOX_TEST_SCAN_FAIL_FIRST=1 /tmp/minibox-scand 18081 >/tmp/scand-fail.log 2>&1 & F=$!
+trap 'kill $P $S $F 2>/dev/null || true' EXIT INT TERM
+python3 - <<'PY'
+import socket
+import time
+from pathlib import Path
+body = Path('/tmp/scan.xml').read_bytes()
+head = (b'POST /eSCL/ScanJobs HTTP/1.1\r\nHost: minibox\r\nContent-Length: ' + str(len(body)).encode() + b'\r\n\r\n')
+for attempt in range(50):
+    try:
+        with socket.create_connection(('127.0.0.1', 18081), timeout=1) as s:
+            s.settimeout(3)
+            s.sendall(head + body)
+            response = s.recv(4096)
+        break
+    except ConnectionRefusedError:
+        time.sleep(.1)
+else:
+    raise AssertionError('failure-injection scanner did not start')
+assert response.startswith(b'HTTP/1.1 201 '), response
+with socket.create_connection(('127.0.0.1', 18081), timeout=3) as s:
+    s.settimeout(3)
+    s.sendall(b'GET /eSCL/ScanJobs/1/NextDocument HTTP/1.1\r\nHost: minibox\r\n\r\n')
+    response = b''
+    while True:
+        chunk = s.recv(4096)
+        if not chunk: break
+        response += chunk
+assert response.startswith(b'HTTP/1.1 503 '), response[:200]
+assert b'HTTP/1.1 200 ' not in response, response[:200]
+with socket.create_connection(('127.0.0.1', 18081), timeout=3) as s:
+    s.sendall(b'GET /health HTTP/1.1\r\nHost: minibox\r\n\r\n')
+    assert b'200 OK' in s.recv(4096)
+PY
 echo 'MFP server transport contract OK'
