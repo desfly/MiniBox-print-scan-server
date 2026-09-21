@@ -87,3 +87,8 @@ Do not repeat USB/port/health tests without new firmware or a regression. Next a
 - [ ] Android scanning: discover the _uscan._tcp/eSCL scanner automatically in a compatible scanner app, complete a physical platen scan and retrieve real JPEG/PDF output. As Android has no guaranteed universal built-in scanning flow, provide MiniBox Web scan fallback without manual IP in normal UX (discoverable name/link or a companion app if required).
 - [ ] Windows and Android discovery are distinct compatibility paths: implement/test Windows WS-Discovery as needed, while retaining DNS-SD/IPP for Android; do not treat passing one platform as passing the other.
 - [ ] Test same-Wi-Fi Android discovery, print/scan, reconnect after MiniBox reboot and changed DHCP address; record observed hardware results separately from simulator/CI contracts.
+
+### 24-hour execution schedule
+- [x] Detailed 24-hour sequence, Windows/Android separate gates and explicit acceptance evidence recorded in docs/24H-WINDOWS-ANDROID-MFP-PLAN-2026-09-21.md (commit 8299ad3d699294a4a1744a426baf168033cfe804). Work begins from IPP and platform print PDL, not generic repeated LAN tests.
+- [ ] Resume first executable code task: implement and test actual accepted job formats/IPP negotiation; retain accurate Android unsupported state until proven raster or PDF conversion to M1522 PCL/PS exists.
+- [ ] Windows WSD full metadata and print integration; do not just advertise a UDP Hello without functioning HTTP endpoints.
