@@ -121,9 +121,8 @@ static int read_name(const unsigned char *q,size_t len,size_t *offset,
         if(n>63||p+n>len||w+n+1>=cap)return -1;
         if(w)out[w++]='.';
         memcpy(out+w,q+p,n);w+=n;p+=n;
-    }
-}
-int mb_mdns_build_reply(const unsigned char *q,size_t len,
+    }}
+int mb_mdns_build_reply_legacy(const unsigned char *q,size_t len,
                         const mb_service_t *services,size_t count,
                         const char *hostname,const unsigned char ip[4],
                         unsigned char *out,size_t cap) {
@@ -151,8 +150,56 @@ int mb_mdns_build_reply(const unsigned char *q,size_t len,
             if(match)return packet(out,cap,s,hostname,ip);
         }
     }
-    return 0;
+    return 0;}
+int mb_mdns_build_reply(const unsigned char *q,size_t len,
+                        const mb_service_t *services,size_t count,
+                        const char *hostname,const unsigned char ip[4],
+                        unsigned char *out,size_t cap) {
+    size_t p=12,op=12,i,j,questions,answers=0;
+    char question[256],type[96],inst[224],target[128];
+    if(!q||len<12||!services||!count||!hostname||!ip||!out||cap<12)return -1;
+    if(q[2]&0x80)return 0;
+    questions=((size_t)q[4]<<8)|q[5];
+    if(!questions||questions>64)return 0;
+    if(label(target,sizeof target,hostname,".local"))return -1;
+    memset(out,0,12);out[2]=0x84;
+    for(i=0;i<questions;i++) {
+        uint16_t kind,klass;
+        if(read_name(q,len,&p,question,sizeof question)||p>len||len-p<4)return -1;
+        kind=(uint16_t)((q[p]<<8)|q[p+1]);
+        klass=(uint16_t)((q[p+2]<<8)|q[p+3]);p+=4;
+        if((klass&0x7fff)!=1)continue;
+        if((kind==1||kind==255)&&!strcasecmp(question,target)) {
+            if(rr_head(out,cap,&op,target,1,0x8001,4)||op>cap||cap-op<4)return -1;
+            memcpy(out+op,ip,4);op+=4;answers++;continue;
+        }
+        for(j=0;j<count;j++) {
+            const mb_service_t *s=&services[j];
+            unsigned char record[1500],rdata[256];
+            size_t rp=0;int n,match;
+            if(label(type,sizeof type,s->type,".local")||
+               snprintf(inst,sizeof inst,"%s.%s",s->name,type)<0||
+               strlen(s->name)+1+strlen(type)>=sizeof inst)return -1;
+            if((kind==12||kind==255)&&
+               !strcasecmp(question,"_services._dns-sd._udp.local")) {
+                if(name(rdata,sizeof rdata,&rp,type)||
+                   rr_head(out,cap,&op,"_services._dns-sd._udp.local",12,1,(uint16_t)rp)||
+                   op>cap||rp>cap-op)return -1;
+                memcpy(out+op,rdata,rp);op+=rp;answers++;continue;
+            }
+            match=((kind==12||kind==255)&&!strcasecmp(question,type))||
+                  ((kind==33||kind==16||kind==255)&&!strcasecmp(question,inst));
+            if(!match)continue;
+            n=packet(record,sizeof record,s,hostname,ip);
+            if(n<12||op>cap||(size_t)(n-12)>cap-op)return -1;
+            memcpy(out+op,record+12,(size_t)(n-12));op+=(size_t)(n-12);answers+=4;
+        }
+    }
+    if(!answers)return 0;
+    out[6]=(unsigned char)(answers>>8);out[7]=(unsigned char)answers;
+    return (int)op;
 }
+
 static int wifi_ipv4(unsigned char ip[4],struct in_addr *addr) {
     struct ifaddrs *ifs,*p;int best=-1;
     if(getifaddrs(&ifs))return -errno;
