@@ -39,8 +39,8 @@ int main(void) {
     services[1].port=8080;
     check(services,2,"_ipp._tcp.local",12,4);
     check(services,2,"_uscan._tcp.local",12,4);
-    check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",33,3);
-    check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",16,3);
+    check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",33,4);
+    check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",16,4);
     check(services,2,"_services._dns-sd._udp.local",12,2);
     check(services,2,"minibox.local",1,1);
     check(services,2,"missing.local",1,0);
