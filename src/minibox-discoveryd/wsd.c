@@ -12,6 +12,15 @@ static int local_name(const char *p,size_t n,const char *name){
 static const char *element(const char *s,size_t n,const char *name){
     size_t i;for(i=0;i<n;i++)if(s[i]=='<'&&local_name(s+i,n-i,name))return s+i;return 0;
 }
+static const char *element_end(const char *s,size_t n,const char *name){
+    size_t i,z=strlen(name);const char *p,*e,*c;
+    for(i=0;i+3<n;i++)if(s[i]=='<'&&s[i+1]=='/'){
+        p=s+i+2;e=memchr(p,'>',n-i-2);if(!e)return 0;
+        c=memchr(p,':',(size_t)(e-p));if(c)p=c+1;
+        if((size_t)(e-p)==z&&!memcmp(p,name,z))return e+1;
+    }
+    return 0;
+}
 static int text_of(const char *s,size_t n,const char *name,char *out,size_t cap){
     const char *p=element(s,n,name),*gt,*lt;size_t z;
     if(!p)return 1;
@@ -35,17 +44,21 @@ static int qname_local_is(const char *s,size_t n,const char *local){
     return 0;
 }
 int mb_wsd_parse(const char *xml,size_t len,struct mb_wsd_request *out){
-    const char *body;int r;
+    const char *env,*body,*body_end;size_t body_len;int r;
     if(!xml||!out||!len||len>65535)return -1;
     memset(out,0,sizeof *out);
-    /* Require a SOAP Envelope and Body; do not accept substring-only packets. */
-    if(!element(xml,len,"Envelope")||(body=element(xml,len,"Body"))==0)return -2;
-    if(element(body,len-(size_t)(body-xml),"Probe"))out->kind=MB_WSD_PROBE;
-    else if(element(body,len-(size_t)(body-xml),"Resolve"))out->kind=MB_WSD_RESOLVE;
+    /* Require one bounded SOAP Envelope and scope discovery actions to Body.
+     * Header text containing <Probe> or <Resolve> must never select an action. */
+    env=element(xml,len,"Envelope");if(!env)return -2;
+    body=element(env,len-(size_t)(env-xml),"Body");if(!body)return -2;
+    body_end=element_end(body,len-(size_t)(body-xml),"Body");if(!body_end)return -2;
+    body_len=(size_t)(body_end-body);
+    if(element(body,body_len,"Probe"))out->kind=MB_WSD_PROBE;
+    else if(element(body,body_len,"Resolve"))out->kind=MB_WSD_RESOLVE;
     else return -3;
-    r=text_of(xml,len,"MessageID",out->message_id,sizeof out->message_id);if(r)return -4;
-    if(out->kind==MB_WSD_PROBE){r=text_of(body,len-(size_t)(body-xml),"Types",out->types,sizeof out->types);if(r<0)return -5;}
-    else {r=text_of(body,len-(size_t)(body-xml),"Address",out->endpoint,sizeof out->endpoint);if(r)return -6;}
+    r=text_of(env,len-(size_t)(env-xml),"MessageID",out->message_id,sizeof out->message_id);if(r)return -4;
+    if(out->kind==MB_WSD_PROBE){r=text_of(body,body_len,"Types",out->types,sizeof out->types);if(r<0)return -5;}
+    else {r=text_of(body,body_len,"Address",out->endpoint,sizeof out->endpoint);if(r)return -6;}
     return 0;
 }
 int mb_wsd_is_print_probe(const struct mb_wsd_request *r){
