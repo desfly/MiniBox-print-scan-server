@@ -23,7 +23,9 @@ static void check(const mb_service_t *services,size_t count,const char *qname,un
     if(expected==0){assert(len==0);return;}
     assert(len>=12);
     assert(reply[2]==0x84);
-    assert((((unsigned)reply[6]<<8)|reply[7])==expected);
+    unsigned actual=((unsigned)reply[6]<<8)|reply[7];
+    if(actual!=expected)fprintf(stderr,"DNS query %s type %u: expected %u records, got %u\\n",qname,type,expected,actual);
+    assert(actual==expected);
 }
 int main(void) {
     mb_service_t services[2]={0};
