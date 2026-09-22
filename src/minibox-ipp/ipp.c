@@ -41,6 +41,8 @@ static int put(unsigned char*o,size_t c,size_t*p,const void*v,size_t n){if(*p>c|
 static int u16(unsigned char*o,size_t c,size_t*p,unsigned v){unsigned char b[2]={(unsigned char)(v>>8),(unsigned char)v};return put(o,c,p,b,2);}
 static int attr(unsigned char*o,size_t c,size_t*p,unsigned tag,const char*n,const void*v,size_t z){size_t nl=strlen(n);unsigned char t=(unsigned char)tag;if(nl>65535||z>65535||put(o,c,p,&t,1)||u16(o,c,p,(unsigned)nl)||put(o,c,p,n,nl)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
 static int attr_more(unsigned char*o,size_t c,size_t*p,unsigned tag,const void*v,size_t z){unsigned char t=(unsigned char)tag;if(z>65535||put(o,c,p,&t,1)||u16(o,c,p,0)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
+int ipp_raw_format_supported(const unsigned char *b,size_t n){int r=ipp_check_document_format(b,n);return r<0?-1:!r;}
+
 
 /* RFC 8011 section 4.1.4: every IPP response starts with an Operation
  * Attributes group, charset first and natural-language second. */

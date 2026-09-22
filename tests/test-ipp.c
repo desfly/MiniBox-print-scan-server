@@ -1,7 +1,7 @@
 #include "../src/minibox-ipp/ipp.h"
 #include <assert.h>
 #include <string.h>
-static int contains(const unsigned char*b,size_t n,const char*s){size_t z=strlen(s),i;if(z>n)return 0;for(i=0;i+z<=n;i++)if(!memcmp(b+i,s,z))return 1;return 0;}
+static int contains(const unsigned char*b,size_t n,const char*s){size_t z=strlen(s),i;if(z>n)return 0;for(i=0;i+z<=n;i++)if(!memcmp(b+i,s,z))return 1;{const unsigned char raw[]={2,0,0,2,0,0,0,1,1,0x49,0,15,'d','o','c','u','m','e','n','t','-','f','o','r','m','a','t',0,24,'a','p','p','l','i','c','a','t','i','o','n','/','o','c','t','e','t','-','s','t','r','e','a','m',3};unsigned char bad[sizeof raw];memcpy(bad,raw,sizeof raw);assert(ipp_raw_format_supported(raw,sizeof raw)==1);memcpy(bad+29,"application/pdf",15);assert(ipp_raw_format_supported(bad,sizeof bad)==0);}return 0;}
 static int contains_bytes(const unsigned char*b,size_t n,const unsigned char*v,size_t z){size_t i;if(z>n)return 0;for(i=0;i+z<=n;i++)if(!memcmp(b+i,v,z))return 1;return 0;}
 static int attribute_has_exact_value(const unsigned char *b,size_t n,const char *name,const char *value){
     size_t p=9,expected_name=strlen(name),expected_value=strlen(value);
