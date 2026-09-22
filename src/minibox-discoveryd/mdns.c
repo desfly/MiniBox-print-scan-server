@@ -1,3 +1,6 @@
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
 #include "mdns.h"
 #include <arpa/inet.h>
 #include <errno.h>
@@ -53,7 +56,7 @@ static int ipv4_for_interface(const char *ifname,struct in_addr *addr){
     for(it=all;it;it=it->ifa_next){
         if(!it->ifa_addr||it->ifa_addr->sa_family!=AF_INET)continue;
         if(ifname&&strcmp(it->ifa_name,ifname))continue;
-        if(it->ifa_flags&IFF_LOOPBACK)continue;
+        if(it->ifa_addr && (ntohl(((struct sockaddr_in*)it->ifa_addr)->sin_addr.s_addr)>>24)==127)continue;
         *addr=((struct sockaddr_in*)it->ifa_addr)->sin_addr;found=1;break;
     }freeifaddrs(all);return found?0:-1;
 }
