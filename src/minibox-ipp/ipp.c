@@ -1,37 +1,115 @@
 #include "ipp.h"
 #include <string.h>
 int ipp_parse_header(const unsigned char*b,size_t n,struct ipp_request*r){if(!b||!r||n<8)return-1;r->major=b[0];r->minor=b[1];r->operation=(uint16_t)(((uint16_t)b[2]<<8)|b[3]);r->request_id=((uint32_t)b[4]<<24)|((uint32_t)b[5]<<16)|((uint32_t)b[6]<<8)|b[7];if(r->major!=1&&r->major!=2)return-2;return 0;}
-int ipp_document_offset(const unsigned char*b,size_t n,size_t*off){size_t p=8;if(!b||!off||n<9)return-1;while(p<n){unsigned char tag=b[p++];if(tag==0x03){*off=p;return 0;}if(tag>=0x01&&tag<=0x05)continue;if(p+2>n)return-2;{size_t nl=((size_t)b[p]<<8)|b[p+1];p+=2;if(p+nl+2>n)return-2;p+=nl;{size_t vl=((size_t)b[p]<<8)|b[p+1];p+=2;if(p+vl>n)return-2;p+=vl;}}}return-3;}
+int ipp_document_offset(const unsigned char*b,size_t n,size_t*off){size_t p=8;if(!b||!off||n<9)return-1;while(p<n){unsigned char tag=b[p++];if(tag==0x03){*off=p;return 0;}if(tag>=0x01&&tag<=0x05)continue;if(p+2>n)return-2;{size_t nl=((size_t)b[p]<<8)|b[p+1];p+=2;if(nl>n-p||n-p-nl<2)return-2;p+=nl;{size_t vl=((size_t)b[p]<<8)|b[p+1];p+=2;if(vl>n-p)return-2;p+=vl;}}}return-3;}
+
+/* A MiniBox print job is a raw stream to the M1522, NOT a PDF/raster
+ * renderer. Reject explicitly unsupported formats before touching USB. */
+int ipp_check_document_format(const unsigned char *buf,size_t len) {
+    static const char key[]="document-format";
+    static const char raw[]="application/octet-stream";
+    size_t p=8;
+    int seen=0;
+    if(!buf||len<9)return -1;
+    while(p<len) {
+        unsigned char tag=buf[p++];
+        size_t nl,vl;
+        if(tag==0x03)return 0;
+        if(tag>=0x01&&tag<=0x05)continue;
+        if(p>len||len-p<2)return -1;
+        nl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
+        if(nl>len-p||len-p-nl<2)return -1;
+        if(nl==sizeof(key)-1&&!memcmp(buf+p,key,nl)) {
+            if(seen++||tag!=0x49)return 1;
+            p+=nl;
+            vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
+            if(vl>len-p)return -1;
+            if(vl!=sizeof(raw)-1||memcmp(buf+p,raw,vl))return 1;
+        } else {
+            p+=nl;
+            vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
+            if(vl>len-p)return -1;
+        }
+        p+=vl;
+    }
+    return -1;
+}
+
 const char*ipp_operation_name(uint16_t op){switch(op){case IPP_OP_PRINT_JOB:return"Print-Job";case IPP_OP_VALIDATE_JOB:return"Validate-Job";case IPP_OP_GET_PRINTER_ATTRIBUTES:return"Get-Printer-Attributes";default:return"Unknown";}}
-size_t ipp_build_status(unsigned char*o,size_t c,const struct ipp_request*r,uint16_t s){if(!o||!r||c<9)return 0;o[0]=r->major;o[1]=r->minor;o[2]=(unsigned char)(s>>8);o[3]=(unsigned char)s;o[4]=(unsigned char)(r->request_id>>24);o[5]=(unsigned char)(r->request_id>>16);o[6]=(unsigned char)(r->request_id>>8);o[7]=(unsigned char)r->request_id;o[8]=0x03;return 9;}
-static int put(unsigned char*o,size_t c,size_t*p,const void*v,size_t n){if(*p+n>c)return-1;memcpy(o+*p,v,n);*p+=n;return 0;}
+
+static int put(unsigned char*o,size_t c,size_t*p,const void*v,size_t n){if(*p>c||n>c-*p)return-1;memcpy(o+*p,v,n);*p+=n;return 0;}
 static int u16(unsigned char*o,size_t c,size_t*p,unsigned v){unsigned char b[2]={(unsigned char)(v>>8),(unsigned char)v};return put(o,c,p,b,2);}
 static int attr(unsigned char*o,size_t c,size_t*p,unsigned tag,const char*n,const void*v,size_t z){size_t nl=strlen(n);unsigned char t=(unsigned char)tag;if(nl>65535||z>65535||put(o,c,p,&t,1)||u16(o,c,p,(unsigned)nl)||put(o,c,p,n,nl)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
 static int attr_more(unsigned char*o,size_t c,size_t*p,unsigned tag,const void*v,size_t z){unsigned char t=(unsigned char)tag;if(z>65535||put(o,c,p,&t,1)||u16(o,c,p,0)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
-size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){size_t p=0;unsigned char group=0x04,end=0x03;unsigned char state[4]={0,0,0,3};unsigned char accepting=1;unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};if(!o||!r||!uri||c<9)return 0;if(!(p=ipp_build_status(o,c,r,0)))return 0;p--;if(put(o,c,&p,&group,1))return 0;if(attr(o,c,&p,0x45,"printer-name","HP LaserJet M1522n @ MiniBox",28))return 0;if(attr(o,c,&p,0x45,"printer-make-and-model","HP LaserJet M1522n",17))return 0;if(attr(o,c,&p,0x45,"printer-info","MiniBox network print server",28))return 0;if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;if(attr(o,c,&p,0x23,"printer-state",state,4))return 0;if(attr(o,c,&p,0x22,"printer-is-accepting-jobs",&accepting,1))return 0;if(attr(o,c,&p,0x44,"printer-state-reasons","none",4))return 0;if(attr(o,c,&p,0x47,"charset-configured","utf-8",5))return 0;if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;if(attr(o,c,&p,0x44,"ipp-versions-supported","2.0",3))return 0;if(attr(o,c,&p,0x21,"operations-supported",op_print,4))return 0;if(attr_more(o,c,&p,0x21,op_validate,4))return 0;if(attr_more(o,c,&p,0x21,op_attrs,4))return 0;if(attr(o,c,&p,0x49,"document-format-supported","application/octet-stream",24))return 0;if(put(o,c,&p,&end,1))return 0;return p;}
+int ipp_raw_format_supported(const unsigned char *b,size_t n){int r=ipp_check_document_format(b,n);return r<0?-1:!r;}
 
-/* Return 1 for a supported raw document, 0 for an unsupported format,
- * and -1 for malformed or incomplete IPP attributes. */
-int ipp_raw_format_supported(const unsigned char *b,size_t n){
- size_t p=8;int supported=1;
- if(!b||n<9)return -1;
- while(p<n){
-  unsigned char tag=b[p++];size_t nl,vl;
-  if(tag==3)return supported;
-  if(tag>=1&&tag<=5)continue;
-  if(p+2>n)return -1;
-  nl=((size_t)b[p]<<8)|b[p+1];p+=2;
-  if(nl>n-p||n-p-nl<2)return -1;
-  if(nl==15&&!memcmp(b+p,"document-format",15)){
-   p+=nl;vl=((size_t)b[p]<<8)|b[p+1];p+=2;
-   if(vl>n-p)return -1;
-   if(vl!=24||memcmp(b+p,"application/octet-stream",24))supported=0;
-   p+=vl;
-  }else{
-   p+=nl;vl=((size_t)b[p]<<8)|b[p+1];p+=2;
-   if(vl>n-p)return -1;
-   p+=vl;
-  }
- }
- return -1;
+
+/* RFC 8011 section 4.1.4: every IPP response starts with an Operation
+ * Attributes group, charset first and natural-language second. */
+size_t ipp_build_status(unsigned char*o,size_t c,const struct ipp_request*r,uint16_t status){
+    size_t p=0;
+    const unsigned char group=0x01,end=0x03;
+    unsigned char req_id[4];
+    if(!o||!r||c<9)return 0;
+    o[p++]=r->major;o[p++]=r->minor;
+    req_id[0]=(unsigned char)(r->request_id>>24);
+    req_id[1]=(unsigned char)(r->request_id>>16);
+    req_id[2]=(unsigned char)(r->request_id>>8);
+    req_id[3]=(unsigned char)r->request_id;
+    if(u16(o,c,&p,status)||put(o,c,&p,req_id,sizeof req_id)||
+       put(o,c,&p,&group,1)||
+       attr(o,c,&p,0x47,"attributes-charset","utf-8",5)||
+       attr(o,c,&p,0x48,"attributes-natural-language","en",2)||
+       put(o,c,&p,&end,1))return 0;
+    return p;
+}
+
+size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){
+    size_t p=0;
+    const unsigned char group=0x04,end=0x03;
+    const unsigned char state[4]={0,0,0,3};
+    const unsigned char accepting=1;
+    const unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};
+    const unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};
+    const unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};
+    const char *printer_name="HP LaserJet M1522n @ MiniBox";
+    const char *model="HP LaserJet M1522n";
+    const char *info="MiniBox network print server";
+    const char *format="application/octet-stream";
+    if(!o||!r||!uri||c<9)return 0;
+    if(!(p=ipp_build_status(o,c,r,0)))return 0;
+    p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
+    if(put(o,c,&p,&group,1))return 0;
+    /* RFC 8011: nameWithoutLanguage=0x42, textWithoutLanguage=0x41,
+       enum=0x23. A URI tag (0x45) cannot describe a printer name. */
+    if(attr(o,c,&p,0x42,"printer-name",printer_name,strlen(printer_name)))return 0;
+    if(attr(o,c,&p,0x41,"printer-make-and-model",model,strlen(model)))return 0;
+    if(attr(o,c,&p,0x41,"printer-info",info,strlen(info)))return 0;
+    if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;
+    /* These REQUIRED companion values correspond to this one non-TLS,
+     * unauthenticated IPP URI. Never claim TLS or authentication here. */
+    if(attr(o,c,&p,0x44,"uri-authentication-supported","none",4))return 0;
+    if(attr(o,c,&p,0x44,"uri-security-supported","none",4))return 0;
+    if(attr(o,c,&p,0x23,"printer-state",state,4))return 0;
+    if(attr(o,c,&p,0x22,"printer-is-accepting-jobs",&accepting,1))return 0;
+    if(attr(o,c,&p,0x44,"printer-state-reasons","none",4))return 0;
+    if(attr(o,c,&p,0x47,"charset-configured","utf-8",5))return 0;
+    if(attr(o,c,&p,0x47,"charset-supported","utf-8",5))return 0;
+    if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;
+    if(attr(o,c,&p,0x48,"generated-natural-language-supported","en",2))return 0;
+    /* A limited IPP implementation must not claim a fully supported IPP 2.0 feature set. */
+    if(attr(o,c,&p,0x44,"ipp-versions-supported","1.1",3))return 0;
+    if(attr(o,c,&p,0x23,"operations-supported",op_print,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_validate,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_attrs,4))return 0;
+    if(attr(o,c,&p,0x49,"document-format-supported",format,strlen(format)))return 0;
+    if(attr(o,c,&p,0x49,"document-format-default",format,strlen(format)))return 0;
+    /* All print requests are processed synchronously; there is no
+     * persistent asynchronous queue in this implementation. */
+    {
+        const unsigned char queued[4]={0,0,0,0};
+        if(attr(o,c,&p,0x21,"queued-job-count",queued,4))return 0;
+    }
+    if(put(o,c,&p,&end,1))return 0;
+    return p;
 }
