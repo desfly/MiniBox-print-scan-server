@@ -32,7 +32,8 @@ static int read_dns_name(const unsigned char *b,size_t n,size_t *p,char *out,siz
         if(!len){if(!jumped)*p=i;if(w>=cap)return -1;out[w]=0;return 0;}
         if((len&0xc0)==0xc0){unsigned ptr;if(i>=n)return -1;ptr=((len&0x3f)<<8)|b[i++];if(ptr>=n)return -1;if(!jumped)*p=i;jumped=1;i=ptr;continue;}
         if(len&0xc0||len>63||len>n-i||w+len+1>=cap)return -1;
-        if(w)out[w++]='.';memcpy(out+w,b+i,len);w+=len;i+=len;
+        if(w) { out[w++]='.'; }
+        memcpy(out+w,b+i,len);w+=len;i+=len;
     }return -1;
 }
 static int dns_equal(const char*a,const char*b){
