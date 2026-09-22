@@ -39,6 +39,7 @@ int main(void) {
     check(services,2,"_uscan._tcp.local",12,3);
     check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",33,3);
     check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",16,3);
+    check(services,2,"_services._dns-sd._udp.local",12,2);
     check(services,2,"minibox.local",1,1);
     check(services,2,"missing.local",1,0);
     puts("mDNS query contract: OK");
