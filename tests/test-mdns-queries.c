@@ -20,6 +20,7 @@ static void check(const mb_service_t *services,size_t count,const char *qname,un
     size_t n=question(query,qname,type);
     assert(inet_pton(AF_INET,"192.168.55.250",&ip)==1);
     int len=answer_packet(reply,sizeof reply,services,count,"minibox",query,n,ip);
+    if(expected==0){assert(len==0);return;}
     assert(len>=12);
     assert(reply[2]==0x84);
     assert((((unsigned)reply[6]<<8)|reply[7])==expected);
