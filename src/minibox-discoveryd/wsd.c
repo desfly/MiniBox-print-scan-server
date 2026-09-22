@@ -1,12 +1,6 @@
 #include "wsd.h"
 #include <string.h>
 
-static const char *findn(const char *s,size_t n,const char *needle){
-    size_t z=strlen(needle),i;
-    if(!z||z>n)return 0;
-    for(i=0;i+z<=n;i++)if(!memcmp(s+i,needle,z))return s+i;
-    return 0;
-}
 static int local_name(const char *p,size_t n,const char *name){
     const char *e,*c;size_t z=strlen(name);
     if(!p||n<z+2||*p!='<')return 0;
@@ -28,6 +22,18 @@ static int text_of(const char *s,size_t n,const char *name,char *out,size_t cap)
     z=(size_t)(lt-gt);if(!cap||z>=cap)return -2;
     memcpy(out,gt,z);out[z]=0;return 0;
 }
+static int qname_local_is(const char *s,size_t n,const char *local){
+    const char *p=s,*e,*c;size_t z=strlen(local);
+    while(p<s+n){
+        while(p<s+n&&(*p==' '||*p=='\t'||*p=='\r'||*p=='\n'))p++;
+        if(p==s+n)break;
+        e=p;while(e<s+n&&*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n')e++;
+        c=memchr(p,':',(size_t)(e-p));if(c)p=c+1;
+        if((size_t)(e-p)==z&&!memcmp(p,local,z))return 1;
+        p=e;
+    }
+    return 0;
+}
 int mb_wsd_parse(const char *xml,size_t len,struct mb_wsd_request *out){
     const char *body;int r;
     if(!xml||!out||!len||len>65535)return -1;
@@ -44,6 +50,7 @@ int mb_wsd_parse(const char *xml,size_t len,struct mb_wsd_request *out){
 }
 int mb_wsd_is_print_probe(const struct mb_wsd_request *r){
     if(!r||r->kind!=MB_WSD_PROBE)return 0;
-    /* Prefixes are sender-selected, so match the WS-Print local type token. */
-    return findn(r->types,strlen(r->types),"PrintDeviceType")!=0;
+    /* Types is a whitespace-separated list of QNames. Match the local name
+     * exactly so values such as NotPrintDeviceType are never false positives. */
+    return qname_local_is(r->types,strlen(r->types),"PrintDeviceType");
 }
