@@ -94,6 +94,8 @@ static int answer_packet(unsigned char *out,size_t cap,const mb_service_t *servi
             n=packet(record,sizeof record,&services[i],hostname);
             if(n<12||p>cap||(size_t)(n-12)>cap-p)return 0;
             memcpy(out+p,record+12,(size_t)n-12);p+=(size_t)n-12;answers+=3;
+            if(append_a(out,cap,&p,target,addr))return 0;
+            answers++;
         }
     }
     if(!answers)return 0;
