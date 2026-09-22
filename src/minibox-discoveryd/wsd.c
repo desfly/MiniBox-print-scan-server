@@ -44,19 +44,21 @@ static int qname_local_is(const char *s,size_t n,const char *local){
     return 0;
 }
 int mb_wsd_parse(const char *xml,size_t len,struct mb_wsd_request *out){
-    const char *env,*body,*body_end;size_t body_len;int r;
+    const char *env,*env_end,*body,*body_end;size_t env_len,body_len;int r;
     if(!xml||!out||!len||len>65535)return -1;
     memset(out,0,sizeof *out);
-    /* Require one bounded SOAP Envelope and scope discovery actions to Body.
-     * Header text containing <Probe> or <Resolve> must never select an action. */
+    /* Bound every discovery field to one SOAP Envelope. Content after the
+     * closing Envelope is not SOAP and must not inject Body/MessageID data. */
     env=element(xml,len,"Envelope");if(!env)return -2;
-    body=element(env,len-(size_t)(env-xml),"Body");if(!body)return -2;
-    body_end=element_end(body,len-(size_t)(body-xml),"Body");if(!body_end)return -2;
+    env_end=element_end(env,len-(size_t)(env-xml),"Envelope");if(!env_end)return -2;
+    env_len=(size_t)(env_end-env);
+    body=element(env,env_len,"Body");if(!body)return -2;
+    body_end=element_end(body,env_len-(size_t)(body-env),"Body");if(!body_end)return -2;
     body_len=(size_t)(body_end-body);
     if(element(body,body_len,"Probe"))out->kind=MB_WSD_PROBE;
     else if(element(body,body_len,"Resolve"))out->kind=MB_WSD_RESOLVE;
     else return -3;
-    r=text_of(env,len-(size_t)(env-xml),"MessageID",out->message_id,sizeof out->message_id);if(r)return -4;
+    r=text_of(env,env_len,"MessageID",out->message_id,sizeof out->message_id);if(r)return -4;
     if(out->kind==MB_WSD_PROBE){r=text_of(body,body_len,"Types",out->types,sizeof out->types);if(r<0)return -5;}
     else {r=text_of(body,body_len,"Address",out->endpoint,sizeof out->endpoint);if(r)return -6;}
     return 0;
