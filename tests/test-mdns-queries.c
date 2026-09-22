@@ -35,8 +35,8 @@ int main(void) {
     snprintf(services[1].type,sizeof services[1].type,"_uscan._tcp");
     snprintf(services[1].txt,sizeof services[1].txt,"rs=eSCL");
     services[1].port=8080;
-    check(services,2,"_ipp._tcp.local",12,3);
-    check(services,2,"_uscan._tcp.local",12,3);
+    check(services,2,"_ipp._tcp.local",12,4);
+    check(services,2,"_uscan._tcp.local",12,4);
     check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",33,3);
     check(services,2,"HP LaserJet M1522n @ MiniBox._ipp._tcp.local",16,3);
     check(services,2,"_services._dns-sd._udp.local",12,2);
