@@ -43,3 +43,12 @@
 4. Keep network advertisements truthful: do not release phantom IPP/eSCL services before their actual listening backends exist.
 
 Rule: before coding or continuing, read this tracker first and compare it with live repository/CI state. Continue from the first unchecked actionable item; do not redo validated work unless a regression requires it. After every verified change, record the change, reason/logic, commit or CI evidence, next step, and known risk/blocker here.
+
+## 2026-09-22 — IPP hardening
+
+- [x] Commit `7e326d1`: replace potentially overflowing addition-based IPP attribute and response-buffer bounds checks with subtraction-based checks in `src/minibox-ipp/ipp.c`. This is a defensive parser fix, not proof of Windows/Android printing interoperability.
+- [ ] Run IPP regression tests and firmware CI for this branch; do not mark a build green without workflow evidence.
+- [ ] Verify actual advertised document formats against printer input and Windows/Android print clients. `application/octet-stream` alone does not establish driverless printing.
+- [ ] Obtain physical scanner USB descriptor/handshake evidence before enabling scan capture or claiming working eSCL scan output.
+- [ ] Verify separate `_ipp._tcp` and `_uscan._tcp` discovery and actual listening services on Windows/Android.
+- [ ] RAM-boot initramfs and validate Wi-Fi client, physical print, scan and discovery before any flash release.
