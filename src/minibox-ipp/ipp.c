@@ -9,3 +9,29 @@ static int u16(unsigned char*o,size_t c,size_t*p,unsigned v){unsigned char b[2]=
 static int attr(unsigned char*o,size_t c,size_t*p,unsigned tag,const char*n,const void*v,size_t z){size_t nl=strlen(n);unsigned char t=(unsigned char)tag;if(nl>65535||z>65535||put(o,c,p,&t,1)||u16(o,c,p,(unsigned)nl)||put(o,c,p,n,nl)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
 static int attr_more(unsigned char*o,size_t c,size_t*p,unsigned tag,const void*v,size_t z){unsigned char t=(unsigned char)tag;if(z>65535||put(o,c,p,&t,1)||u16(o,c,p,0)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
 size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){size_t p=0;unsigned char group=0x04,end=0x03;unsigned char state[4]={0,0,0,3};unsigned char accepting=1;unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};if(!o||!r||!uri||c<9)return 0;if(!(p=ipp_build_status(o,c,r,0)))return 0;p--;if(put(o,c,&p,&group,1))return 0;if(attr(o,c,&p,0x45,"printer-name","HP LaserJet M1522n @ MiniBox",28))return 0;if(attr(o,c,&p,0x45,"printer-make-and-model","HP LaserJet M1522n",17))return 0;if(attr(o,c,&p,0x45,"printer-info","MiniBox network print server",28))return 0;if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;if(attr(o,c,&p,0x23,"printer-state",state,4))return 0;if(attr(o,c,&p,0x22,"printer-is-accepting-jobs",&accepting,1))return 0;if(attr(o,c,&p,0x44,"printer-state-reasons","none",4))return 0;if(attr(o,c,&p,0x47,"charset-configured","utf-8",5))return 0;if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;if(attr(o,c,&p,0x44,"ipp-versions-supported","2.0",3))return 0;if(attr(o,c,&p,0x21,"operations-supported",op_print,4))return 0;if(attr_more(o,c,&p,0x21,op_validate,4))return 0;if(attr_more(o,c,&p,0x21,op_attrs,4))return 0;if(attr(o,c,&p,0x49,"document-format-supported","application/octet-stream",24))return 0;if(put(o,c,&p,&end,1))return 0;return p;}
+
+/* Return 1 for a supported raw document, 0 for an unsupported format,
+ * and -1 for malformed or incomplete IPP attributes. */
+int ipp_raw_format_supported(const unsigned char *b,size_t n){
+ size_t p=8;int supported=1;
+ if(!b||n<9)return -1;
+ while(p<n){
+  unsigned char tag=b[p++];size_t nl,vl;
+  if(tag==3)return supported;
+  if(tag>=1&&tag<=5)continue;
+  if(p+2>n)return -1;
+  nl=((size_t)b[p]<<8)|b[p+1];p+=2;
+  if(nl>n-p||n-p-nl<2)return -1;
+  if(nl==15&&!memcmp(b+p,"document-format",15)){
+   p+=nl;vl=((size_t)b[p]<<8)|b[p+1];p+=2;
+   if(vl>n-p)return -1;
+   if(vl!=24||memcmp(b+p,"application/octet-stream",24))supported=0;
+   p+=vl;
+  }else{
+   p+=nl;vl=((size_t)b[p]<<8)|b[p+1];p+=2;
+   if(vl>n-p)return -1;
+   p+=vl;
+  }
+ }
+ return -1;
+}
