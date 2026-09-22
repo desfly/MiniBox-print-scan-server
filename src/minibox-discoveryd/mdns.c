@@ -26,14 +26,6 @@ int mb_mdns_publish_once(const mb_service_t*services,size_t count,const char*hos
 #include <net/if.h>
 #include <sys/select.h>
 #include <time.h>
-static int skip_dns_name(const unsigned char *b,size_t n,size_t *p){
-    size_t i=*p;unsigned jumps=0;
-    while(i<n){unsigned len=b[i++];if(!len){*p=i;return 0;}
-        if((len&0xc0)==0xc0){if(i>=n)return -1;i++;*p=i;return 0;}
-        if(len&0xc0||len>n-i)return -1;i+=len;
-        if(++jumps>128)return -1;
-    }return -1;
-}
 static int read_dns_name(const unsigned char *b,size_t n,size_t *p,char *out,size_t cap){
     size_t i=*p,w=0;unsigned hops=0;int jumped=0;
     while(i<n&&++hops<128){unsigned len=b[i++];
