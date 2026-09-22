@@ -21,6 +21,11 @@ jobs:
         run: /tmp/test-discovery-service
       - name: Validate runtime service loading
         run: sh tests/test-discovery-runtime.sh
+      - name: Validate DNS-SD query responses
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -Isrc/minibox-discoveryd tests/test-mdns-queries.c -o /tmp/test-mdns-queries
+          /tmp/test-mdns-queries
       - name: Enforce no-usblp/no-CUPS product rule
         run: |
           set -euo pipefail
