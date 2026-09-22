@@ -19,7 +19,7 @@ static void check(const mb_service_t *services,size_t count,const char *qname,un
     unsigned char query[512],reply[1500];struct in_addr ip;
     size_t n=question(query,qname,type);
     assert(inet_pton(AF_INET,"192.168.55.250",&ip)==1);
-    int len=answer_packet(reply,sizeof reply,services,count,"minibox",query,n,ip);
+    int len=mb_mdns_build_reply(query,n,services,count,"minibox",(const unsigned char *)&ip,reply,sizeof reply);
     if(expected==0){assert(len==0);return;}
     assert(len>=12);
     assert(reply[2]==0x84);
