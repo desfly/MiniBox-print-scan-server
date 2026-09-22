@@ -72,7 +72,10 @@ int main(int argc, char **argv) {
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (once) return mb_mdns_publish_once(services, count, hostname) ? 4 : 0;
+    if (once) {
+        rc = mb_mdns_publish_once(services, count, hostname);
+        if (!rc) printf("minibox-discoveryd: published %u service(s) as %s.local\n", count, hostname);\n        return rc ? 4 : 0;
+    }
     rc = mb_mdns_serve(services, count, hostname, &stop);
     if (rc) fprintf(stderr, "minibox-discoveryd: responder failed: %d\n", rc);
     return rc ? 4 : 0;
