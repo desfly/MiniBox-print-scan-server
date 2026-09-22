@@ -56,6 +56,12 @@ static int mdns_source_ipv4(struct in_addr *addr){
     if(local.sin_family!=AF_INET||local.sin_addr.s_addr==htonl(INADDR_ANY))return -1;
     *addr=local.sin_addr;return 0;
 }
+static int append_service_type(unsigned char*b,size_t cap,size_t *p,const char*type){
+    unsigned char r[256];size_t rp=0;
+    if(name(r,sizeof r,&rp,type)||rr_head(b,cap,p,"_services._dns-sd._udp.local",12,(uint16_t)rp)||
+       *p>cap||rp>cap-*p)return -1;
+    memcpy(b+*p,r,rp);*p+=rp;return 0;
+}
 static int append_a(unsigned char*b,size_t cap,size_t *p,const char*host,struct in_addr addr){
     unsigned char ip[4];memcpy(ip,&addr.s_addr,4);
     if(rr_head(b,cap,p,host,1,4)||*p>cap||cap-*p<4)return -1;
@@ -79,9 +85,12 @@ static int answer_packet(unsigned char *out,size_t cap,const mb_service_t *servi
             unsigned char record[1500];int n;
             snprintf(type,sizeof type,"%s.local",services[i].type);
             snprintf(inst,sizeof inst,"%s.%s",services[i].name,type);
+            if((qt==12||qt==255)&&dns_equal(qname,"_services._dns-sd._udp.local")){
+                if(append_service_type(out,cap,&p,type))return 0;
+                answers++;continue;
+            }
             if(!((qt==12||qt==255)&&dns_equal(qname,type))&&
-               !((qt==33||qt==16||qt==255)&&dns_equal(qname,inst))&&
-               !((qt==12||qt==255)&&dns_equal(qname,"_services._dns-sd._udp.local")))continue;
+               !((qt==33||qt==16||qt==255)&&dns_equal(qname,inst)))continue;
             n=packet(record,sizeof record,&services[i],hostname);
             if(n<12||p>cap||(size_t)(n-12)>cap-p)return 0;
             memcpy(out+p,record+12,(size_t)n-12);p+=(size_t)n-12;answers+=3;
