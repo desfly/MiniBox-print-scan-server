@@ -100,3 +100,12 @@ Do not repeat USB/port/health tests without new firmware or a regression. Next a
 - [x] Detailed 24-hour sequence, Windows/Android separate gates and explicit acceptance evidence recorded in docs/24H-WINDOWS-ANDROID-MFP-PLAN-2026-09-21.md (commit 8299ad3d699294a4a1744a426baf168033cfe804). Work begins from IPP and platform print PDL, not generic repeated LAN tests.
 - [ ] Resume first executable code task: implement and test actual accepted job formats/IPP negotiation; retain accurate Android unsupported state until proven raster or PDF conversion to M1522 PCL/PS exists.
 - [ ] Windows WSD full metadata and print integration; do not just advertise a UDP Hello without functioning HTTP endpoints.
+
+## 2026-09-23 — web interface regression and recovery
+
+- [x] Verified the live repository name is still `desfly/MiniBox-print-scan-server` and the default branch is `main`.
+- [x] Audited the artifact from yesterday's successful firmware run `35775205560` at `d24d92e`. Its manifest includes `uhttpd` and `uhttpd-mod-ubus` from the base build-kit, but no LuCI and the `minibox-mfp` package contributes no `/www` payload. The image therefore had a web server without the intended management page, and the green workflow did not detect that omission.
+- [x] Selected the lightweight implementation appropriate to 16 MB flash / 64 MB RAM: static HTML/JS + read-only status CGI served by `uhttpd`. Full LuCI is intentionally omitted to conserve flash; the browser-facing UI remains integrated in the image.
+- [x] Added source-level UI contract tests and squashfs gates that require the UI payload, `uhttpd` binary/config/init script and boot-time enable symlink. The factory image must remain at or below 16,580,608 bytes.
+- [ ] Obtain green PR checks and a firmware artifact from the exact PR head.
+- [ ] RAM-boot before flashing and verify board boot, Ethernet/Wi-Fi/ART, USB services and `http://<MiniBox-IP>/`. CI does not establish hardware compatibility or a safe flash/recovery path.

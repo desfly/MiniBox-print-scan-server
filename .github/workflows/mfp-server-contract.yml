@@ -27,6 +27,8 @@ jobs:
         run: sh tests/compile-libusb-backend.sh
       - name: Validate procd runtime definitions
         run: sh tests/test-procd-runtime.sh
+      - name: Validate embedded web UI contract
+        run: sh tests/test-web-ui.sh
       - name: Enforce no CUPS and no usblp
         run: |
           set -euo pipefail

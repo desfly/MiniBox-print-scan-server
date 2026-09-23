@@ -1,0 +1,23 @@
+#!/bin/sh
+
+printf 'Content-Type: text/plain; charset=utf-8\r\n'
+printf 'Cache-Control: no-store\r\n\r\n'
+
+model='Gainstrong MiniBox V1.0'
+[ -r /tmp/sysinfo/model ] && model="$(cat /tmp/sysinfo/model)"
+printf 'Модель: %s\n' "$model"
+printf 'Вебінтерфейс: доступний\n'
+
+for service in minibox-printerd minibox-scand minibox-discoveryd; do
+  if "/etc/init.d/$service" running >/dev/null 2>&1; then
+    state='працює'
+  else
+    state='не запущено'
+  fi
+  printf '%s: %s\n' "$service" "$state"
+done
+
+if [ -r /proc/uptime ]; then
+  read -r uptime_seconds _ < /proc/uptime
+  printf 'Uptime: %s с\n' "${uptime_seconds%%.*}"
+fi

@@ -150,3 +150,19 @@ Only verified protocol evidence may be used to implement/enable the SOAPHT codec
 4. Obtain real M1522 `.pcapng`, run extractor + analyzer, then commit only sanitized protocol fixtures/manifest needed for codec tests.
 5. Derive and implement `start/read_image/end_page/end_scan` only after real transcript evidence.
 6. Update this tracker after each step.
+
+## 2026-09-23 — integrated web UI recovery
+
+- Repository name verified on GitHub: `desfly/MiniBox-print-scan-server`; default branch remains `main`.
+- Root cause confirmed from the artifact of run `35775205560` / commit `d24d92e`: its manifest contains `uhttpd` and `uhttpd-mod-ubus` from the base build-kit configuration, but `minibox-mfp` packaged no `/www` UI files and LuCI is absent. The green build therefore had a web server without the intended management page.
+- Decision for the 16 MB flash / 64 MB RAM target: embed the previously agreed minimal HTML UI and use `uhttpd`; do not add full LuCI unless the minimal UI proves insufficient. This keeps the UI explicit and avoids the substantially larger LuCI dependency set.
+- Branch: `fix/integrated-web-ui-20260923` based on the exact commit used by yesterday's successful integration build.
+- Added `/www/index.html`, `/www/minibox/index.html`, `/www/minibox/app.js`, read-only `/www/cgi-bin/minibox-status`, and a hard package dependency on `uhttpd`.
+- Added source contract checks plus post-build squashfs inspection for the UI files, `uhttpd` binary/config/init script and enabled `/etc/rc.d/S??uhttpd` link. Factory image size remains gated at 16,580,608 bytes.
+- Safety state: CI output is TEST-ONLY. Do not flash until initramfs/RAM boot and board-specific Ethernet, Wi-Fi, ART/calibration, USB, UI and recovery checks pass.
+
+### NEXT STEP
+
+1. Push the branch, open a PR and run GitHub Actions from the PR head.
+2. Record the real run URL, artifact name/digest and generated image sizes here.
+3. RAM-boot the initramfs candidate and verify `http://<MiniBox-IP>/` before any flash write.
