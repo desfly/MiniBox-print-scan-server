@@ -173,31 +173,65 @@ jobs:
           make -j"$(nproc)" 2>&1 | tee "$GITHUB_WORKSPACE/build.log" || make -j1 V=s 2>&1 | tee -a "$GITHUB_WORKSPACE/build.log"
 
       - name: Verify web UI and uhttpd autostart in squashfs
+        id: web_ui_check
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           TARGET_DIR="$OPENWRT_DIR/bin/targets/ath79/generic"
           ROOTFS="$(find "$TARGET_DIR" -maxdepth 1 -type f -name '*root.squashfs' -print -quit)"
-          test -n "$ROOTFS"
+          REPORT="$GITHUB_WORKSPACE/WEB-UI-IMAGE-CHECKS.txt"
+          : > "$REPORT"
+          failures=0
+          check() {
+            local label="$1"
+            shift
+            if "$@"; then
+              printf 'PASS %s\n' "$label" | tee -a "$REPORT"
+            else
+              printf 'FAIL %s\n' "$label" | tee -a "$REPORT" >&2
+              failures=$((failures + 1))
+            fi
+          }
+
+          if [ -z "$ROOTFS" ]; then
+            printf 'FAIL root.squashfs image not found in %s\n' "$TARGET_DIR" | tee -a "$REPORT" >&2
+            find "$TARGET_DIR" -maxdepth 1 -type f -printf '%f\n' | sort | tee -a "$REPORT"
+            exit 1
+          fi
+
           rm -rf rootfs-inspect
-          unsquashfs -no-progress -d rootfs-inspect "$ROOTFS" >/dev/null
-          test -x rootfs-inspect/usr/sbin/uhttpd
-          test -s rootfs-inspect/etc/config/uhttpd
-          test -x rootfs-inspect/etc/init.d/uhttpd
-          test -s rootfs-inspect/www/index.html
-          test -s rootfs-inspect/www/minibox/index.html
-          test -s rootfs-inspect/www/minibox/app.js
-          test -x rootfs-inspect/www/cgi-bin/minibox-status
-          find rootfs-inspect/etc/rc.d -type l -name 'S??uhttpd' -print -quit | grep -q .
-          grep -q 'MiniBox print + scan server' rootfs-inspect/www/index.html
-          printf '%s\n' \
-            "rootfs=$(basename "$ROOTFS")" \
-            'ui=/www/index.html' \
-            'status=/www/cgi-bin/minibox-status' \
-            'server=/usr/sbin/uhttpd' \
-            'autostart=verified' > WEB-UI-IMAGE-CHECKS.txt
+          if ! unsquashfs -no-progress -d rootfs-inspect "$ROOTFS" >/dev/null; then
+            printf 'FAIL unable to extract %s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT" >&2
+            exit 1
+          fi
+
+          printf 'rootfs=%s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT"
+          check '/usr/sbin/uhttpd executable' test -x rootfs-inspect/usr/sbin/uhttpd
+          check '/etc/config/uhttpd present' test -s rootfs-inspect/etc/config/uhttpd
+          check '/etc/init.d/uhttpd executable' test -x rootfs-inspect/etc/init.d/uhttpd
+          check '/www/index.html present' test -s rootfs-inspect/www/index.html
+          check '/www/minibox/index.html present' test -s rootfs-inspect/www/minibox/index.html
+          check '/www/minibox/app.js present' test -s rootfs-inspect/www/minibox/app.js
+          check '/www/cgi-bin/minibox-status executable' test -x rootfs-inspect/www/cgi-bin/minibox-status
+
+          UHTTPD_LINK="$(find rootfs-inspect/etc/rc.d -type l -name 'S??uhttpd' -print -quit 2>/dev/null)"
+          check 'uhttpd boot symlink present' test -n "$UHTTPD_LINK"
+          check 'MiniBox UI marker present' grep -q 'MiniBox print + scan server' rootfs-inspect/www/index.html
+
+          printf '%s\n' '--- /www inventory ---' | tee -a "$REPORT"
+          find rootfs-inspect/www -maxdepth 3 -printf '%M %P\n' 2>/dev/null | sort | tee -a "$REPORT"
+          printf '%s\n' '--- uhttpd boot links ---' | tee -a "$REPORT"
+          find rootfs-inspect/etc/rc.d -type l -name '*uhttpd' -printf '%P -> %l\n' 2>/dev/null | sort | tee -a "$REPORT"
+
+          if [ "$failures" -ne 0 ]; then
+            printf 'RESULT FAIL (%d checks)\n' "$failures" | tee -a "$REPORT" >&2
+            exit 1
+          fi
+          printf '%s\n' 'RESULT PASS' | tee -a "$REPORT"
 
       - name: Collect firmware and package
+        if: ${{ success() || steps.web_ui_check.outcome == 'failure' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -239,8 +273,16 @@ jobs:
           find "$DIST_DIR" -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$DIST_DIR/BUILD-SHA256SUMS.txt"
 
       - name: Upload MiniBox firmware artifact
+        if: ${{ success() || steps.web_ui_check.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: minibox-v1-openwrt-25.12.5-integrated-web-ui-TEST-${{ github.sha }}
           path: dist/
           if-no-files-found: error
+
+      - name: Enforce web UI image verification
+        if: ${{ always() && steps.web_ui_check.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo 'Web UI image verification failed; see WEB-UI-IMAGE-CHECKS.txt in the uploaded artifact.' >&2
+          exit 1
