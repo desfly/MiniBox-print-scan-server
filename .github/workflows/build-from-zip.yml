@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$OPENWRT_TAG" https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
+          git clone --depth 1 --branch "$OPENWRT_TAG" https://git.openwrt.openwrt.git "$OPENWRT_DIR"
 
       - name: Enable OpenWrt package feeds
         shell: bash
@@ -195,9 +195,34 @@ jobs:
           }
 
           if [ -z "$ROOTFS" ]; then
-            printf 'FAIL root.squashfs image not found in %s\n' "$TARGET_DIR" | tee -a "$REPORT" >&2
-            find "$TARGET_DIR" -maxdepth 1 -type f -printf '%f\n' | sort | tee -a "$REPORT"
-            exit 1
+            FIRMWARE="$(find "$TARGET_DIR" -maxdepth 1 -type f -name '*minibox*squashfs-factory.bin' -print -quit)"
+            if [ -z "$FIRMWARE" ]; then
+              printf 'FAIL neither root.squashfs nor MiniBox factory image found in %s\n' "$TARGET_DIR" | tee -a "$REPORT" >&2
+              find "$TARGET_DIR" -maxdepth 1 -type f -printf '%f\n' | sort | tee -a "$REPORT"
+              exit 1
+            fi
+
+            ROOTFS="$GITHUB_WORKSPACE/embedded-root.squashfs"
+            python3 - "$FIRMWARE" "$ROOTFS" <<'PY' | tee -a "$REPORT"
+          import struct
+          import sys
+
+          source, destination = sys.argv[1:]
+          image = open(source, "rb").read()
+          offset = image.find(b"hsqs")
+          if offset < 0:
+              raise SystemExit("FAIL SquashFS magic not found in factory image")
+          if offset + 48 > len(image):
+              raise SystemExit("FAIL truncated SquashFS superblock in factory image")
+          bytes_used = struct.unpack_from("<Q", image, offset + 40)[0]
+          if bytes_used < 96 or offset + bytes_used > len(image):
+              raise SystemExit("FAIL invalid SquashFS length in factory image")
+          with open(destination, "wb") as output:
+              output.write(image[offset:offset + bytes_used])
+          print(f"factory={source.rsplit('/', 1)[-1]}")
+          print(f"squashfs_offset={offset}")
+          print(f"squashfs_bytes={bytes_used}")
+          PY
           fi
 
           rm -rf rootfs-inspect
