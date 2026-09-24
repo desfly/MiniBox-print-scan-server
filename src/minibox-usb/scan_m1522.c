@@ -63,6 +63,9 @@ int m1522_scan_write(struct m1522_scan_handle *h,const unsigned char *buf,size_t
     int done=0,r;
     if(!h||!h->dev||!h->bulk_out||(!buf&&len)||len>(size_t)INT_MAX)return -1;
     r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char *)buf,(int)len,&done,timeout_ms);
+    if (r || (len && !done))
+        fprintf(stderr, "minibox-scand: stage=libusb-bulk-out rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d\n",
+                r, done, len, h->bulk_out, timeout_ms);
     return r?r:done;
 }
 
@@ -71,6 +74,9 @@ int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,si
     if(!h||!h->dev||!h->bulk_in||!buf||!got||!cap||cap>(size_t)INT_MAX)return -1;
     *got=0;
     r=libusb_bulk_transfer(h->dev,h->bulk_in,buf,(int)cap,&done,timeout_ms);
+    if (r || !done)
+        fprintf(stderr, "minibox-scand: stage=libusb-bulk-in rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d\n",
+                r, done, cap, h->bulk_in, timeout_ms);
     if(r)return r;
     *got=(size_t)done;
     return 0;
