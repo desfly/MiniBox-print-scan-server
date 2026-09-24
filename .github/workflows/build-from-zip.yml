@@ -235,7 +235,7 @@ jobs:
           fi
           rm -rf rootfs-inspect
           printf '%s\n' '--- SquashFS extraction diagnostics ---' | tee -a "$REPORT"
-          if ! unsquashfs -no-progress -processors 1 -no-devices -d rootfs-inspect "$ROOTFS" 2>&1 | tee -a "$REPORT"; then
+          if ! sudo unsquashfs -no-progress -processors 1 -d rootfs-inspect "$ROOTFS" 2>&1 | tee -a "$REPORT"; then
             printf 'FAIL unable to extract %s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT" >&2
             exit 1
           fi
