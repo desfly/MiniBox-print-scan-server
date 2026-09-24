@@ -170,3 +170,14 @@ Only verified protocol evidence may be used to implement/enable the SOAPHT codec
 1. Push the branch, open a PR and run GitHub Actions from the PR head.
 2. Record the real run URL, artifact name/digest and generated image sizes here.
 3. RAM-boot the initramfs candidate and verify `http://<MiniBox-IP>/` before any flash write.
+
+## 2026-09-24 — physical test #101 and follow-up PR: eSCL 503 recovery/diagnostics
+
+- [x] Hardware-tested image documented in PR #8 issue comment 5818989553: run 36014351722, image commit 133d6113ee6823607a50242c0ba0ffd97d9aebf6; web UI PASS and manual IPP/PCL6 paper print PASS; automatic Windows/Android discovery FAIL; eSCL NextDocument HTTP 503 FAIL.
+- [x] On actual M1522, SOAPHT interface 0 (ff/02/01), bulk OUT 0x03 and bulk IN 0x83, with claim/release success. Repeating USB-descriptor/claim tests without a new regression is not the next step.
+- [x] Code audit: the generic 503 corresponds to scan stream/backend OPEN failing, but the previously asserted exact SOAPHT-handshake failure was **not proven**; the m1522_scan_session test harness is separate from the production eSCL path. Production SOAPHT codec exists but has not yielded a physical image.
+- [x] Branch `fix/scan-503-recovery-and-stage-logs-20260924` created from PR #8 head `d7bb6e913ad7d1722152756727dd331a53785330`. Fixes eSCL session stuck in READING after backend-open 503, adds stage/error logs at backend, SOAPHT and libusb boundaries, and a regression in `tests/test-mfp-servers.sh` that requires the next ScanJobs POST to return 201 rather than 409. No new USB command bytes or printer path changes.
+- [ ] Obtain green mfp-server-contract CI on final PR head; a source patch is not hardware validation. Do not claim scanning works until actual JPEG bytes are retrieved from physical M1522.
+- [ ] Use new server logs on a hardware run to distinguish libusb open/claim, SOAPHT GetScannerElements and CreateScanJob failure. If protocol mismatch remains, obtain a known-good direct USB capture; do not invent vendor commands.
+- [ ] Complete platform discovery separately. Windows 10 legacy wizard requires WSD investigation; Android print service requires genuinely supported document formats/conversion. mDNS visibility and manual PCL6 print do not prove auto-install or driverless output.
+- [ ] Preserve current physically printing firmware as rollback; no flash/merge to production based only on this diagnostics PR.
