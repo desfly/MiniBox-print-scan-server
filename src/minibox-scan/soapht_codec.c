@@ -311,12 +311,28 @@ static int codec_start(struct soapht_session *transport,
     size_t n;
     memset(&state, 0, sizeof(state));
     if (!transport || !job) return -1;
-    if (control_request(transport, get_elements_xml, 0)) return -2;
-    if (make_create_xml(xml, sizeof(xml), job) ||
-        control_request(transport, xml, &response)) return -3;
+    {
+        int rc = control_request(transport, get_elements_xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-get-elements rc=%d\n", rc);
+            return -2;
+        }
+    }
+    if (make_create_xml(xml, sizeof(xml), job)) {
+        fprintf(stderr, "minibox-scand: stage=soapht-create-xml rc=-1\n");
+        return -3;
+    }
+    {
+        int rc = control_request(transport, xml, &response);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-create-job rc=%d\n", rc);
+            return -3;
+        }
+    }
     a = strstr(response, "<JobId>");
     b = a ? strstr(a + 7, "</JobId>") : 0;
     if (!a || !b || b == a + 7 || (n = (size_t)(b - (a + 7))) >= sizeof(state.job_id)) {
+        fprintf(stderr, "minibox-scand: stage=soapht-job-id rc=-4\n");
         free(response); return -4;
     }
     memcpy(state.job_id, a + 7, n);

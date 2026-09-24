@@ -30,25 +30,57 @@ static const char*body_of(char*b,size_t n,size_t*len){size_t i;for(i=0;i+3<n;i++
 static int next_document_id(const char *p,unsigned *id){char tail;return sscanf(p,"/eSCL/ScanJobs/%u/NextDocument%c",id,&tail)==1?0:-1;}
 #ifdef MINIBOX_TEST_SCAN_BACKEND
 struct test_scan_ctx{size_t off;}; static struct test_scan_ctx test_ctx; static const unsigned char test_jpeg[]={0xff,0xd8,'M','I','N','I','B','O','X',0xff,0xd9};
-static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
+static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;if(getenv("MINIBOX_TEST_SCAN_OPEN_FAIL"))return -1;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(getenv("MINIBOX_TEST_SCAN_READ_FAIL"))return -7;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
 #else
 static const struct minibox_scan_backend *scan_backend=&minibox_m1522_scan_backend; static void *scan_backend_ctx;
 #endif
 static int stream_document(int f){
- struct minibox_scan_stream s={0}; unsigned char buf[16384]; size_t got; int more=0,started=0;
+ struct minibox_scan_stream s={0}; unsigned char buf[16384];
+ size_t got=0, first=0; int more=0, started=0, rc;
  const char*h="HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nConnection: close\r\n\r\n";
 #ifndef MINIBOX_TEST_SCAN_BACKEND
  scan_backend_ctx=minibox_m1522_scan_backend_ctx;
 #endif
- if(!scan_backend||minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings)) return -1;
- if(send_all(f,h,strlen(h))) goto fail;
- started=1;
- for(;;){
-  if(minibox_scan_stream_read(&s,buf,sizeof buf,&got)) goto fail;
-  if(!got) break;
-  if(send_all(f,buf,got)) goto fail;
+ if(!scan_backend){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=backend-missing\n",scan.id);
+  minibox_scan_session_fail(&scan);return -1;
  }
- if(minibox_scan_stream_end_page(&s,&more)) goto fail;
+ rc=minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings);
+ if(rc){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=backend-open rc=%d\n",scan.id,rc);
+  minibox_scan_session_fail(&scan);return -1;
+ }
+ /* Never send HTTP 200/image/jpeg before at least the actual JPEG SOI is
+  * received. On a first-read error return a valid HTTP 503 to the client. */
+ while(first<2){
+  got=0;rc=minibox_scan_stream_read(&s,buf+first,sizeof buf-first,&got);
+  if(rc||!got||got>sizeof buf-first){
+   fprintf(stderr,"minibox-scand: scan job=%u stage=first-image-read rc=%d got=%zu\n",scan.id,rc,got);
+   goto fail;
+  }
+  first+=got;
+ }
+ if(buf[0]!=0xff||buf[1]!=0xd8){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=invalid-image-prefix\n",scan.id);
+  goto fail;
+ }
+ /* Once a successful HTTP response starts it cannot be replaced by 503. */
+ started=1;
+ if(send_all(f,h,strlen(h))||send_all(f,buf,first))goto fail;
+ for(;;){
+  got=0;rc=minibox_scan_stream_read(&s,buf,sizeof buf,&got);
+  if(rc||got>sizeof buf){
+   fprintf(stderr,"minibox-scand: scan job=%u stage=image-read rc=%d got=%zu\n",scan.id,rc,got);
+   goto fail;
+  }
+  if(!got)break;
+  if(send_all(f,buf,got))goto fail;
+ }
+ rc=minibox_scan_stream_end_page(&s,&more);
+ if(rc){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=end-page rc=%d\n",scan.id,rc);
+  goto fail;
+ }
  minibox_scan_stream_close(&s);
  return minibox_scan_session_end_page(&scan,more);
 fail:
