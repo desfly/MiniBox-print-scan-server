@@ -225,8 +225,17 @@ jobs:
           PY
           fi
 
+          # Keep the original extractor diagnostics in the uploaded report.
+          # A valid magic/bytes_used header alone does not prove that the image
+          # can be decompressed; do not turn extraction failures into a pass.
+          printf '%s\n' '--- SquashFS superblock ---' | tee -a "$REPORT"
+          if ! unsquashfs -s "$ROOTFS" 2>&1 | tee -a "$REPORT"; then
+            printf 'FAIL unable to read SquashFS superblock\n' | tee -a "$REPORT" >&2
+            exit 1
+          fi
           rm -rf rootfs-inspect
-          if ! unsquashfs -no-progress -d rootfs-inspect "$ROOTFS" >/dev/null; then
+          printf '%s\n' '--- SquashFS extraction diagnostics ---' | tee -a "$REPORT"
+          if ! unsquashfs -no-progress -processors 1 -d rootfs-inspect "$ROOTFS" 2>&1 | tee -a "$REPORT"; then
             printf 'FAIL unable to extract %s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT" >&2
             exit 1
           fi
