@@ -200,6 +200,17 @@ int mb_mdns_build_reply(const unsigned char *q,size_t len,
     return (int)op;
 }
 
+/* In OpenWrt client mode the IPv4 address can be attached to wwan rather
+ * than wlan0. Never prefer the Ethernet management IP merely because getifaddrs
+ * happens to enumerate it first. */
+static int wifi_name_score(const char *ifname) {
+    if (!ifname) return 0;
+    if (!strncmp(ifname,"wlan",4)||!strncmp(ifname,"wwan",4)||
+        !strncmp(ifname,"wifi",4)||!strncmp(ifname,"wlp",3)||
+        !strncmp(ifname,"wlx",3)||!strncmp(ifname,"sta",3)||
+        !strncmp(ifname,"phy",3)) return 3;
+    return 1;
+}
 static int wifi_ipv4(unsigned char ip[4],struct in_addr *addr) {
     struct ifaddrs *ifs,*p;int best=-1;
     if(getifaddrs(&ifs))return -errno;
@@ -208,9 +219,7 @@ static int wifi_ipv4(unsigned char ip[4],struct in_addr *addr) {
         int score;
         if(!p->ifa_addr||p->ifa_addr->sa_family!=AF_INET||
            !(p->ifa_flags&IFF_UP)||(p->ifa_flags&IFF_LOOPBACK))continue;
-        score=1;
-        if(strstr(p->ifa_name,"sta")||strstr(p->ifa_name,"wlan")||
-           strstr(p->ifa_name,"wifi")||strstr(p->ifa_name,"wl"))score=2;
+        score=wifi_name_score(p->ifa_name);
         if(score<=best)continue;
         sin=(const struct sockaddr_in *)p->ifa_addr;
         *addr=sin->sin_addr;memcpy(ip,&sin->sin_addr,4);best=score;
@@ -267,8 +276,31 @@ int mb_mdns_run(const mb_service_t *services,size_t count,
     (void)setsockopt(fd,IPPROTO_IP,IP_MULTICAST_IF,&interface_ip,sizeof interface_ip);
     while(!*stop) {
         fd_set fds;struct timeval tv={1,0};time_t now=time(NULL);
+        struct in_addr latest_addr;
+        unsigned char latest_ip[4];
+        /* A Wi-Fi client may reconnect with a new address/interface. Move
+         * multicast membership before answering queries or announcing an A RR. */
+        rc=wifi_ipv4(latest_ip,&latest_addr);
+        if(!rc && latest_addr.s_addr!=interface_ip.s_addr) {
+            struct ip_mreq new_group=group;
+            new_group.imr_interface=latest_addr;
+            if(!setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,
+                           &new_group,sizeof new_group)) {
+                (void)setsockopt(fd,IPPROTO_IP,IP_DROP_MEMBERSHIP,
+                                 &group,sizeof group);
+                group=new_group;
+                interface_ip=latest_addr;
+                memcpy(ip,latest_ip,sizeof ip);
+                (void)setsockopt(fd,IPPROTO_IP,IP_MULTICAST_IF,
+                                 &interface_ip,sizeof interface_ip);
+                fprintf(stderr,"minibox-discoveryd: mDNS IPv4/interface changed to %s\n",
+                        inet_ntoa(interface_ip));
+                next=0;
+            } else {
+                fprintf(stderr,"minibox-discoveryd: mDNS rejoin failed: %d\n",errno);
+            }
+        }
         if(now>=next) {
-            rc=wifi_ipv4(ip,&interface_ip);
             if(!rc)rc=announce(fd,&dst,services,count,host,ip);
             if(rc)fprintf(stderr,"minibox-discoveryd: mDNS publish failed: %d\n",rc);
             else {
