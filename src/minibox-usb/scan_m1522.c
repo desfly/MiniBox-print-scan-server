@@ -1,6 +1,7 @@
 #include "scan_m1522.h"
 #include "usb_backend.h"
 #include <limits.h>
+#include <stdio.h>
 #include <string.h>
 
 static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
@@ -28,12 +29,27 @@ static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
 int m1522_scan_open(struct m1522_scan_handle *h){
     if(!h)return -1;
     memset(h,0,sizeof *h);h->iface=-1;
-    if(libusb_init(&h->ctx))return -2;
+    {
+        int rc=libusb_init(&h->ctx);
+        if(rc){fprintf(stderr,"minibox-scand: stage=libusb-init rc=%d\n",rc);return -2;}
+    }
     h->dev=libusb_open_device_with_vid_pid(h->ctx,MINIBOX_HP_VID,MINIBOX_M1522_PID);
-    if(!h->dev){m1522_scan_close(h);return -3;}
-    if(find_soapht(libusb_get_device(h->dev),h)){m1522_scan_close(h);return -4;}
-    if(libusb_kernel_driver_active(h->dev,h->iface)==1)libusb_detach_kernel_driver(h->dev,h->iface);
-    if(libusb_claim_interface(h->dev,h->iface)){m1522_scan_close(h);return -5;}
+    if(!h->dev){fprintf(stderr,"minibox-scand: stage=libusb-open-device rc=-3\n");m1522_scan_close(h);return -3;}
+    if(find_soapht(libusb_get_device(h->dev),h)){fprintf(stderr,"minibox-scand: stage=libusb-find-interface rc=-4\n");m1522_scan_close(h);return -4;}
+    {
+        int rc=libusb_kernel_driver_active(h->dev,h->iface);
+        if(rc==1){
+            rc=libusb_detach_kernel_driver(h->dev,h->iface);
+            if(rc){fprintf(stderr,"minibox-scand: stage=libusb-detach rc=%d\n",rc);m1522_scan_close(h);return -5;}
+        } else if(rc<0 && rc!=LIBUSB_ERROR_NOT_SUPPORTED){
+            fprintf(stderr,"minibox-scand: stage=libusb-driver-check rc=%d\n",rc);
+            m1522_scan_close(h);return -5;
+        }
+    }
+    {
+        int rc=libusb_claim_interface(h->dev,h->iface);
+        if(rc){fprintf(stderr,"minibox-scand: stage=libusb-claim rc=%d\n",rc);m1522_scan_close(h);return -5;}
+    }
     return 0;
 }
 
