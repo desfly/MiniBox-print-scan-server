@@ -63,7 +63,7 @@ int m1522_scan_write(struct m1522_scan_handle *h,const unsigned char *buf,size_t
     int done=0,r;
     if(!h||!h->dev||!h->bulk_out||(!buf&&len)||len>(size_t)INT_MAX)return -1;
     r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char *)buf,(int)len,&done,timeout_ms);
-    return r?-r:done;
+    return r?r:done;
 }
 
 int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,size_t *got,int timeout_ms){
@@ -71,7 +71,7 @@ int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,si
     if(!h||!h->dev||!h->bulk_in||!buf||!got||!cap||cap>(size_t)INT_MAX)return -1;
     *got=0;
     r=libusb_bulk_transfer(h->dev,h->bulk_in,buf,(int)cap,&done,timeout_ms);
-    if(r)return -r;
+    if(r)return r;
     *got=(size_t)done;
     return 0;
 }
