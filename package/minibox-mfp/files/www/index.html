@@ -27,8 +27,9 @@
   <section>
     <h2>Мережеві служби</h2>
     <p>IPP-друк: <code>http://&lt;адреса MiniBox&gt;:631/ipp/print</code></p>
-    <p>RAW/JetDirect: <code>&lt;адреса MiniBox&gt;:9100</code></p>
-    <p>eSCL: <code>http://&lt;адреса MiniBox&gt;:8080/eSCL/</code></p>
+    <p class="muted">RAW/JetDirect (порт 9100): не реалізовано; користуйтеся IPP.</p>
+    <p>eSCL (мережевий інтерфейс сканера): <code>http://&lt;адреса MiniBox&gt;:8080/eSCL/</code></p>
+    <p class="warn">Наявність eSCL-сервера не підтверджує отримання зображення з МФУ. Фізичне сканування потребує окремого тесту.</p>
     <p class="warn">Ця сторінка не підтверджує сумісність прошивки із залізом. Перед записом у flash потрібні RAM-boot і апаратна перевірка.</p>
   </section>
   <script src="/minibox/app.js"></script>
