@@ -22,6 +22,11 @@ int main(void) {
     assert(strstr(p.txt, "application/pdf") == NULL);
     assert(strstr(p.txt, "image/urf") == NULL);
     assert(strstr(p.txt, "URF=") == NULL);
+    assert(mb_service_load("package/minibox-mfp/files/etc/minibox/services.d/scanner.service", &p) == 0);
+    assert(strstr(p.txt, "duplex=T") == NULL);
+    assert(strstr(p.txt, "application/pdf") == NULL);
+    assert(strstr(p.txt, "image/jpeg") == NULL);
+    assert(strstr(p.txt, "is=platen") != NULL);
     puts("discovery service contracts: OK");
     return 0;
 }
