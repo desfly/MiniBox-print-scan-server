@@ -10,6 +10,7 @@ struct mock {
     char requests[16384];
     size_t requests_len;
     int request_no;
+    int truncate_first_response;
 };
 
 static void put16(unsigned char *p, unsigned v)
@@ -37,6 +38,9 @@ static void stage_response(struct mock *m)
     unsigned char dime[128], *p = dime;
     if (m->request_no == 1) {
         set_http(m, elements, sizeof(elements)-1, 202, "application/soap+xml");
+        /* Simulate the physical 503: USB response ends before the terminating
+         * chunk, so control_request must log the read/framing failure. */
+        if (m->truncate_first_response) m->response_len -= 7;
     } else if (m->request_no == 2) {
         set_http(m, created, sizeof(created)-1, 202, "application/soap+xml");
     } else {
@@ -96,6 +100,15 @@ int main(void)
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     assert(!minibox_soapht_codec->finish(&s));
     soapht_close(&s);
-    puts("verified M1522 SOAPHT codec: OK");
+    {
+        struct mock truncated={0};
+        struct soapht_session failing;
+        truncated.truncate_first_response=1;
+        assert(!soapht_open(&failing,&io,&truncated));
+        assert(minibox_soapht_codec->start(&failing,&job)==-2);
+        soapht_close(&failing);
+        assert(truncated.request_no==1);
+    }
+    puts("verified M1522 SOAPHT codec and truncated-response diagnostics: OK");
     return 0;
 }
