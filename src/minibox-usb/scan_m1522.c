@@ -40,10 +40,9 @@ int m1522_scan_open(struct m1522_scan_handle *h){
         int rc=libusb_kernel_driver_active(h->dev,h->iface);
         if(rc==1){
             rc=libusb_detach_kernel_driver(h->dev,h->iface);
-            if(rc){fprintf(stderr,"minibox-scand: stage=libusb-detach rc=%d\n",rc);m1522_scan_close(h);return -5;}
+            if(rc)fprintf(stderr,"minibox-scand: stage=libusb-detach rc=%d\n",rc);
         } else if(rc<0 && rc!=LIBUSB_ERROR_NOT_SUPPORTED){
             fprintf(stderr,"minibox-scand: stage=libusb-driver-check rc=%d\n",rc);
-            m1522_scan_close(h);return -5;
         }
     }
     {
