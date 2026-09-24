@@ -30,7 +30,7 @@ static const char*body_of(char*b,size_t n,size_t*len){size_t i;for(i=0;i+3<n;i++
 static int next_document_id(const char *p,unsigned *id){char tail;return sscanf(p,"/eSCL/ScanJobs/%u/NextDocument%c",id,&tail)==1?0:-1;}
 #ifdef MINIBOX_TEST_SCAN_BACKEND
 struct test_scan_ctx{size_t off;}; static struct test_scan_ctx test_ctx; static const unsigned char test_jpeg[]={0xff,0xd8,'M','I','N','I','B','O','X',0xff,0xd9};
-static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
+static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;if(getenv("MINIBOX_TEST_SCAN_OPEN_FAIL"))return -1;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
 #else
 static const struct minibox_scan_backend *scan_backend=&minibox_m1522_scan_backend; static void *scan_backend_ctx;
 #endif
@@ -40,7 +40,9 @@ static int stream_document(int f){
 #ifndef MINIBOX_TEST_SCAN_BACKEND
  scan_backend_ctx=minibox_m1522_scan_backend_ctx;
 #endif
- if(!scan_backend||minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings)) return -1;
+ if(!scan_backend){fprintf(stderr,"minibox-scand: scan job=%u stage=backend-missing\n",scan.id);minibox_scan_session_fail(&scan);return -1;}
+ {int rc=minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings);
+  if(rc){fprintf(stderr,"minibox-scand: scan job=%u stage=backend-open rc=%d\n",scan.id,rc);minibox_scan_session_fail(&scan);return -1;}}
  if(send_all(f,h,strlen(h))) goto fail;
  started=1;
  for(;;){
