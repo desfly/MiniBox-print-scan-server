@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$OPENWRT_TAG" https://git.openwrt.openwrt.git "$OPENWRT_DIR"
+          git clone --depth 1 --branch "$OPENWRT_TAG" https://git.openwrt.org/openwrt/openwrt.git "$OPENWRT_DIR"
 
       - name: Enable OpenWrt package feeds
         shell: bash
