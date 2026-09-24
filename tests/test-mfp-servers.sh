@@ -120,4 +120,18 @@ code=$(curl -sS -D /tmp/failed-job2.headers -o /tmp/failed-job2.out -w '%{http_c
 [ "$code" = 201 ]
 grep -qi '^Location: /eSCL/ScanJobs/2' /tmp/failed-job2.headers
 grep -q 'stage=backend-open' /tmp/scand-open-fail.log
+# Failure on the *first image read* must not produce HTTP 200 or a fake JPEG.
+MINIBOX_TEST_SCAN_READ_FAIL=1 /tmp/minibox-scand 18082 >/tmp/scand-read-fail.log 2>&1 & R=$!
+trap 'kill $P $S $F $R 2>/dev/null || true' EXIT INT TERM
+sleep 1
+code=$(curl -sS -D /tmp/read-job1.headers -o /tmp/read-job1.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18082/eSCL/ScanJobs)
+[ "$code" = 201 ]
+code=$(curl -sS -D /tmp/read-next.headers -o /tmp/read-next.out -w '%{http_code}' http://127.0.0.1:18082/eSCL/ScanJobs/1/NextDocument)
+[ "$code" = 503 ]
+grep -qi '^Content-Type: text/plain' /tmp/read-next.headers
+grep -q 'M1522 scan backend unavailable' /tmp/read-next.out
+grep -q 'stage=first-image-read' /tmp/scand-read-fail.log
+code=$(curl -sS -D /tmp/read-job2.headers -o /tmp/read-job2.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18082/eSCL/ScanJobs)
+[ "$code" = 201 ]
+grep -qi '^Location: /eSCL/ScanJobs/2' /tmp/read-job2.headers
 echo 'MFP server transport contract OK'
