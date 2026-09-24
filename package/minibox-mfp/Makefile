@@ -10,7 +10,7 @@ define Package/minibox-mfp
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=MiniBox MFP Wi-Fi print and scan bridge
-  DEPENDS:=+libusb-1.0
+  DEPENDS:=+libusb-1.0 +uhttpd
 endef
 
 define Package/minibox-mfp/description
@@ -98,6 +98,12 @@ define Package/minibox-mfp/install
 
 	$(INSTALL_DIR) $(1)/usr/libexec/minibox-mfp
 	$(CP) ./files/usr/libexec/minibox-mfp/* $(1)/usr/libexec/minibox-mfp/
+
+	$(INSTALL_DIR) $(1)/www/minibox $(1)/www/cgi-bin
+	$(INSTALL_DATA) ./files/www/index.html $(1)/www/index.html
+	$(INSTALL_DATA) ./files/www/index.html $(1)/www/minibox/index.html
+	$(INSTALL_DATA) ./files/www/minibox/app.js $(1)/www/minibox/app.js
+	$(INSTALL_BIN) ./files/www/cgi-bin/minibox-status $(1)/www/cgi-bin/minibox-status
 endef
 
 $(eval $(call BuildPackage,minibox-mfp))

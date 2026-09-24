@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MiniBox print + scan server</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 48rem; margin: 0 auto; padding: 1.5rem; background: #0b1220; color: #e8eef8; }
+    header, section { background: #131d2e; border: 1px solid #263653; border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+    h1 { margin: 0 0 .35rem; font-size: 1.55rem; }
+    h2 { font-size: 1.05rem; }
+    .ok { color: #66e3a4; } .warn { color: #ffd166; } .muted { color: #aebbd0; }
+    pre { white-space: pre-wrap; margin: 0; font: .92rem ui-monospace, monospace; }
+    a { color: #8ec5ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MiniBox print + scan server</h1>
+    <div class="muted">Компактна вбудована вебморда · uhttpd · порт 80</div>
+  </header>
+  <section>
+    <h2>Стан пристрою</h2>
+    <pre id="status" aria-live="polite">Завантаження…</pre>
+  </section>
+  <section>
+    <h2>Мережеві служби</h2>
+    <p>IPP-друк: <code>http://&lt;адреса MiniBox&gt;:631/ipp/print</code></p>
+    <p>RAW/JetDirect: <code>&lt;адреса MiniBox&gt;:9100</code></p>
+    <p>eSCL: <code>http://&lt;адреса MiniBox&gt;:8080/eSCL/</code></p>
+    <p class="warn">Ця сторінка не підтверджує сумісність прошивки із залізом. Перед записом у flash потрібні RAM-boot і апаратна перевірка.</p>
+  </section>
+  <script src="/minibox/app.js"></script>
+</body>
+</html>
