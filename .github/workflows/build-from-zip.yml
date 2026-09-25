@@ -40,8 +40,21 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout repository
+      - name: Resolve exact source commit
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout exact source commit
         uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.source.outputs.sha }}
 
       - name: Test OpenWrt package source injection contract
         shell: bash
@@ -284,7 +297,11 @@ jobs:
           test -n "$APK"
           test "$(stat -c%s "$FACTORY")" -le 16580608
           cp WEB-UI-IMAGE-CHECKS.txt "$DIST_DIR/"
-          git rev-parse HEAD > "$DIST_DIR/SOURCE-COMMIT.txt"
+          EXPECTED_SOURCE_SHA="${{ steps.source.outputs.sha }}"
+          ACTUAL_SOURCE_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SOURCE_SHA" = "$EXPECTED_SOURCE_SHA" || { echo "ERROR: checkout/source SHA $ACTUAL_SOURCE_SHA != expected source SHA $EXPECTED_SOURCE_SHA" >&2; exit 1; }
+          printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$DIST_DIR/SOURCE-COMMIT.txt"
+          test "$(cat "$DIST_DIR/SOURCE-COMMIT.txt")" = "$EXPECTED_SOURCE_SHA"
           cp docs/FINALIZATION-AUDIT-2026-09-20.md "$DIST_DIR/ROLLBACK-AND-MANUAL-TEST.md"
           printf '%s\n' 'TEST-ONLY: hardware validation pending; flash_allowed=false' > "$DIST_DIR/READ-ME-FIRST.txt"
           cat > "$DIST_DIR/SBOM.spdx" <<EOF
@@ -297,20 +314,24 @@ jobs:
           Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
           PackageName: minibox-firmware-test
           SPDXID: SPDXRef-Package
-          PackageVersion: ${GITHUB_SHA}
+          PackageVersion: ${{ steps.source.outputs.sha }}
           PackageDownloadLocation: NOASSERTION
           FilesAnalyzed: false
           PackageLicenseConcluded: NOASSERTION
           PackageLicenseDeclared: NOASSERTION
           PackageCopyrightText: NOASSERTION
           EOF
-          find "$DIST_DIR" -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$DIST_DIR/BUILD-SHA256SUMS.txt"
+          (
+            cd "$DIST_DIR"
+            find . -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > BUILD-SHA256SUMS.txt
+            sha256sum -c BUILD-SHA256SUMS.txt
+          )
 
       - name: Upload MiniBox firmware artifact
         if: ${{ success() || steps.web_ui_check.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
-          name: minibox-v1-openwrt-25.12.5-integrated-web-ui-TEST-${{ github.sha }}
+          name: minibox-v1-openwrt-25.12.5-integrated-web-ui-TEST-${{ steps.source.outputs.sha }}
           path: dist/
           if-no-files-found: error
 
