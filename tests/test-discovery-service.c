@@ -18,7 +18,8 @@ int main(void) {
     check("overlay/etc/minibox/services.d/scanner.service", "_uscan._tcp", 8080, "/eSCL");
     assert(mb_service_load("overlay/etc/minibox/services.d/ipp-printer.service", &p) == 0);
     assert(strstr(p.txt, "rp=ipp/print") != NULL);
-    assert(strstr(p.txt, "pdl=application/octet-stream") != NULL);
+    assert(strstr(p.txt, "pdl=application/octet-stream,image/pwg-raster") != NULL);
+    assert(strstr(p.txt, "Duplex=F") != NULL);
     assert(strstr(p.txt, "application/pdf") == NULL);
     assert(strstr(p.txt, "image/urf") == NULL);
     assert(strstr(p.txt, "URF=") == NULL);
