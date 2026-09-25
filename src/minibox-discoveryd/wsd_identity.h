@@ -4,7 +4,7 @@
 #include <netinet/in.h>
 
 struct mb_wsd_identity {
-    char ifname[IFNAMSIZ];
+    char ifname[IF_NAMESIZE];
     struct in_addr ipv4;
     char endpoint[96];
     char xaddr[160];
