@@ -28,6 +28,13 @@ static void check(const mb_service_t *services,size_t count,const char *qname,un
     assert(actual==expected);
 }
 int main(void) {
+    /* Wi-Fi client IPv4 commonly lives on wwan, not wlan0. */
+    assert(wifi_name_score("wwan")==3);
+    assert(wifi_name_score("wwan0")==3);
+    assert(wifi_name_score("wlan0")==3);
+    assert(wifi_name_score("wlp2s0")==3);
+    assert(wifi_name_score("br-lan")==1);
+    assert(wifi_name_score("eth0")==1);
     mb_service_t services[2]={0};
     snprintf(services[0].name,sizeof services[0].name,"HP LaserJet M1522n @ MiniBox");
     snprintf(services[0].type,sizeof services[0].type,"_ipp._tcp");

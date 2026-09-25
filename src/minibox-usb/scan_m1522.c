@@ -1,6 +1,7 @@
 #include "scan_m1522.h"
 #include "usb_backend.h"
 #include <limits.h>
+#include <stdio.h>
 #include <string.h>
 
 static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
@@ -28,12 +29,26 @@ static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
 int m1522_scan_open(struct m1522_scan_handle *h){
     if(!h)return -1;
     memset(h,0,sizeof *h);h->iface=-1;
-    if(libusb_init(&h->ctx))return -2;
+    {
+        int rc=libusb_init(&h->ctx);
+        if(rc){fprintf(stderr,"minibox-scand: stage=libusb-init rc=%d\n",rc);return -2;}
+    }
     h->dev=libusb_open_device_with_vid_pid(h->ctx,MINIBOX_HP_VID,MINIBOX_M1522_PID);
-    if(!h->dev){m1522_scan_close(h);return -3;}
-    if(find_soapht(libusb_get_device(h->dev),h)){m1522_scan_close(h);return -4;}
-    if(libusb_kernel_driver_active(h->dev,h->iface)==1)libusb_detach_kernel_driver(h->dev,h->iface);
-    if(libusb_claim_interface(h->dev,h->iface)){m1522_scan_close(h);return -5;}
+    if(!h->dev){fprintf(stderr,"minibox-scand: stage=libusb-open-device rc=-3\n");m1522_scan_close(h);return -3;}
+    if(find_soapht(libusb_get_device(h->dev),h)){fprintf(stderr,"minibox-scand: stage=libusb-find-interface rc=-4\n");m1522_scan_close(h);return -4;}
+    {
+        int rc=libusb_kernel_driver_active(h->dev,h->iface);
+        if(rc==1){
+            rc=libusb_detach_kernel_driver(h->dev,h->iface);
+            if(rc)fprintf(stderr,"minibox-scand: stage=libusb-detach rc=%d\n",rc);
+        } else if(rc<0 && rc!=LIBUSB_ERROR_NOT_SUPPORTED){
+            fprintf(stderr,"minibox-scand: stage=libusb-driver-check rc=%d\n",rc);
+        }
+    }
+    {
+        int rc=libusb_claim_interface(h->dev,h->iface);
+        if(rc){fprintf(stderr,"minibox-scand: stage=libusb-claim rc=%d\n",rc);m1522_scan_close(h);return -5;}
+    }
     return 0;
 }
 
@@ -48,7 +63,10 @@ int m1522_scan_write(struct m1522_scan_handle *h,const unsigned char *buf,size_t
     int done=0,r;
     if(!h||!h->dev||!h->bulk_out||(!buf&&len)||len>(size_t)INT_MAX)return -1;
     r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char *)buf,(int)len,&done,timeout_ms);
-    return r?-r:done;
+    if (r || (len && !done))
+        fprintf(stderr, "minibox-scand: stage=libusb-bulk-out rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d\n",
+                r, done, len, h->bulk_out, timeout_ms);
+    return r?r:done;
 }
 
 int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,size_t *got,int timeout_ms){
@@ -56,7 +74,10 @@ int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,si
     if(!h||!h->dev||!h->bulk_in||!buf||!got||!cap||cap>(size_t)INT_MAX)return -1;
     *got=0;
     r=libusb_bulk_transfer(h->dev,h->bulk_in,buf,(int)cap,&done,timeout_ms);
-    if(r)return -r;
+    if (r || !done)
+        fprintf(stderr, "minibox-scand: stage=libusb-bulk-in rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d\n",
+                r, done, cap, h->bulk_in, timeout_ms);
+    if(r)return r;
     *got=(size_t)done;
     return 0;
 }

@@ -44,7 +44,10 @@ static int raw_fill(struct body_reader *r)
     int rc;
     if (r->raw_pos < r->raw_len) return 0;
     rc = soapht_read(r->transport, r->raw, sizeof(r->raw), &got);
-    if (rc || !got) return -1;
+    if (rc || !got) {
+        fprintf(stderr, "minibox-scand: stage=soapht-raw-read rc=%d got=%zu\n", rc, got);
+        return -1;
+    }
     r->raw_pos = 0;
     r->raw_len = got;
     return 0;
@@ -231,17 +234,38 @@ static int control_request(struct soapht_session *transport, const char *xml,
     struct body_reader r;
     unsigned char *body;
     size_t len = 0, got;
-    if (send_request(transport, xml) || reader_begin(&r, transport)) return -1;
-    if (r.status < 200 || r.status >= 300) return -2;
+    int rc = send_request(transport, xml);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-control-write rc=%d\n", rc);
+        return -1;
+    }
+    rc = reader_begin(&r, transport);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-control-headers rc=%d\n", rc);
+        return -1;
+    }
+    if (r.status < 200 || r.status >= 300) {
+        fprintf(stderr, "minibox-scand: stage=soapht-control-http status=%d\n", r.status);
+        return -2;
+    }
     body = malloc(SOAPHT_CONTROL_MAX + 1);
     if (!body) return -3;
     while (!r.done) {
-        if (len == SOAPHT_CONTROL_MAX ||
-            body_read(&r, body + len, SOAPHT_CONTROL_MAX - len, &got)) {
-            free(body); return -4;
+        if (len == SOAPHT_CONTROL_MAX) {
+            fprintf(stderr, "minibox-scand: stage=soapht-control-body rc=-5 status=%d received=%zu limit=%u\n",
+                    r.status, len, (unsigned)SOAPHT_CONTROL_MAX);
+            free(body);
+            return -4;
+        }
+        rc = body_read(&r, body + len, SOAPHT_CONTROL_MAX - len, &got);
+        if (rc || (!got && !r.done)) {
+            fprintf(stderr, "minibox-scand: stage=soapht-control-body rc=%d status=%d received=%zu got=%zu content_left=%zu chunk_left=%zu chunked=%d raw_pending=%zu\n",
+                    rc, r.status, len, got, r.content_left, r.chunk_left,
+                    r.chunked, r.raw_len - r.raw_pos);
+            free(body);
+            return -4;
         }
         len += got;
-        if (!got && !r.done) { free(body); return -4; }
     }
     body[len] = 0;
     if (body_out) *body_out = (char *)body; else free(body);
@@ -311,12 +335,28 @@ static int codec_start(struct soapht_session *transport,
     size_t n;
     memset(&state, 0, sizeof(state));
     if (!transport || !job) return -1;
-    if (control_request(transport, get_elements_xml, 0)) return -2;
-    if (make_create_xml(xml, sizeof(xml), job) ||
-        control_request(transport, xml, &response)) return -3;
+    {
+        int rc = control_request(transport, get_elements_xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-get-elements rc=%d\n", rc);
+            return -2;
+        }
+    }
+    if (make_create_xml(xml, sizeof(xml), job)) {
+        fprintf(stderr, "minibox-scand: stage=soapht-create-xml rc=-1\n");
+        return -3;
+    }
+    {
+        int rc = control_request(transport, xml, &response);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-create-job rc=%d\n", rc);
+            return -3;
+        }
+    }
     a = strstr(response, "<JobId>");
     b = a ? strstr(a + 7, "</JobId>") : 0;
     if (!a || !b || b == a + 7 || (n = (size_t)(b - (a + 7))) >= sizeof(state.job_id)) {
+        fprintf(stderr, "minibox-scand: stage=soapht-job-id rc=-4\n");
         free(response); return -4;
     }
     memcpy(state.job_id, a + 7, n);

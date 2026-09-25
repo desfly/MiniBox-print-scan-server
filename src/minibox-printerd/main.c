@@ -10,6 +10,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "../minibox-ipp/ipp.h"
+#include "../minibox-raster/pwg_to_pcl.h"
 #include "http_body.h"
 #ifndef MINIBOX_TEST_PRINT_SINK
 #include "../minibox-usb/print_m1522.h"
@@ -20,6 +21,7 @@
 #define MAX_PRINT_JOB (128u * 1024u * 1024u)
 #define CLIENT_TIMEOUT_SEC 15
 static volatile sig_atomic_t stop;
+static uint32_t next_print_job=1;
 static void on_signal(int sig){(void)sig;stop=1;}
 static int send_all(int fd,const void*vp,size_t n){const unsigned char*p=vp;while(n){ssize_t w=send(fd,p,n,0);if(w<0){if(errno==EINTR)continue;return-1;}p+=w;n-=(size_t)w;}return 0;}
 static void reply_data(int fd,int code,const char*reason,const char*type,const void*body,size_t n){char h[512];int m=snprintf(h,sizeof h,"HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",code,reason,type,n);if(m>0){(void)send_all(fd,h,(size_t)m);if(n)(void)send_all(fd,body,n);}}
@@ -35,10 +37,92 @@ static int ps_open(print_session **s){static print_session x;*s=&x;return m1522_
 static int ps_write(print_session*s,const unsigned char*b,size_t n){return m1522_print_write(s,b,n);}
 static void ps_close(print_session*s){m1522_print_close(s);}
 #endif
+static int pwg_write(void *ctx,const unsigned char *buf,size_t len){return ps_write((print_session*)ctx,buf,len);}
 static void ipp_reply(int fd,const struct ipp_request*r,uint16_t status){unsigned char out[256];size_t n=ipp_build_status(out,sizeof out,r,status);if(!n){reply_text(fd,500,"Internal Server Error","IPP response build failed\n");return;}reply_data(fd,200,"OK","application/ipp",out,n);}
 static void ipp_attributes_reply(int fd,const struct ipp_request*r){unsigned char out[2048];char host[64]="minibox",uri[128];size_t n;if(gethostname(host,sizeof host-1)!=0||!host[0])strcpy(host,"minibox");host[sizeof host-1]=0;if(snprintf(uri,sizeof uri,"ipp://%s.local/ipp/print",host)>=(int)sizeof uri){ipp_reply(fd,r,0x0500);return;}n=ipp_build_printer_attributes(out,sizeof out,r,uri);if(!n){ipp_reply(fd,r,0x0500);return;}reply_data(fd,200,"OK","application/ipp",out,n);}
+static void ipp_print_job_reply(int fd,const struct ipp_request*r){
+    unsigned char out[512];char host[64]="minibox",uri[192];size_t n;uint32_t id=next_print_job++;
+    if(!id){id=next_print_job++;if(!id)id=1;}
+    if(gethostname(host,sizeof host-1)!=0||!host[0])strcpy(host,"minibox");
+    host[sizeof host-1]=0;
+    if(snprintf(uri,sizeof uri,"ipp://%s.local/ipp/print/jobs/%lu",
+                host,(unsigned long)id)>=(int)sizeof uri){ipp_reply(fd,r,0x0500);return;}
+    n=ipp_build_print_job_response(out,sizeof out,r,id,uri);
+    if(!n){ipp_reply(fd,r,0x0500);return;}
+    reply_data(fd,200,"OK","application/ipp",out,n);
+}
 static int read_more(int fd,unsigned char*b,size_t*used,size_t cap,size_t total){ssize_t n;size_t want;if(*used>=cap||*used>=total)return-1;want=cap-*used;if(want>total-*used)want=total-*used;n=minibox_recv_retry(fd,b+*used,want);if(n<=0)return-1;*used+=(size_t)n;return 0;}
-static void serve_post(int fd,unsigned char*body,size_t have,size_t total){struct ipp_request r;size_t off=0;int dr;print_session*ps=0;unsigned char io[IO_CHUNK];size_t consumed,remain;if(have<8){while(have<8&&have<total)if(read_more(fd,body,&have,IPP_PREFIX_CAP,total)){reply_text(fd,400,"Bad Request","truncated IPP body\n");return;}}if(ipp_parse_header(body,have,&r)){reply_text(fd,400,"Bad Request","invalid IPP header\n");return;}if(r.operation==IPP_OP_VALIDATE_JOB){while(have<total&&have<IPP_PREFIX_CAP){if(read_more(fd,body,&have,IPP_PREFIX_CAP,total)){reply_text(fd,400,"Bad Request","truncated IPP attributes\n");return;}}if(have!=total){ipp_reply(fd,&r,0x0400);return;}dr=ipp_check_document_format(body,have);ipp_reply(fd,&r,dr>0?0x040a:dr<0?0x0400:0);return;}if(r.operation!=IPP_OP_PRINT_JOB){while(have<total){size_t want=total-have>sizeof io?sizeof io:total-have;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){reply_text(fd,400,"Bad Request","truncated IPP body\n");return;}have+=(size_t)n;}if(r.operation==IPP_OP_GET_PRINTER_ATTRIBUTES){ipp_attributes_reply(fd,&r);return;}ipp_reply(fd,&r,0x0501);return;}for(;;){dr=ipp_document_offset(body,have,&off);if(!dr)break;if(have>=total||have>=IPP_PREFIX_CAP){ipp_reply(fd,&r,0x0400);return;}if(read_more(fd,body,&have,IPP_PREFIX_CAP,total)){reply_text(fd,400,"Bad Request","truncated IPP attributes\n");return;}}if(off>=total){ipp_reply(fd,&r,0x0400);return;}dr=ipp_check_document_format(body,off);if(dr){ipp_reply(fd,&r,dr>0?0x040a:0x0400);return;}if(ps_open(&ps)){ipp_reply(fd,&r,0x0507);return;}consumed=have;if(have>off&&ps_write(ps,body+off,have-off)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}remain=total-consumed;while(remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){ps_close(ps);reply_text(fd,400,"Bad Request","truncated print document\n");return;}if(ps_write(ps,io,(size_t)n)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}remain-=(size_t)n;}ps_close(ps);ipp_reply(fd,&r,0);}
+static void serve_post(int fd,unsigned char*body,size_t have,size_t total){struct ipp_request r;size_t off=0;int dr,format;print_session*ps=0;unsigned char io[IO_CHUNK];size_t consumed,remain;if(have<8){while(have<8&&have<total)if(read_more(fd,body,&have,IPP_PREFIX_CAP,total)){reply_text(fd,400,"Bad Request","truncated IPP body\n");return;}}if(ipp_parse_header(body,have,&r)){reply_text(fd,400,"Bad Request","invalid IPP header\n");return;}if(r.operation==IPP_OP_VALIDATE_JOB){while(have<total&&have<IPP_PREFIX_CAP){if(read_more(fd,body,&have,IPP_PREFIX_CAP,total)){reply_text(fd,400,"Bad Request","truncated IPP attributes\n");return;}}if(have!=total){ipp_reply(fd,&r,0x0400);return;}dr=ipp_check_document_format(body,have);ipp_reply(fd,&r,dr>0?0x040a:dr<0?0x0400:0);return;}if(r.operation!=IPP_OP_PRINT_JOB){while(have<total){size_t want=total-have>sizeof io?sizeof io:total-have;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){reply_text(fd,400,"Bad Request","truncated IPP body\n");return;}have+=(size_t)n;}if(r.operation==IPP_OP_GET_PRINTER_ATTRIBUTES){ipp_attributes_reply(fd,&r);return;}ipp_reply(fd,&r,0x0501);return;}for(;;){dr=ipp_document_offset(body,have,&off);if(!dr)break;if(have>=total||have>=IPP_PREFIX_CAP){ipp_reply(fd,&r,0x0400);return;}if(read_more(fd,body,&have,IPP_PREFIX_CAP,total)){reply_text(fd,400,"Bad Request","truncated IPP attributes\n");return;}}if(off>=total){ipp_reply(fd,&r,0x0400);return;}format=ipp_document_format_kind(body,off);if(format==IPP_DOCUMENT_MALFORMED||format==IPP_DOCUMENT_UNSUPPORTED){ipp_reply(fd,&r,format==IPP_DOCUMENT_UNSUPPORTED?0x040a:0x0400);return;}if(ps_open(&ps)){ipp_reply(fd,&r,0x0507);return;}consumed=have;remain=total-consumed;if(format==IPP_DOCUMENT_PWG_RASTER){struct mb_pwg_pcl cv;int prc=0;mb_pwg_pcl_init(&cv);if(have>off)prc=mb_pwg_pcl_feed(&cv,body+off,have-off,pwg_write,ps);while(!prc&&remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){mb_pwg_pcl_reset(&cv);ps_close(ps);reply_text(fd,400,"Bad Request","truncated PWG Raster document\n");return;}prc=mb_pwg_pcl_feed(&cv,io,(size_t)n,pwg_write,ps);remain-=(size_t)n;}if(!prc)prc=mb_pwg_pcl_finish(&cv,pwg_write,ps);if(prc)fprintf(stderr,"minibox-printerd: stage=pwg-raster rc=%d\n",prc);mb_pwg_pcl_reset(&cv);if(prc){ps_close(ps);ipp_reply(fd,&r,0x0400);return;}}else{if(have>off&&ps_write(ps,body+off,have-off)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}while(remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){ps_close(ps);reply_text(fd,400,"Bad Request","truncated print document\n");return;}if(ps_write(ps,io,(size_t)n)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}remain-=(size_t)n;}}ps_close(ps);ipp_print_job_reply(fd,&r);}
+static ssize_t chunk_read_limited(struct minibox_chunk_reader *r,unsigned char *buf,size_t cap,size_t *total){
+    ssize_t n=minibox_chunk_read(r,buf,cap);
+    if(n<=0)return n;
+    if(*total>MAX_PRINT_JOB-(size_t)n)return -2;
+    *total+=(size_t)n;
+    return n;
+}
+static void serve_post_chunked(int fd,const unsigned char *initial,size_t initial_len){
+    struct minibox_chunk_reader cr;struct ipp_request r;
+    unsigned char prefix[IPP_PREFIX_CAP],io[IO_CHUNK];
+    size_t have=0,off=0,total=0;int dr,format;print_session *ps=0;ssize_t n;
+    minibox_chunk_reader_init(&cr,fd,initial,initial_len);
+    while(have<8){
+        n=chunk_read_limited(&cr,prefix+have,sizeof prefix-have,&total);
+        if(n==-2){reply_text(fd,413,"Payload Too Large","print job too large\n");return;}
+        if(n<=0){reply_text(fd,400,"Bad Request","truncated chunked IPP body\n");return;}
+        have+=(size_t)n;
+    }
+    if(ipp_parse_header(prefix,have,&r)){
+        reply_text(fd,400,"Bad Request","invalid IPP header\n");return;
+    }
+    /* Attached-file chunking is the interoperability path we need. Keep
+     * non-document operations on Content-Length so they stay bounded/simple. */
+    if(r.operation!=IPP_OP_PRINT_JOB){
+        ipp_reply(fd,&r,0x0501);return;
+    }
+    for(;;){
+        dr=ipp_document_offset(prefix,have,&off);
+        if(!dr)break;
+        if(have==sizeof prefix){ipp_reply(fd,&r,0x0400);return;}
+        n=chunk_read_limited(&cr,prefix+have,sizeof prefix-have,&total);
+        if(n==-2){reply_text(fd,413,"Payload Too Large","print job too large\n");return;}
+        if(n<=0){ipp_reply(fd,&r,0x0400);return;}
+        have+=(size_t)n;
+    }
+    format=ipp_document_format_kind(prefix,off);
+    if(format==IPP_DOCUMENT_MALFORMED||format==IPP_DOCUMENT_UNSUPPORTED){
+        ipp_reply(fd,&r,format==IPP_DOCUMENT_UNSUPPORTED?0x040a:0x0400);return;
+    }
+    if(ps_open(&ps)){ipp_reply(fd,&r,0x0507);return;}
+    if(format==IPP_DOCUMENT_PWG_RASTER){
+        struct mb_pwg_pcl cv;int prc=0;
+        mb_pwg_pcl_init(&cv);
+        if(have>off)prc=mb_pwg_pcl_feed(&cv,prefix+off,have-off,pwg_write,ps);
+        while(!prc){
+            n=chunk_read_limited(&cr,io,sizeof io,&total);
+            if(n==-2){mb_pwg_pcl_reset(&cv);ps_close(ps);reply_text(fd,413,"Payload Too Large","print job too large\n");return;}
+            if(n<0){mb_pwg_pcl_reset(&cv);ps_close(ps);reply_text(fd,400,"Bad Request","malformed chunked print document\n");return;}
+            if(!n)break;
+            prc=mb_pwg_pcl_feed(&cv,io,(size_t)n,pwg_write,ps);
+        }
+        if(!prc)prc=mb_pwg_pcl_finish(&cv,pwg_write,ps);
+        if(prc)fprintf(stderr,"minibox-printerd: stage=pwg-raster-chunked rc=%d\n",prc);
+        mb_pwg_pcl_reset(&cv);
+        if(prc){ps_close(ps);ipp_reply(fd,&r,0x0400);return;}
+    }else{
+        if(have>off&&ps_write(ps,prefix+off,have-off)){
+            ps_close(ps);ipp_reply(fd,&r,0x0507);return;
+        }
+        for(;;){
+            n=chunk_read_limited(&cr,io,sizeof io,&total);
+            if(n==-2){ps_close(ps);reply_text(fd,413,"Payload Too Large","print job too large\n");return;}
+            if(n<0){ps_close(ps);reply_text(fd,400,"Bad Request","malformed chunked print document\n");return;}
+            if(!n)break;
+            if(ps_write(ps,io,(size_t)n)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}
+        }
+    }
+    ps_close(ps);
+    ipp_print_job_reply(fd,&r);
+}
 static int headers_complete(const unsigned char*b,size_t n){size_t i;for(i=0;i+3<n;i++)if(b[i]=='\r'&&b[i+1]=='\n'&&b[i+2]=='\r'&&b[i+3]=='\n')return 1;return 0;}
-static void serve(int fd){unsigned char head[HTTP_HEAD_CAP],prefix[IPP_PREFIX_CAP];size_t used=0,initial;struct minibox_http_body hb;int pr;char method[16],path[256];while(!headers_complete(head,used)&&used<sizeof head){ssize_t n=minibox_recv_retry(fd,head+used,sizeof head-used);if(n<=0)return;used+=(size_t)n;}if(!headers_complete(head,used)){reply_text(fd,431,"Request Header Fields Too Large","headers too large\n");return;}if(sscanf((const char*)head,"%15s %255s",method,path)!=2){reply_text(fd,400,"Bad Request","bad request\n");return;}if(!strcmp(method,"GET")&&!strcmp(path,"/health")){reply_text(fd,200,"OK","minibox-printerd ok\n");return;}if(strcmp(path,"/ipp/print")){reply_text(fd,404,"Not Found","not found\n");return;}if(strcmp(method,"POST")){reply_text(fd,405,"Method Not Allowed","POST required\n");return;}pr=minibox_http_parse_body(head,used,&hb);if(pr){reply_text(fd,411,"Length Required","valid Content-Length required\n");return;}if(hb.content_length>MAX_PRINT_JOB){reply_text(fd,413,"Payload Too Large","print job too large\n");return;}initial=hb.buffered_body;if(initial>sizeof prefix)initial=sizeof prefix;if(initial)memcpy(prefix,head+hb.header_bytes,initial);if(hb.content_length<8){reply_text(fd,400,"Bad Request","IPP header too short\n");return;}serve_post(fd,prefix,initial,hb.content_length);}
+static void serve(int fd){unsigned char head[HTTP_HEAD_CAP],prefix[IPP_PREFIX_CAP];size_t used=0,initial;struct minibox_http_body hb;int pr;char method[16],path[256];while(!headers_complete(head,used)&&used<sizeof head){ssize_t n=minibox_recv_retry(fd,head+used,sizeof head-used);if(n<=0)return;used+=(size_t)n;}if(!headers_complete(head,used)){reply_text(fd,431,"Request Header Fields Too Large","headers too large\n");return;}if(sscanf((const char*)head,"%15s %255s",method,path)!=2){reply_text(fd,400,"Bad Request","bad request\n");return;}if(!strcmp(method,"GET")&&!strcmp(path,"/health")){reply_text(fd,200,"OK","minibox-printerd ok\n");return;}if(strcmp(path,"/ipp/print")){reply_text(fd,404,"Not Found","not found\n");return;}if(strcmp(method,"POST")){reply_text(fd,405,"Method Not Allowed","POST required\n");return;}pr=minibox_http_parse_body(head,used,&hb);if(pr){reply_text(fd,pr==-3?411:400,pr==-3?"Length Required":"Bad Request",pr==-3?"Content-Length or chunked transfer required\n":"invalid HTTP request framing\n");return;}if(hb.chunked){serve_post_chunked(fd,head+hb.header_bytes,hb.buffered_body);return;}if(hb.content_length>MAX_PRINT_JOB){reply_text(fd,413,"Payload Too Large","print job too large\n");return;}initial=hb.buffered_body;if(initial>sizeof prefix)initial=sizeof prefix;if(initial)memcpy(prefix,head+hb.header_bytes,initial);if(hb.content_length<8){reply_text(fd,400,"Bad Request","IPP header too short\n");return;}serve_post(fd,prefix,initial,hb.content_length);}
 int main(int argc,char**argv){int port=argc>1?atoi(argv[1]):631;int s=socket(AF_INET,SOCK_STREAM,0);if(s<0){perror("socket");return 1;}int one=1;setsockopt(s,SOL_SOCKET,SO_REUSEADDR,&one,sizeof one);struct sockaddr_in a;memset(&a,0,sizeof a);a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_ANY);a.sin_port=htons((unsigned short)port);if(bind(s,(struct sockaddr*)&a,sizeof a)||listen(s,8)){perror("bind/listen");close(s);return 1;}signal(SIGINT,on_signal);signal(SIGTERM,on_signal);fprintf(stderr,"minibox-printerd: listening on %d\n",port);while(!stop){int c=accept(s,NULL,NULL);struct timeval tv={CLIENT_TIMEOUT_SEC,0};if(c<0){if(errno==EINTR)continue;perror("accept");break;}(void)setsockopt(c,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof tv);(void)setsockopt(c,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof tv);serve(c);close(c);}close(s);return 0;}

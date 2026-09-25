@@ -21,6 +21,8 @@ required_sources='minibox-printerd/main.c
 minibox-printerd/http_body.c
 minibox-ipp/ipp.c
 minibox-ipp/print_job.c
+minibox-raster/pwg_to_pcl.c
+minibox-raster/pwg_to_pcl.h
 minibox-usb/stream.c
 minibox-usb/libusb_m1522.c
 minibox-usb/print_m1522.c

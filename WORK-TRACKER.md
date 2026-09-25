@@ -20,15 +20,14 @@ Do not re-prove completed layers unless a regression is detected.
 ## Current checkpoint
 
 - Repository: `desfly/MiniBox-print-scan-server`
-- Working branch: `minibox-network-mfp-runtime-v2`
-- Current code HEAD before this tracker update: `14905aafa0900def4aed7cefd24dc8c8e0ae2630`
-- Latest code change: `scan: add offline SOAPHT transcript analyzer`
-- Canonical tracker introduced at: `88800b0b81e7fb5a5bfb4c19959c9bfa21dbe2d2`
-- Firmware line: Build-0106 / OpenWrt 25.12.5 / Gainstrong MiniBox V1.0 / AR9330
-- Runtime package physically installed on MiniBox: `minibox-mfp-0.3.0-r10.apk`
-- r10 source commit: `9cf0a79a539e47c657a240eaf6ec8dcece1e3e1f`
-- r10 APK SHA256: `eb761ee0c39d9667c1ce189d75e4f4f3061525e37053f8da438878a1d176ce98`
-- r10 artifact run: `35020884433`
+- Working branch: `integration/minibox-r21-20260925`
+- Current HEAD: `16a14ea10631c3fb7d0a44b077514f7d592faf2e`
+- Firmware line: OpenWrt 25.12.5 / Gainstrong MiniBox V1.0 / AR9330
+- Physically flashed baseline before today's scanner-discovery fix: `ade0c6541f23393a95e1deb0d2f0883fb138bf10`
+- Baseline flashed image SHA256: `496b018dd4a04f99efed2de585b4e53d3ffa79802e6f4014291291b315b81db8`
+- Baseline image file: `minibox-v1-ade0c654-sysupgrade.bin`
+- Baseline `sysupgrade -T`: PASS
+- Device returned after flash at Wi-Fi IP `192.168.55.250`.
 
 ## Architecture contract
 
@@ -39,134 +38,182 @@ Do not re-prove completed layers unless a regression is detected.
 - Printer and scanner USB access is userspace/libusb.
 - Network print protocol: IPP.
 - Network scan protocol: eSCL/AirScan style endpoint.
-- Automatic discovery uses mDNS/DNS-SD.
+- Automatic discovery uses mDNS/DNS-SD plus Windows WSD where needed.
 
-## Proven — do not redo without regression
+## 2026-09-25 — physical firmware validation and Windows discovery work
 
-### Printing
+### Firmware and runtime after flashing ade0c654
 
-Physical end-to-end network printing has succeeded:
+All three MiniBox daemons are running:
+- `minibox-printerd` — running
+- `minibox-scand` — running
+- `minibox-discoveryd` — running
 
-`Windows -> Wi-Fi -> MiniBox -> IPP :631 -> libusb -> HP M1522n`
+Health endpoints:
+- `http://192.168.55.250:631/health` -> `minibox-printerd ok`
+- `http://192.168.55.250:8080/health` -> `minibox-scand ok`
 
-A real test page printed. Correct PJL/UEL close framing was proven to clear the MFP's lingering `Печать документа` state.
+eSCL:
+- `/eSCL/ScannerCapabilities` -> HTTP 200
+- `/eSCL/ScannerStatus` -> HTTP 200 / Idle
+- Capabilities advertise HP LaserJet M1522n @ MiniBox, Platen, ADF, RGB24, Grayscale8, JPEG, 300x300.
 
-### Scanner network layer
+### Windows command-environment repair
 
-Windows has successfully reached eSCL `ScannerCapabilities` and `ScannerStatus`; status returned `Idle`.
+Bad/stub binaries in `C:\Users\75` were shadowing system tools:
+- `powershell`
+- `powershell.exe`
+- `ssh.exe`
+- `curl.exe`
 
-### Scanner USB layer
+They were moved to `C:\Users\75\CLI_BAD_BACKUP`.
 
-M1522 scanner transport identified:
-- interface 0: SOAPHT `ff/02/01`
-- bulk OUT: `0x03`
-- bulk IN: `0x83`
-- interrupt IN: `0x84`
-- printer interface: interface 1, `07/01/02`
+Verified correct tools:
+- PowerShell 5.1.19041.6456
+- OpenSSH_for_Windows_9.5p1
+- curl 8.13.0
 
-Physical `/usr/sbin/minibox-scan-diag --claim` succeeded on r10 and released safely without sending a scan payload.
+Use `scp -O` because MiniBox has no `/usr/libexec/sftp-server`.
 
-## Current CI state
+### mDNS proven on hardware/network
 
-Verified source HEAD `ba6bf53aa7ef965f0164b69cc1d968ad42610a9d` had four workflow runs; observed contract workflows were green. Build-0106 was changed there to consume current runtime-v2 source.
+MiniBox UDP 5353 is listening.
 
-Documentation/tool-only commits after that do not change the installed MiniBox runtime yet.
+Windows direct multicast capture received MiniBox advertisements from `192.168.55.250:5353` for both:
+- `_ipp._tcp.local`
+- `_uscan._tcp.local`
 
-## Current scanner blocker
+IPP TXT observed:
+- `rp=ipp/print`
+- `ty=HP LaserJet M1522n`
+- `product=(HP LaserJet M1522n)`
+- `pdl=application/octet-stream,image/pwg-raster`
+- `Duplex=F`
+- `Scan=T`
+- `note=MiniBox MFP`
 
-Real M1522 image acquisition is NOT implemented. Production remains intentionally fail-closed with `minibox_soapht_codec = 0`.
+Scanner TXT observed:
+- `is=platen,adf`
+- `cs=grayscale,color`
+- `pdl=image/jpeg`
+- `duplex=F`
+- `note=MiniBox MFP`
 
-Known old HPLIP wrapper ABI:
-- `bb_open`
-- `bb_close`
-- `bb_get_parameters`
-- `bb_is_paper_in_adf`
-- `bb_start_scan`
-- `bb_get_image_data`
-- `bb_end_page`
-- `bb_end_scan`
+Conclusion: multicast delivery to Windows is physically proven. Do not repeat basic mDNS reachability unless a regression appears.
 
-Low-level command framing/bytes still require verified evidence.
+### Windows WS-Discovery proven manually
 
-## Reverse-engineering tooling
+MiniBox UDP 3702 is listening through `minibox-wsdd`.
 
-### Capture extractor
+Direct unicast Windows WS Probe to `192.168.55.250:3702` returned valid SOAP `ProbeMatches` with:
+- endpoint `urn:uuid:4d424f58-0000-4000-8000-0cefafcfc53d`
+- types `dp:Device p:PrintDeviceType scn:ScanDeviceType`
+- XAddr `http://192.168.55.250/cgi-bin/minibox-wsd`
 
-`tools/extract_soapht_usbpcap.py`
+HTTP GET to the WSD endpoint returned expected 405 because metadata requires POST.
 
-Filters real capture traffic for `0x03 OUT` / `0x83 IN`, writes chronological TSV and concatenated streams. It intentionally does not decode or replay unknown commands.
+SOAP Transfer/Get POST returned HTTP 200 metadata containing:
+- FriendlyName `HP LaserJet M1522n @ MiniBox`
+- Manufacturer `HP`
+- ModelName `HP LaserJet M1522n @ MiniBox`
+- ModelNumber `M1522n`
+- SerialNumber `0cefafcfc53d`
+- PresentationUrl `http://192.168.55.250/`
+- DeviceCategory `MFP Printers Scanners`
 
-### Transcript analyzer — NEW
+Conclusion: manual WSD Probe + metadata chain works. This does not itself prove Windows GUI auto-registration.
 
-`tools/analyze_soapht_transcript.py`
+### Windows print path — physically confirmed
 
-Code commit: `14905aafa0900def4aed7cefd24dc8c8e0ae2630`
+Windows printer queue:
+- Name: `\\http://192.168.55.250:631\HP LaserJet M1522n @ MiniBox`
+- Driver: `HP Universal Printing PCL 6`
+- Port: `http://192.168.55.250:631/ipp/print`
 
-It consumes the extractor TSV and, without assigning guessed protocol meanings:
-- coalesces adjacent same-direction payload transfers into exchanges
-- preserves first/last frame and transfer counts
-- emits exact per-exchange `.bin` fixtures
-- records byte lengths and SHA256
-- writes a JSON manifest for regression/codec tests
-- prints a short hex preview for inspection
+`Win32_Printer.PrintTestPage` returned `ReturnValue 0`, and the user confirmed the physical page printed.
 
-This creates the fixture-first path required before enabling any real SOAPHT command encoder.
+Physical end-to-end path is therefore confirmed:
+`Windows -> Wi-Fi -> MiniBox -> IPP :631 -> libusb -> HP M1522n -> paper`.
 
-## Hardware evidence still needed
+### Windows scanner registration — current blocker
 
-Capture one known-good direct USB scan from Windows with USBPcap/Wireshark:
-- M1522 directly connected to Windows laptop by USB
-- platen
-- one page
-- 300 dpi
-- color or grayscale
-- capture starts before scan and stops immediately after scan
-- save `.pcapng`
+`Get-PnpDevice -Class Image` shows only:
+- old USB HP LJ M1522n Scan entry, status Unknown
+- `ROOT\IMAGE\0000`, status OK
 
-Only verified protocol evidence may be used to implement/enable the SOAPHT codec.
+WIA COM enumeration also returns only:
+- `HP LJ M1522n Scan`
 
-## Truth table
+There is no separately registered MiniBox network scanner in Windows.
 
-- MiniBox sees M1522 USB: YES
-- Physical network print: YES
-- IPP endpoint: YES
-- Correct PJL/UEL close: YES
-- Persistent mDNS code: YES
-- eSCL capabilities/status from Windows: YES
-- SOAPHT interface/endpoints identified: YES
-- libusb scanner claim/release on hardware: YES
-- Capture extractor: YES
-- Offline transcript -> fixture analyzer: YES
-- Real scan movement/image: NO
-- Verified SOAPHT codec: NO
-- Automatic Windows printer discovery: NOT YET PHYSICALLY CONFIRMED
-- Automatic Windows scanner discovery: NOT YET PHYSICALLY CONFIRMED
+Important distinction:
+- eSCL HTTP works
+- mDNS `_uscan._tcp` reaches Windows
+- WSD Probe/metadata manually works
+- Windows still does not provision/register the network scanner.
 
-## NEXT STEP
+### eSCL identity fix — PR #22
 
-1. Add deterministic tests for `analyze_soapht_transcript.py` using synthetic TSV data only; this tests tooling, not protocol assumptions.
-2. Wire that test into the existing contract CI so the reverse-engineering pipeline cannot silently regress.
-3. Keep `minibox_soapht_codec = 0`.
-4. Obtain real M1522 `.pcapng`, run extractor + analyzer, then commit only sanitized protocol fixtures/manifest needed for codec tests.
-5. Derive and implement `start/read_image/end_page/end_scan` only after real transcript evidence.
-6. Update this tracker after each step.
+Branch:
+`fix/windows-escl-identity-20260925`
 
-## 2026-09-23 — integrated web UI recovery
+PR:
+`#22 Fix Windows eSCL discovery identity`
 
-- Repository name verified on GitHub: `desfly/MiniBox-print-scan-server`; default branch remains `main`.
-- Root cause confirmed from the artifact of run `35775205560` / commit `d24d92e`: its manifest contains `uhttpd` and `uhttpd-mod-ubus` from the base build-kit configuration, but `minibox-mfp` packaged no `/www` UI files and LuCI is absent. The green build therefore had a web server without the intended management page.
-- Decision for the 16 MB flash / 64 MB RAM target: embed the previously agreed minimal HTML UI and use `uhttpd`; do not add full LuCI unless the minimal UI proves insufficient. This keeps the UI explicit and avoids the substantially larger LuCI dependency set.
-- Branch: `fix/integrated-web-ui-20260923` based on the exact commit used by yesterday's successful integration build.
-- Added `/www/index.html`, `/www/minibox/index.html`, `/www/minibox/app.js`, read-only `/www/cgi-bin/minibox-status`, and a hard package dependency on `uhttpd`.
-- Added source contract checks plus post-build squashfs inspection for the UI files, `uhttpd` binary/config/init script and enabled `/etc/rc.d/S??uhttpd` link. Factory image size remains gated at 16,580,608 bytes.
-- Physical baseline rechecked read-only on the running MiniBox before installing any candidate: OpenWrt 25.12.5 / kernel 6.12.94, `minibox-mfp-0.3.0-r12`, `uhttpd` and `uhttpd-mod-ubus` are installed; LuCI is absent. `uhttpd`, printerd, scand and discoveryd are running and their boot links exist (`S50`, `S91`, `S91`, `S92`). HTTP 80, IPP 631, eSCL 8080 and UDP 5353 listen; RAW 9100 does not.
-- The physical `/www` contains no UI files and `/www/cgi-bin` does not exist, while `uhttpd` serves a directory index. This independently confirms the failure mechanism on hardware: the server starts, but the image/package has no web payload. No reboot, package install or flash write was performed during this check.
-- Resource baseline: 55,676 KiB total RAM with 15,876 KiB available at idle, and about 9.0 MiB free overlay. This reinforces the lightweight static UI decision; it is not a hardware-compatibility result for the new image.
-- Read-only MTD inspection confirms the physical `firmware` partition is exactly 16,580,608 bytes, matching the CI factory-image ceiling. `u-boot` is a separate 131,072-byte partition and `art` is a separate final 65,536-byte partition; neither was read or modified. The current TP-Link firmware parser exposes kernel/rootfs splits and the boot cmdline is `console=ttyATH0,115200 rootfstype=squashfs,jffs2`. This is layout evidence only, not proof that UART recovery or a new image is safe.
-- Safety state: CI output is TEST-ONLY. Do not flash until initramfs/RAM boot and board-specific Ethernet, Wi-Fi, ART/calibration, USB, UI and recovery checks pass.
+Change:
+- add stable eSCL DNS-SD `UUID`, derived from the existing WSD identity
+- add `adminurl=http://<hostname>.local/`
+- only enrich `_uscan._tcp` / `_uscans._tcp`
+- preserve truthful existing scan capabilities; no false Mopria certification claim
+- add regression coverage.
 
-### NEXT STEP
+PR head:
+`a755c49841fdd8b65f758250a78d931423e50f14`
 
-1. Push the branch, open a PR and run GitHub Actions from the PR head.
-2. Record the real run URL, artifact name/digest and generated image sizes here.
-3. RAM-boot the initramfs candidate and verify `http://<MiniBox-IP>/` before any flash write.
+All PR checks passed:
+- scan-contract — success
+- discovery-contract — success
+- server-contract — success
+- OpenWrt 25.12.5 / MiniBox V1 — success
+
+PR #22 was merged into `integration/minibox-r21-20260925`.
+
+Merge commit / current integration HEAD:
+`16a14ea10631c3fb7d0a44b077514f7d592faf2e`
+
+### New firmware build for tomorrow
+
+Existing integration PR #21 automatically picked up the new head and launched CI for `16a14ea...`.
+
+Current status when stopping work tonight:
+- scan-contract — success
+- discovery-contract — success
+- server-contract — success
+- OpenWrt 25.12.5 / MiniBox V1 — IN PROGRESS
+- full firmware workflow run: `36184892544`
+
+Do not flash tonight. Tomorrow first verify that full OpenWrt build completed successfully and that the artifact's `SOURCE-COMMIT.txt` / provenance matches exactly `16a14ea10631c3fb7d0a44b077514f7d592faf2e`.
+
+## Tomorrow start sequence
+
+1. Check run `36184892544`.
+2. If green, fetch artifact and verify exact source commit = `16a14ea10631c3fb7d0a44b077514f7d592faf2e`.
+3. Verify artifact checksums and identify the new `squashfs-sysupgrade.bin` / renamed TEST sysupgrade image.
+4. Download to Windows.
+5. Verify SHA256 on Windows.
+6. Copy with:
+   `scp -O <new-image> root@192.168.55.250:/tmp/`
+7. On MiniBox verify file size and SHA256.
+8. Run:
+   `sysupgrade -T /tmp/<new-image>`
+9. Only if test passes, flash with `sysupgrade /tmp/<new-image>`.
+10. After reboot, verify health endpoints, then immediately retest Windows scanner registration before changing any other subsystem.
+
+## Priority order remains
+
+1. Printing reliable end-to-end — CURRENTLY PHYSICALLY PASS.
+2. Scanning returns a real image reliably end-to-end.
+3. Automatic discovery/addition works on Windows and Android.
+4. Only after the three above: factory AP / Wi-Fi setup UI and reset provisioning.
+
+Do not let AP/UI work preempt scanner and OS auto-discovery work.

@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=12
+PKG_RELEASE:=21
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -14,7 +14,7 @@ define Package/minibox-mfp
 endef
 
 define Package/minibox-mfp/description
- Minimal IPP/eSCL/mDNS runtime and libusb backend for HP LaserJet M1522n.
+ Minimal IPP/eSCL/mDNS/WSD discovery runtime and libusb backend for HP LaserJet M1522n.
  No CUPS and no usblp dependency.
 endef
 
@@ -35,6 +35,7 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-printerd/http_body.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/ipp.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/print_job.c \
+		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl.c \
 		$(PKG_BUILD_DIR)/minibox-usb/stream.c \
 		$(PKG_BUILD_DIR)/minibox-usb/libusb_m1522.c \
 		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c -lusb-1.0
@@ -52,7 +53,17 @@ define Build/Compile
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-discoveryd \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/main.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/service.c \
-		$(PKG_BUILD_DIR)/minibox-discoveryd/mdns.c
+		$(PKG_BUILD_DIR)/minibox-discoveryd/mdns.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_identity.c
+	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-wsdd \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_main.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_runtime.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_identity.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd.c
+	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_metadata.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_identity.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd.c
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-scan-diag \
 		$(PKG_BUILD_DIR)/minibox-usb/scan_diag.c \
 		$(PKG_BUILD_DIR)/minibox-usb/scan_m1522.c -lusb-1.0
@@ -78,6 +89,7 @@ define Package/minibox-mfp/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-printerd $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-scand $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-discoveryd $(1)/usr/sbin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsdd $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-scan-diag $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_usb_transport $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/m1522_capture_parser $(1)/usr/sbin/
@@ -91,6 +103,7 @@ define Package/minibox-mfp/install
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-printerd $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-scand $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-discoveryd $(1)/etc/init.d/
+	$(INSTALL_BIN) ./files/etc/init.d/minibox-wsdd $(1)/etc/init.d/
 
 	$(INSTALL_DIR) $(1)/etc/minibox/services.d
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-printer.service $(1)/etc/minibox/services.d/
@@ -104,6 +117,7 @@ define Package/minibox-mfp/install
 	$(INSTALL_DATA) ./files/www/index.html $(1)/www/minibox/index.html
 	$(INSTALL_DATA) ./files/www/minibox/app.js $(1)/www/minibox/app.js
 	$(INSTALL_BIN) ./files/www/cgi-bin/minibox-status $(1)/www/cgi-bin/minibox-status
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/cgi-bin/minibox-wsd
 endef
 
 $(eval $(call BuildPackage,minibox-mfp))

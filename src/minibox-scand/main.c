@@ -30,25 +30,57 @@ static const char*body_of(char*b,size_t n,size_t*len){size_t i;for(i=0;i+3<n;i++
 static int next_document_id(const char *p,unsigned *id){char tail;return sscanf(p,"/eSCL/ScanJobs/%u/NextDocument%c",id,&tail)==1?0:-1;}
 #ifdef MINIBOX_TEST_SCAN_BACKEND
 struct test_scan_ctx{size_t off;}; static struct test_scan_ctx test_ctx; static const unsigned char test_jpeg[]={0xff,0xd8,'M','I','N','I','B','O','X',0xff,0xd9};
-static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
+static int tb_open(void*v,const struct escl_job*j){struct test_scan_ctx*c=v;(void)j;if(getenv("MINIBOX_TEST_SCAN_OPEN_FAIL"))return -1;c->off=0;return 0;} static int tb_read(void*v,unsigned char*b,size_t cap,size_t*got){struct test_scan_ctx*c=v;size_t left=sizeof(test_jpeg)-c->off,n=left<cap?left:cap;if(getenv("MINIBOX_TEST_SCAN_READ_FAIL"))return -7;if(n)memcpy(b,test_jpeg+c->off,n);c->off+=n;*got=n;return 0;} static int tb_end(void*v,int*more){(void)v;*more=0;return 0;} static void tb_close(void*v){(void)v;} static const struct minibox_scan_backend scan_backend_storage={tb_open,tb_read,tb_end,tb_close}; static const struct minibox_scan_backend *scan_backend=&scan_backend_storage; static void*scan_backend_ctx=&test_ctx;
 #else
 static const struct minibox_scan_backend *scan_backend=&minibox_m1522_scan_backend; static void *scan_backend_ctx;
 #endif
 static int stream_document(int f){
- struct minibox_scan_stream s={0}; unsigned char buf[16384]; size_t got; int more=0,started=0;
+ struct minibox_scan_stream s={0}; unsigned char buf[16384];
+ size_t got=0, first=0; int more=0, started=0, rc;
  const char*h="HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nConnection: close\r\n\r\n";
 #ifndef MINIBOX_TEST_SCAN_BACKEND
  scan_backend_ctx=minibox_m1522_scan_backend_ctx;
 #endif
- if(!scan_backend||minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings)) return -1;
- if(send_all(f,h,strlen(h))) goto fail;
- started=1;
- for(;;){
-  if(minibox_scan_stream_read(&s,buf,sizeof buf,&got)) goto fail;
-  if(!got) break;
-  if(send_all(f,buf,got)) goto fail;
+ if(!scan_backend){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=backend-missing\n",scan.id);
+  minibox_scan_session_fail(&scan);return -1;
  }
- if(minibox_scan_stream_end_page(&s,&more)) goto fail;
+ rc=minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings);
+ if(rc){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=backend-open rc=%d\n",scan.id,rc);
+  minibox_scan_session_fail(&scan);return -1;
+ }
+ /* Never send HTTP 200/image/jpeg before at least the actual JPEG SOI is
+  * received. On a first-read error return a valid HTTP 503 to the client. */
+ while(first<2){
+  got=0;rc=minibox_scan_stream_read(&s,buf+first,sizeof buf-first,&got);
+  if(rc||!got||got>sizeof buf-first){
+   fprintf(stderr,"minibox-scand: scan job=%u stage=first-image-read rc=%d got=%zu\n",scan.id,rc,got);
+   goto fail;
+  }
+  first+=got;
+ }
+ if(buf[0]!=0xff||buf[1]!=0xd8){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=invalid-image-prefix\n",scan.id);
+  goto fail;
+ }
+ /* Once a successful HTTP response starts it cannot be replaced by 503. */
+ started=1;
+ if(send_all(f,h,strlen(h))||send_all(f,buf,first))goto fail;
+ for(;;){
+  got=0;rc=minibox_scan_stream_read(&s,buf,sizeof buf,&got);
+  if(rc||got>sizeof buf){
+   fprintf(stderr,"minibox-scand: scan job=%u stage=image-read rc=%d got=%zu\n",scan.id,rc,got);
+   goto fail;
+  }
+  if(!got)break;
+  if(send_all(f,buf,got))goto fail;
+ }
+ rc=minibox_scan_stream_end_page(&s,&more);
+ if(rc){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=end-page rc=%d\n",scan.id,rc);
+  goto fail;
+ }
  minibox_scan_stream_close(&s);
  return minibox_scan_session_end_page(&scan,more);
 fail:
@@ -56,5 +88,5 @@ fail:
  minibox_scan_session_fail(&scan);
  return started?-2:-1;
 }
-static void serve(int f){char b[SCAN_REQUEST_MAX+1],m[16],p[256];size_t n=0;int rr=receive_request(f,b,SCAN_REQUEST_MAX,&n);if(rr){out(f,rr==-4?413:400,"text/plain",rr==-4?"scan request too large\n":"invalid or incomplete request\n");return;}if(sscanf(b,"%15s %255s",m,p)!=2){out(f,400,"text/plain","bad request\n");return;}if(!strcmp(m,"GET")&&!strcmp(p,"/health")){out(f,200,"text/plain","minibox-scand ok\n");return;}if(!strcmp(m,"GET")&&!strcmp(p,"/eSCL/ScannerCapabilities")){out(f,200,"text/xml","<?xml version=\"1.0\"?><scan:ScannerCapabilities xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"><scan:MakeAndModel>HP LaserJet M1522n @ MiniBox</scan:MakeAndModel><scan:Platen/><scan:Adf/></scan:ScannerCapabilities>\n");return;}if(!strcmp(m,"GET")&&!strcmp(p,"/eSCL/ScannerStatus")){out(f,200,"text/xml",minibox_scan_session_busy(&scan)?"<?xml version=\"1.0\"?><scan:ScannerStatus xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"><scan:State>Processing</scan:State></scan:ScannerStatus>\n":"<?xml version=\"1.0\"?><scan:ScannerStatus xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"><scan:State>Idle</scan:State></scan:ScannerStatus>\n");return;}if(!strcmp(m,"POST")&&!strcmp(p,"/eSCL/ScanJobs")){size_t z=0;const char*x=body_of(b,n,&z);char extra[256];struct escl_job settings;unsigned id;if(minibox_scan_session_busy(&scan)){out(f,409,"text/plain","scan job already active\n");return;}if(!x||escl_parse_scan_settings(x,z,&settings)){out(f,400,"text/plain","invalid scan settings\n");return;}id=next_job++;if(!id)id=next_job++;if(minibox_scan_session_create(&scan,id,&settings)){out(f,503,"text/plain","cannot create scan job\n");return;}snprintf(extra,sizeof extra,"Location: /eSCL/ScanJobs/%u\r\n",id);outx(f,201,"Created","text/plain",extra,"");return;}if(!strcmp(m,"GET")){unsigned id;if(next_document_id(p,&id)==0){int sr;if(minibox_scan_session_begin_page(&scan,id)){out(f,404,"text/plain","no matching scan job\n");return;}sr=stream_document(f);if(sr==-1)out(f,503,"text/plain","M1522 scan backend unavailable\n");return;}}out(f,404,"text/plain","not found\n");}
+static void serve(int f){char b[SCAN_REQUEST_MAX+1],m[16],p[256];size_t n=0;int rr=receive_request(f,b,SCAN_REQUEST_MAX,&n);if(rr){out(f,rr==-4?413:400,"text/plain",rr==-4?"scan request too large\n":"invalid or incomplete request\n");return;}if(sscanf(b,"%15s %255s",m,p)!=2){out(f,400,"text/plain","bad request\n");return;}if(!strcmp(m,"GET")&&!strcmp(p,"/health")){out(f,200,"text/plain","minibox-scand ok\n");return;}if(!strcmp(m,"GET")&&!strcmp(p,"/eSCL/ScannerCapabilities")){out(f,200,"text/xml",escl_scanner_capabilities_xml());return;}if(!strcmp(m,"GET")&&!strcmp(p,"/eSCL/ScannerStatus")){out(f,200,"text/xml",escl_scanner_status_xml(minibox_scan_session_busy(&scan)));return;}if(!strcmp(m,"POST")&&!strcmp(p,"/eSCL/ScanJobs")){size_t z=0;const char*x=body_of(b,n,&z);char extra[256];struct escl_job settings;unsigned id;if(minibox_scan_session_busy(&scan)){out(f,409,"text/plain","scan job already active\n");return;}if(!x||escl_parse_scan_settings(x,z,&settings)){out(f,400,"text/plain","invalid scan settings\n");return;}id=next_job++;if(!id)id=next_job++;if(minibox_scan_session_create(&scan,id,&settings)){out(f,503,"text/plain","cannot create scan job\n");return;}snprintf(extra,sizeof extra,"Location: /eSCL/ScanJobs/%u\r\n",id);outx(f,201,"Created","text/plain",extra,"");return;}if(!strcmp(m,"GET")){unsigned id;if(next_document_id(p,&id)==0){int sr;if(minibox_scan_session_begin_page(&scan,id)){out(f,404,"text/plain","no matching scan job\n");return;}sr=stream_document(f);if(sr==-1)out(f,503,"text/plain","M1522 scan backend unavailable\n");return;}}out(f,404,"text/plain","not found\n");}
 int main(int argc,char**argv){int port=argc>1?atoi(argv[1]):8080,s=socket(AF_INET,SOCK_STREAM,0),one=1;if(s<0){perror("socket");return 1;}setsockopt(s,SOL_SOCKET,SO_REUSEADDR,&one,sizeof one);struct sockaddr_in a;memset(&a,0,sizeof a);a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_ANY);a.sin_port=htons((unsigned short)port);if(bind(s,(struct sockaddr*)&a,sizeof a)||listen(s,8)){perror("bind/listen");close(s);return 1;}signal(SIGINT,on_signal);signal(SIGTERM,on_signal);fprintf(stderr,"minibox-scand: listening on %d\n",port);while(!stop){int c=accept(s,NULL,NULL);struct timeval tv={CLIENT_TIMEOUT_SEC,0};if(c<0){if(errno==EINTR)continue;break;}(void)setsockopt(c,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof tv);(void)setsockopt(c,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof tv);serve(c);close(c);}close(s);return 0;}

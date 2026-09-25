@@ -8,6 +8,8 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp
 /tmp/test-ipp
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp-format.c -o /tmp/test-ipp-format
 /tmp/test-ipp-format
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-raster/pwg_to_pcl.c tests/test-pwg-to-pcl.c -o /tmp/test-pwg-to-pcl
+/tmp/test-pwg-to-pcl
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-discoveryd/wsd.c tests/test-wsd.c -o /tmp/test-wsd
 /tmp/test-wsd
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-escl/escl.c tests/test-escl.c -o /tmp/test-escl
@@ -15,7 +17,10 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-escl/escl.c tests/test-e
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c tests/test-soapht-transport.c -o /tmp/test-soapht
 /tmp/test-soapht
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c src/minibox-scan/soapht_codec.c tests/test_soapht_codec.c -o /tmp/test-soapht-codec
-/tmp/test-soapht-codec
+/tmp/test-soapht-codec 2>/tmp/minibox-soapht-failure.log
+grep -q 'stage=soapht-raw-read' /tmp/minibox-soapht-failure.log
+grep -q 'stage=soapht-control-body' /tmp/minibox-soapht-failure.log
+grep -q 'stage=soapht-get-elements rc=-4' /tmp/minibox-soapht-failure.log
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_session.c tests/test-scan-session.c -o /tmp/test-scan-session
 /tmp/test-scan-session
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_backend.c tests/test-scan-backend.c -o /tmp/test-scan-backend
