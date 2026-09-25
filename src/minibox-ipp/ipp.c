@@ -145,3 +145,25 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(put(o,c,&p,&end,1))return 0;
     return p;
 }
+
+size_t ipp_build_print_job_response(unsigned char *o,size_t cap,
+                                    const struct ipp_request *r,
+                                    uint32_t job_id,const char *job_uri){
+    size_t p;
+    const unsigned char group=0x02,end=0x03;
+    unsigned char id[4],state[4]={0,0,0,9}; /* completed */
+    if(!o||!r||!job_id||!job_uri||!job_uri[0])return 0;
+    if(!(p=ipp_build_status(o,cap,r,0)))return 0;
+    p--; /* Replace end-of-attributes with the required Job Attributes group. */
+    id[0]=(unsigned char)(job_id>>24);
+    id[1]=(unsigned char)(job_id>>16);
+    id[2]=(unsigned char)(job_id>>8);
+    id[3]=(unsigned char)job_id;
+    if(put(o,cap,&p,&group,1)||
+       attr(o,cap,&p,0x45,"job-uri",job_uri,strlen(job_uri))||
+       attr(o,cap,&p,0x21,"job-id",id,sizeof id)||
+       attr(o,cap,&p,0x23,"job-state",state,sizeof state)||
+       attr(o,cap,&p,0x44,"job-state-reasons","none",4)||
+       put(o,cap,&p,&end,1))return 0;
+    return p;
+}
