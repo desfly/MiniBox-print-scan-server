@@ -65,7 +65,7 @@
   ATTR name job-name "MiniBox PWG CI"
   ATTR mimeMediaType document-format image/pwg-raster
 
-  FILE minibox-pwg.ras
+  FILE $filename
 
   STATUS successful-ok
   EXPECT job-uri OF-TYPE uri IN-GROUP job-attributes-tag
