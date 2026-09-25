@@ -20,11 +20,52 @@ static int copy_value(char *dst, size_t cap, const char *src) {
     return 0;
 }
 
+static int has_txt_key(const char *txt, const char *key) {
+    size_t k;
+    const char *p;
+    if (!txt || !key || !*key) return 0;
+    k = strlen(key);
+    for (p = txt; *p; ) {
+        const char *end = strchr(p, ';');
+        size_t n = end ? (size_t)(end - p) : strlen(p);
+        if (n > k && !memcmp(p, key, k) && p[k] == '=') return 1;
+        if (!end) break;
+        p = end + 1;
+    }
+    return 0;
+}
+
+static int append_txt_kv(char *txt, size_t cap, const char *key, const char *value) {
+    size_t used;
+    int n;
+    if (!txt || !cap || !key || !value || !*key || strchr(key, '=') || strchr(key, ';') ||
+        strchr(value, ';')) return -EINVAL;
+    if (has_txt_key(txt, key)) return 0;
+    used = strlen(txt);
+    n = snprintf(txt + used, cap - used, "%s%s=%s", used ? ";" : "", key, value);
+    if (n < 0 || (size_t)n >= cap - used) return -E2BIG;
+    return 0;
+}
+
 int mb_service_validate(const mb_service_t *s) {
     if (!s || !s->name[0] || !s->type[0] || !s->port) return -EINVAL;
     if (s->type[0] != '_' || strstr(s->type, "._tcp") == NULL) return -EINVAL;
     if (s->path[0] && s->path[0] != '/') return -EINVAL;
     return 0;
+}
+
+int mb_service_add_escl_identity(mb_service_t *s,
+                                 const char *uuid,
+                                 const char *hostname) {
+    char adminurl[160];
+    int rc;
+    if (!s || !uuid || !*uuid || !hostname || !*hostname) return -EINVAL;
+    if (strcmp(s->type, "_uscan._tcp") && strcmp(s->type, "_uscans._tcp")) return 0;
+    if (snprintf(adminurl, sizeof(adminurl), "http://%s.local/", hostname) >=
+        (int)sizeof(adminurl)) return -E2BIG;
+    rc = append_txt_kv(s->txt, sizeof(s->txt), "UUID", uuid);
+    if (rc) return rc;
+    return append_txt_kv(s->txt, sizeof(s->txt), "adminurl", adminurl);
 }
 
 int mb_service_load(const char *path, mb_service_t *out) {
