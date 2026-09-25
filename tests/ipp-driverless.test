@@ -51,3 +51,25 @@
 
   STATUS client-error-document-format-not-supported
 }
+
+{
+  NAME "Print PWG Raster and return RFC job attributes"
+  VERSION 2.0
+  OPERATION Print-Job
+
+  GROUP operation-attributes-tag
+  ATTR charset attributes-charset utf-8
+  ATTR language attributes-natural-language en
+  ATTR uri printer-uri $uri
+  ATTR name requesting-user-name minibox-ci
+  ATTR name job-name "MiniBox PWG CI"
+  ATTR mimeMediaType document-format image/pwg-raster
+
+  FILE /tmp/minibox-pwg.ras
+
+  STATUS successful-ok
+  EXPECT job-uri OF-TYPE uri IN-GROUP job-attributes-tag
+  EXPECT job-id OF-TYPE integer IN-GROUP job-attributes-tag WITH-VALUE >0
+  EXPECT job-state OF-TYPE enum IN-GROUP job-attributes-tag WITH-VALUE 9
+  EXPECT job-state-reasons OF-TYPE keyword IN-GROUP job-attributes-tag WITH-VALUE "none"
+}
