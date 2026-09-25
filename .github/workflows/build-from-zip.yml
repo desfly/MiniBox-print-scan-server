@@ -321,7 +321,11 @@ jobs:
           PackageLicenseDeclared: NOASSERTION
           PackageCopyrightText: NOASSERTION
           EOF
-          find "$DIST_DIR" -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$DIST_DIR/BUILD-SHA256SUMS.txt"
+          (
+            cd "$DIST_DIR"
+            find . -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > BUILD-SHA256SUMS.txt
+            sha256sum -c BUILD-SHA256SUMS.txt
+          )
 
       - name: Upload MiniBox firmware artifact
         if: ${{ success() || steps.web_ui_check.outcome == 'failure' }}
