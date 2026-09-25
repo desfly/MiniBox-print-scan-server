@@ -3,36 +3,40 @@
 int ipp_parse_header(const unsigned char*b,size_t n,struct ipp_request*r){if(!b||!r||n<8)return-1;r->major=b[0];r->minor=b[1];r->operation=(uint16_t)(((uint16_t)b[2]<<8)|b[3]);r->request_id=((uint32_t)b[4]<<24)|((uint32_t)b[5]<<16)|((uint32_t)b[6]<<8)|b[7];if(r->major!=1&&r->major!=2)return-2;return 0;}
 int ipp_document_offset(const unsigned char*b,size_t n,size_t*off){size_t p=8;if(!b||!off||n<9)return-1;while(p<n){unsigned char tag=b[p++];if(tag==0x03){*off=p;return 0;}if(tag>=0x01&&tag<=0x05)continue;if(p+2>n)return-2;{size_t nl=((size_t)b[p]<<8)|b[p+1];p+=2;if(nl>n-p||n-p-nl<2)return-2;p+=nl;{size_t vl=((size_t)b[p]<<8)|b[p+1];p+=2;if(vl>n-p)return-2;p+=vl;}}}return-3;}
 
-/* A MiniBox print job is a raw stream to the M1522, NOT a PDF/raster
- * renderer. Reject explicitly unsupported formats before touching USB. */
-int ipp_check_document_format(const unsigned char *buf,size_t len) {
+/* Identify the document data that follows the IPP attribute section.
+ * Raw PCL remains supported for the proven Windows path. PWG Raster is
+ * converted by printerd to bounded monochrome PCL5 before USB. */
+int ipp_document_format_kind(const unsigned char *buf,size_t len) {
     static const char key[]="document-format";
     static const char raw[]="application/octet-stream";
-    size_t p=8;
-    int seen=0;
-    if(!buf||len<9)return -1;
+    static const char pwg[]="image/pwg-raster";
+    size_t p=8;int seen=0,kind=IPP_DOCUMENT_RAW;
+    if(!buf||len<9)return IPP_DOCUMENT_MALFORMED;
     while(p<len) {
-        unsigned char tag=buf[p++];
-        size_t nl,vl;
-        if(tag==0x03)return 0;
+        unsigned char tag=buf[p++];size_t nl,vl;
+        if(tag==0x03)return kind;
         if(tag>=0x01&&tag<=0x05)continue;
-        if(p>len||len-p<2)return -1;
+        if(p>len||len-p<2)return IPP_DOCUMENT_MALFORMED;
         nl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
-        if(nl>len-p||len-p-nl<2)return -1;
+        if(nl>len-p||len-p-nl<2)return IPP_DOCUMENT_MALFORMED;
         if(nl==sizeof(key)-1&&!memcmp(buf+p,key,nl)) {
-            if(seen++||tag!=0x49)return 1;
-            p+=nl;
-            vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
-            if(vl>len-p)return -1;
-            if(vl!=sizeof(raw)-1||memcmp(buf+p,raw,vl))return 1;
+            if(seen++||tag!=0x49)return IPP_DOCUMENT_UNSUPPORTED;
+            p+=nl;vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
+            if(vl>len-p)return IPP_DOCUMENT_MALFORMED;
+            if(vl==sizeof(raw)-1&&!memcmp(buf+p,raw,vl))kind=IPP_DOCUMENT_RAW;
+            else if(vl==sizeof(pwg)-1&&!memcmp(buf+p,pwg,vl))kind=IPP_DOCUMENT_PWG_RASTER;
+            else return IPP_DOCUMENT_UNSUPPORTED;
         } else {
-            p+=nl;
-            vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
-            if(vl>len-p)return -1;
+            p+=nl;vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
+            if(vl>len-p)return IPP_DOCUMENT_MALFORMED;
         }
         p+=vl;
     }
-    return -1;
+    return IPP_DOCUMENT_MALFORMED;
+}
+int ipp_check_document_format(const unsigned char *buf,size_t len) {
+    int k=ipp_document_format_kind(buf,len);
+    return k==IPP_DOCUMENT_MALFORMED?-1:k==IPP_DOCUMENT_UNSUPPORTED?1:0;
 }
 
 const char*ipp_operation_name(uint16_t op){switch(op){case IPP_OP_PRINT_JOB:return"Print-Job";case IPP_OP_VALIDATE_JOB:return"Validate-Job";case IPP_OP_GET_PRINTER_ATTRIBUTES:return"Get-Printer-Attributes";default:return"Unknown";}}
