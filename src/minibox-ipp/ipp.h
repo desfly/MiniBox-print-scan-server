@@ -18,7 +18,10 @@ int ipp_document_format_kind(const unsigned char *buf,size_t len);
 int ipp_check_document_format(const unsigned char *buf,size_t len);
 const char *ipp_operation_name(uint16_t op);
 size_t ipp_build_status(unsigned char *out,size_t cap,const struct ipp_request *r,uint16_t status);
-size_t ipp_build_printer_attributes(unsigned char *out,size_t cap,const struct ipp_request *r,const char *printer_uri);
+size_t ipp_build_printer_attributes(unsigned char *out,size_t cap,
+                                    const struct ipp_request *r,
+                                    const char *printer_uri,
+                                    const char *printer_uuid);
 size_t ipp_build_print_job_response(unsigned char *out,size_t cap,
                                     const struct ipp_request *r,
                                     uint32_t job_id,const char *job_uri);
