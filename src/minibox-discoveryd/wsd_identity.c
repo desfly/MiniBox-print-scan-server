@@ -73,11 +73,13 @@ int mb_wsd_get_identity(struct mb_wsd_identity *out){
     return 0;
 }
 
-int mb_wsd_service_instance(const char *base,const char *serial,
-                            char *out,size_t cap){
-    const char *suffix;int n;
-    if(!base||!base[0]||!serial||strlen(serial)<6||!out||!cap)return -EINVAL;
-    suffix=serial+strlen(serial)-6;
-    n=snprintf(out,cap,"%s [%s]",base,suffix);
-    return n<0||(size_t)n>=cap?-ENOSPC:0;
+int mb_wsd_uuid_value(const struct mb_wsd_identity *id,
+                      char *out,size_t cap){
+    static const char prefix[]="urn:uuid:";
+    size_t n;
+    if(!id||!out||!cap||strncmp(id->endpoint,prefix,sizeof prefix-1))return -EINVAL;
+    n=strlen(id->endpoint+sizeof prefix-1);
+    if(n!=36||n>=cap)return -EINVAL;
+    memcpy(out,id->endpoint+sizeof prefix-1,n+1);
+    return 0;
 }
