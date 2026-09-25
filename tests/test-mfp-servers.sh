@@ -8,6 +8,8 @@ trap 'kill $P $S 2>/dev/null || true' EXIT INT TERM
 sleep 1
 curl -fsS http://127.0.0.1:18631/health | grep -q 'printerd ok'
 curl -fsS http://127.0.0.1:18080/health | grep -q 'scand ok'
+command -v ipptool >/dev/null
+ipptool -tv ipp://127.0.0.1:18631/ipp/print tests/ipp-driverless.test
 curl -fsS http://127.0.0.1:18080/eSCL/ScannerCapabilities >/tmp/escl-caps.xml
 curl -fsS http://127.0.0.1:18080/eSCL/ScannerStatus >/tmp/escl-status.xml
 python3 - <<'PY'
