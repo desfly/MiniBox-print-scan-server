@@ -34,7 +34,10 @@ int main(void)
     hs=body.header_bytes;
     assert(body.buffered_body == strlen(chunked)-hs);
     assert(socketpair(AF_UNIX,SOCK_STREAM,0,sv)==0);
-    assert(write(sv[1],"ki\r\n5\r\npedia\r\n0\r\nTrailer: ok\r\n\r\n",35)==35);
+    {
+        static const char rest[]="ki\r\n5\r\npedia\r\n0\r\nTrailer: ok\r\n\r\n";
+        assert(write(sv[1],rest,sizeof rest-1)==(ssize_t)(sizeof rest-1));
+    }
     close(sv[1]);
     minibox_chunk_reader_init(&cr,sv[0],(const unsigned char *)chunked+hs,body.buffered_body);
     for(;;){
