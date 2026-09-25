@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=18
+PKG_RELEASE:=19
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -53,7 +53,8 @@ define Build/Compile
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-discoveryd \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/main.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/service.c \
-		$(PKG_BUILD_DIR)/minibox-discoveryd/mdns.c
+		$(PKG_BUILD_DIR)/minibox-discoveryd/mdns.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_identity.c
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-wsdd \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_main.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_runtime.c \
