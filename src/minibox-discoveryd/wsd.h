@@ -38,6 +38,7 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
                                    const char *xaddr,
                                    const char *response_message_id,
                                    const char *serial,
+                                   const char *presentation_url,
                                    char *out,size_t cap);
 
 #endif
