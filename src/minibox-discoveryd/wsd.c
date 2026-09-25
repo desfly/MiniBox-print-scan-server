@@ -45,6 +45,14 @@ static int qname_local_is(const char *s,size_t n,const char *local){
     }
     return 0;
 }
+int mb_wsd_extract_message_id(const char *xml,size_t len,char *out,size_t cap){
+    const char *env,*env_end;size_t env_len;
+    if(!xml||!out||!cap||!len||len>65535)return -1;
+    env=element(xml,len,"Envelope");if(!env)return -2;
+    env_end=element_end(env,len-(size_t)(env-xml),"Envelope");if(!env_end)return -2;
+    env_len=(size_t)(env_end-env);
+    return text_of(env,env_len,"MessageID",out,cap)?-3:0;
+}
 int mb_wsd_parse(const char *xml,size_t len,struct mb_wsd_request *out){
     const char *env,*env_end,*body,*body_end;size_t env_len,body_len;int r;
     if(!xml||!out||!len||len>65535)return -1;
@@ -173,4 +181,64 @@ int mb_wsd_build_match(const struct mb_wsd_request *r,
        p>=cap)return -2;
     out[p]=0;
     return (int)p;
+}
+
+int mb_wsd_build_metadata_response(const char *request_message_id,
+                                   const char *endpoint,const char *xaddr,
+                                   const char *response_message_id,
+                                   const char *serial,
+                                   char *out,size_t cap){
+    size_t p=0;
+    if(!request_message_id||!endpoint||!xaddr||!response_message_id||
+       !serial||!out||cap<2)return -1;
+    if(!uriish(request_message_id)||!uriish(endpoint)||!uriish(xaddr)||
+       !uriish(response_message_id))return -1;
+    if(add(out,cap,&p,
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+      "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+      " xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\""
+      " xmlns:x=\"http://schemas.xmlsoap.org/ws/2004/09/mex\""
+      " xmlns:dp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\""
+      " xmlns:pnpx=\"http://schemas.microsoft.com/windows/pnpx/2005/10\""
+      " xmlns:p=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\""
+      " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/08/wdp/scan\">"
+      "<s:Header>"
+      "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
+      "<a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</a:Action>"
+      "<a:MessageID>")||
+       xml_text(out,cap,&p,response_message_id)||
+       add(out,cap,&p,"</a:MessageID><a:RelatesTo>")||
+       xml_text(out,cap,&p,request_message_id)||
+       add(out,cap,&p,
+      "</a:RelatesTo></s:Header><s:Body><x:Metadata>"
+      "<x:MetadataSection Dialect=\"http://schemas.xmlsoap.org/ws/2006/02/devprof/ThisDevice\">"
+      "<dp:ThisDevice><dp:FriendlyName>HP LaserJet M1522n @ MiniBox</dp:FriendlyName>"
+      "<dp:FirmwareVersion>MiniBox-MFP 0.3.0</dp:FirmwareVersion><dp:SerialNumber>")||
+       xml_text(out,cap,&p,serial)||
+       add(out,cap,&p,
+      "</dp:SerialNumber></dp:ThisDevice></x:MetadataSection>"
+      "<x:MetadataSection Dialect=\"http://schemas.xmlsoap.org/ws/2006/02/devprof/ThisModel\">"
+      "<dp:ThisModel><dp:Manufacturer>HP</dp:Manufacturer>"
+      "<dp:ModelName>HP LaserJet M1522n @ MiniBox</dp:ModelName>"
+      "<dp:ModelNumber>M1522n</dp:ModelNumber>"
+      "<dp:PresentationUrl>")||
+       /* The presentation page is the MiniBox web root, not the SOAP endpoint. */
+       xml_text(out,cap,&p,xaddr)||
+       add(out,cap,&p,
+      "</dp:PresentationUrl><pnpx:DeviceCategory>MFP Printers Scanners</pnpx:DeviceCategory>"
+      "</dp:ThisModel></x:MetadataSection>"
+      "<x:MetadataSection Dialect=\"http://schemas.xmlsoap.org/ws/2006/02/devprof/Relationship\">"
+      "<dp:Relationship Type=\"http://schemas.xmlsoap.org/ws/2006/02/devprof/host\">"
+      "<dp:Host><a:EndpointReference><a:Address>")||
+       xml_text(out,cap,&p,endpoint)||
+       add(out,cap,&p,
+      "</a:Address></a:EndpointReference>"
+      "<dp:Types>dp:Device p:PrintDeviceType scn:ScanDeviceType</dp:Types>"
+      "<dp:ServiceId>")||
+       xml_text(out,cap,&p,endpoint)||
+       add(out,cap,&p,
+      "</dp:ServiceId></dp:Host></dp:Relationship></x:MetadataSection>"
+      "</x:Metadata></s:Body></s:Envelope>")||
+       p>=cap)return -2;
+    out[p]=0;return (int)p;
 }
