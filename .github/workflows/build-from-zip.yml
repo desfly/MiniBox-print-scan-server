@@ -138,6 +138,251 @@ jobs:
           test -f "$DEST/package/minibox-mfp/src/m1522_usb_transport.c"
           test -f "$DEST/package/minibox-mfp/files/usr/sbin/minibox-m1522-descriptors"
 
+          # Ensure the custom MiniBox sysupgrade image carries standard OpenWrt metadata.
+          # sysupgrade -T rejects images without the fwtool metadata trailer even when the
+          # binary itself was built successfully.
+          DEVICE_MK="$(grep -RIl 'define Device/gainstrong_minibox-v1' "$DEST/target/linux/ath79/image" | head -n1)"
+          test -n "$DEVICE_MK" || { echo 'ERROR: MiniBox device image recipe not found' >&2; exit 1; }
+          python3 - "$DEVICE_MK" <<'PY'
+          import re
+          import sys
+
+          path = sys.argv[1]
+          text = open(path, encoding="utf-8").read()
+          m = re.search(r'(?ms)^define Device/gainstrong_minibox-v1\n(.*?)^endef\n', text)
+          if not m:
+              raise SystemExit("ERROR: MiniBox device block not found")
+          body = m.group(1)
+
+          if not re.search(r'^\s*SUPPORTED_DEVICES\s*[:+]?=', body, re.M):
+              body += '  SUPPORTED_DEVICES := gainstrong,minibox-v1\n'
+
+          sm = re.search(r'(?m)^(\s*IMAGE/sysupgrade\.bin\s*:=\s*)(.+)
+      - name: Configure OpenWrt
+        shell: bash
+        working-directory: openwrt-src
+        run: |
+          set -euo pipefail
+          cp "$KIT_ROOT/openwrt.config" .config
+          cat >> .config <<'EOF'
+          CONFIG_TARGET_ROOTFS_SQUASHFS=y
+          CONFIG_TARGET_ROOTFS_INITRAMFS=y
+          CONFIG_PACKAGE_minibox-mfp=y
+          CONFIG_PACKAGE_libusb-1.0=y
+          CONFIG_PACKAGE_kmod-usb2=y
+          CONFIG_PACKAGE_uhttpd=y
+          # CONFIG_PACKAGE_kmod-usb-printer is not set
+          EOF
+          make defconfig
+          grep -q '^CONFIG_TARGET_ath79_generic_DEVICE_gainstrong_minibox-v1=y$' .config
+          grep -q '^CONFIG_PACKAGE_minibox-mfp=y$' .config
+          grep -q '^CONFIG_PACKAGE_uhttpd=y$' .config
+          ! grep -Eq '^CONFIG_PACKAGE_(luci|luci-light)=y$' .config
+          ! grep -q '^CONFIG_PACKAGE_kmod-usb-printer=y$' .config
+
+      - name: Restore OpenWrt build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            openwrt-src/dl
+            openwrt-src/staging_dir
+            openwrt-src/build_dir
+          key: minibox-openwrt-v25.12.5-ath79-livepkg-v2-${{ runner.os }}
+          restore-keys: |
+            minibox-openwrt-v25.12.5-ath79-livepkg-
+
+      - name: Download OpenWrt sources
+        shell: bash
+        working-directory: openwrt-src
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" download 2>&1 | tee "$GITHUB_WORKSPACE/download.log" || make -j1 V=s download 2>&1 | tee -a "$GITHUB_WORKSPACE/download.log"
+
+      - name: Build firmware
+        shell: bash
+        working-directory: openwrt-src
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" 2>&1 | tee "$GITHUB_WORKSPACE/build.log" || make -j1 V=s 2>&1 | tee -a "$GITHUB_WORKSPACE/build.log"
+
+      - name: Verify web UI and uhttpd autostart in squashfs
+        id: web_ui_check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          TARGET_DIR="$OPENWRT_DIR/bin/targets/ath79/generic"
+          ROOTFS="$(find "$TARGET_DIR" -maxdepth 1 -type f -name '*root.squashfs' -print -quit)"
+          REPORT="$GITHUB_WORKSPACE/WEB-UI-IMAGE-CHECKS.txt"
+          : > "$REPORT"
+          failures=0
+          check() {
+            local label="$1"
+            shift
+            if "$@"; then
+              printf 'PASS %s\n' "$label" | tee -a "$REPORT"
+            else
+              printf 'FAIL %s\n' "$label" | tee -a "$REPORT" >&2
+              failures=$((failures + 1))
+            fi
+          }
+
+          if [ -z "$ROOTFS" ]; then
+            FIRMWARE="$(find "$TARGET_DIR" -maxdepth 1 -type f -name '*minibox*squashfs-factory.bin' -print -quit)"
+            if [ -z "$FIRMWARE" ]; then
+              printf 'FAIL neither root.squashfs nor MiniBox factory image found in %s\n' "$TARGET_DIR" | tee -a "$REPORT" >&2
+              find "$TARGET_DIR" -maxdepth 1 -type f -printf '%f\n' | sort | tee -a "$REPORT"
+              exit 1
+            fi
+
+            ROOTFS="$GITHUB_WORKSPACE/embedded-root.squashfs"
+            python3 - "$FIRMWARE" "$ROOTFS" <<'PY' | tee -a "$REPORT"
+          import struct
+          import sys
+
+          source, destination = sys.argv[1:]
+          image = open(source, "rb").read()
+          offset = image.find(b"hsqs")
+          if offset < 0:
+              raise SystemExit("FAIL SquashFS magic not found in factory image")
+          if offset + 48 > len(image):
+              raise SystemExit("FAIL truncated SquashFS superblock in factory image")
+          bytes_used = struct.unpack_from("<Q", image, offset + 40)[0]
+          if bytes_used < 96 or offset + bytes_used > len(image):
+              raise SystemExit("FAIL invalid SquashFS length in factory image")
+          with open(destination, "wb") as output:
+              output.write(image[offset:offset + bytes_used])
+          print(f"factory={source.rsplit('/', 1)[-1]}")
+          print(f"squashfs_offset={offset}")
+          print(f"squashfs_bytes={bytes_used}")
+          PY
+          fi
+
+          # Keep the original extractor diagnostics in the uploaded report.
+          # A valid magic/bytes_used header alone does not prove that the image
+          # can be decompressed; do not turn extraction failures into a pass.
+          printf '%s\n' '--- SquashFS superblock ---' | tee -a "$REPORT"
+          if ! unsquashfs -s "$ROOTFS" 2>&1 | tee -a "$REPORT"; then
+            printf 'FAIL unable to read SquashFS superblock\n' | tee -a "$REPORT" >&2
+            exit 1
+          fi
+          rm -rf rootfs-inspect
+          printf '%s\n' '--- SquashFS extraction diagnostics ---' | tee -a "$REPORT"
+          if ! sudo unsquashfs -no-progress -processors 1 -d rootfs-inspect "$ROOTFS" 2>&1 | tee -a "$REPORT"; then
+            printf 'FAIL unable to extract %s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT" >&2
+            exit 1
+          fi
+
+          printf 'rootfs=%s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT"
+          check '/usr/sbin/uhttpd executable' test -x rootfs-inspect/usr/sbin/uhttpd
+          check '/etc/config/uhttpd present' test -s rootfs-inspect/etc/config/uhttpd
+          check '/etc/init.d/uhttpd executable' test -x rootfs-inspect/etc/init.d/uhttpd
+          check '/www/index.html present' test -s rootfs-inspect/www/index.html
+          check '/www/minibox/index.html present' test -s rootfs-inspect/www/minibox/index.html
+          check '/www/minibox/app.js present' test -s rootfs-inspect/www/minibox/app.js
+          check '/www/cgi-bin/minibox-status executable' test -x rootfs-inspect/www/cgi-bin/minibox-status
+
+          UHTTPD_LINK="$(find rootfs-inspect/etc/rc.d -type l -name 'S??uhttpd' -print -quit 2>/dev/null)"
+          check 'uhttpd boot symlink present' test -n "$UHTTPD_LINK"
+          check 'MiniBox UI marker present' grep -q 'MiniBox print + scan server' rootfs-inspect/www/index.html
+
+          printf '%s\n' '--- /www inventory ---' | tee -a "$REPORT"
+          find rootfs-inspect/www -maxdepth 3 -printf '%M %P\n' 2>/dev/null | sort | tee -a "$REPORT"
+          printf '%s\n' '--- uhttpd boot links ---' | tee -a "$REPORT"
+          find rootfs-inspect/etc/rc.d -type l -name '*uhttpd' -printf '%P -> %l\n' 2>/dev/null | sort | tee -a "$REPORT"
+
+          if [ "$failures" -ne 0 ]; then
+            printf 'RESULT FAIL (%d checks)\n' "$failures" | tee -a "$REPORT" >&2
+            exit 1
+          fi
+          printf '%s\n' 'RESULT PASS' | tee -a "$REPORT"
+
+      - name: Collect firmware and package
+        if: ${{ success() || steps.web_ui_check.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$DIST_DIR"; mkdir -p "$DIST_DIR"
+          TARGET_DIR="$OPENWRT_DIR/bin/targets/ath79/generic"
+          find "$TARGET_DIR" -maxdepth 1 -type f -iname '*minibox*.bin' -exec cp -v {} "$DIST_DIR/" \;
+          find "$TARGET_DIR" -maxdepth 1 -type f \( -name '*.manifest' -o -name 'profiles.json' \) -exec cp -v {} "$DIST_DIR/" \;
+          find "$OPENWRT_DIR/bin/packages" -type f -iname 'minibox-mfp*.apk' -exec cp -v {} "$DIST_DIR/" \; 2>/dev/null || true
+          INITRAMFS="$(find "$DIST_DIR" -type f -iname '*minibox*initramfs-kernel.bin' -print -quit)"
+          FACTORY="$(find "$DIST_DIR" -type f -iname '*minibox*squashfs-factory.bin' -print -quit)"
+          SYSUPGRADE="$(find "$DIST_DIR" -type f -iname '*minibox*squashfs-sysupgrade.bin' -print -quit)"
+          APK="$(find "$DIST_DIR" -type f -iname 'minibox-mfp*.apk' -print -quit)"
+          test -n "$INITRAMFS"
+          test -n "$FACTORY"
+          test -n "$SYSUPGRADE"
+          test -n "$APK"
+          FWTOOL="$OPENWRT_DIR/staging_dir/host/bin/fwtool"
+          test -x "$FWTOOL" || { echo 'ERROR: fwtool not found' >&2; exit 1; }
+          "$FWTOOL" -i /dev/null "$SYSUPGRADE" >/dev/null 2>&1 || {
+            echo 'ERROR: sysupgrade image is missing valid OpenWrt metadata' >&2
+            exit 1
+          }
+          test "$(stat -c%s "$FACTORY")" -le 16580608
+          cp WEB-UI-IMAGE-CHECKS.txt "$DIST_DIR/"
+          EXPECTED_SOURCE_SHA="${{ steps.source.outputs.sha }}"
+          ACTUAL_SOURCE_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SOURCE_SHA" = "$EXPECTED_SOURCE_SHA" || { echo "ERROR: checkout/source SHA $ACTUAL_SOURCE_SHA != expected source SHA $EXPECTED_SOURCE_SHA" >&2; exit 1; }
+          printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$DIST_DIR/SOURCE-COMMIT.txt"
+          test "$(cat "$DIST_DIR/SOURCE-COMMIT.txt")" = "$EXPECTED_SOURCE_SHA"
+          cp docs/FINALIZATION-AUDIT-2026-09-20.md "$DIST_DIR/ROLLBACK-AND-MANUAL-TEST.md"
+          printf '%s\n' 'TEST-ONLY: hardware validation pending; flash_allowed=false' > "$DIST_DIR/READ-ME-FIRST.txt"
+          cat > "$DIST_DIR/SBOM.spdx" <<EOF
+          SPDXVersion: SPDX-2.3
+          DataLicense: CC0-1.0
+          SPDXID: SPDXRef-DOCUMENT
+          DocumentName: MiniBox-post-merge-TEST
+          DocumentNamespace: https://github.com/desfly/MiniBox-print-scan-server/actions/runs/${GITHUB_RUN_ID}/sbom
+          Creator: Tool: GitHub-Actions
+          Created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          PackageName: minibox-firmware-test
+          SPDXID: SPDXRef-Package
+          PackageVersion: ${{ steps.source.outputs.sha }}
+          PackageDownloadLocation: NOASSERTION
+          FilesAnalyzed: false
+          PackageLicenseConcluded: NOASSERTION
+          PackageLicenseDeclared: NOASSERTION
+          PackageCopyrightText: NOASSERTION
+          EOF
+          (
+            cd "$DIST_DIR"
+            find . -maxdepth 1 -type f ! -name BUILD-SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > BUILD-SHA256SUMS.txt
+            sha256sum -c BUILD-SHA256SUMS.txt
+          )
+
+      - name: Upload MiniBox firmware artifact
+        if: ${{ success() || steps.web_ui_check.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: minibox-v1-openwrt-25.12.5-integrated-web-ui-TEST-${{ steps.source.outputs.sha }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Enforce web UI image verification
+        if: ${{ always() && steps.web_ui_check.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo 'Web UI image verification failed; see WEB-UI-IMAGE-CHECKS.txt in the uploaded artifact.' >&2
+          exit 1
+, body)
+          if not sm:
+              raise SystemExit("ERROR: MiniBox sysupgrade recipe not found")
+          recipe = sm.group(2).rstrip()
+          if 'append-metadata' not in recipe:
+              recipe += ' | append-metadata'
+              body = body[:sm.start(2)] + recipe + body[sm.end(2):]
+
+          new_block = 'define Device/gainstrong_minibox-v1\n' + body + 'endef\n'
+          text = text[:m.start()] + new_block + text[m.end():]
+          open(path, 'w', encoding='utf-8').write(text)
+          PY
+          sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK"
+          sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK" | grep -q 'SUPPORTED_DEVICES.*gainstrong,minibox-v1'
+          sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK" | grep -q 'IMAGE/sysupgrade.bin.*append-metadata'
+
       - name: Configure OpenWrt
         shell: bash
         working-directory: openwrt-src
