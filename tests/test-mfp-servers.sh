@@ -22,7 +22,7 @@ h[396:400]=be32(0); h[400:404]=be32(18); h[420:424]=be32(1)
 Path('tests/minibox-pwg.ras').write_bytes(
     b'RaS2'+bytes(h)+bytes([1,249,0,255,0,255,0,255,0,255]))
 PY
-ipptool -tv ipp://127.0.0.1:18631/ipp/print tests/ipp-driverless.test
+ipptool -tv -f tests/minibox-pwg.ras ipp://127.0.0.1:18631/ipp/print tests/ipp-driverless.test
 curl -fsS http://127.0.0.1:18080/eSCL/ScannerCapabilities >/tmp/escl-caps.xml
 curl -fsS http://127.0.0.1:18080/eSCL/ScannerStatus >/tmp/escl-status.xml
 python3 - <<'PY'
