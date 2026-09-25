@@ -187,12 +187,13 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
                                    const char *endpoint,const char *xaddr,
                                    const char *response_message_id,
                                    const char *serial,
+                                   const char *presentation_url,
                                    char *out,size_t cap){
     size_t p=0;
     if(!request_message_id||!endpoint||!xaddr||!response_message_id||
-       !serial||!out||cap<2)return -1;
+       !serial||!presentation_url||!out||cap<2)return -1;
     if(!uriish(request_message_id)||!uriish(endpoint)||!uriish(xaddr)||
-       !uriish(response_message_id))return -1;
+       !uriish(response_message_id)||!uriish(presentation_url))return -1;
     if(add(out,cap,&p,
       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
       "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
@@ -222,8 +223,7 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
       "<dp:ModelName>HP LaserJet M1522n @ MiniBox</dp:ModelName>"
       "<dp:ModelNumber>M1522n</dp:ModelNumber>"
       "<dp:PresentationUrl>")||
-       /* The presentation page is the MiniBox web root, not the SOAP endpoint. */
-       xml_text(out,cap,&p,xaddr)||
+       xml_text(out,cap,&p,presentation_url)||
        add(out,cap,&p,
       "</dp:PresentationUrl><pnpx:DeviceCategory>MFP Printers Scanners</pnpx:DeviceCategory>"
       "</dp:ThisModel></x:MetadataSection>"
