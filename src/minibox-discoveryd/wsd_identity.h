@@ -13,6 +13,6 @@ struct mb_wsd_identity {
 };
 
 int mb_wsd_get_identity(struct mb_wsd_identity *out);
-int mb_wsd_service_instance(const char *base,const char *serial,
-                            char *out,size_t cap);
+int mb_wsd_uuid_value(const struct mb_wsd_identity *id,
+                      char *out,size_t cap);
 #endif
