@@ -45,6 +45,11 @@ static int put(unsigned char*o,size_t c,size_t*p,const void*v,size_t n){if(*p>c|
 static int u16(unsigned char*o,size_t c,size_t*p,unsigned v){unsigned char b[2]={(unsigned char)(v>>8),(unsigned char)v};return put(o,c,p,b,2);}
 static int attr(unsigned char*o,size_t c,size_t*p,unsigned tag,const char*n,const void*v,size_t z){size_t nl=strlen(n);unsigned char t=(unsigned char)tag;if(nl>65535||z>65535||put(o,c,p,&t,1)||u16(o,c,p,(unsigned)nl)||put(o,c,p,n,nl)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
 static int attr_more(unsigned char*o,size_t c,size_t*p,unsigned tag,const void*v,size_t z){unsigned char t=(unsigned char)tag;if(z>65535||put(o,c,p,&t,1)||u16(o,c,p,0)||u16(o,c,p,(unsigned)z)||put(o,c,p,v,z))return-1;return 0;}
+static int attr_resolution(unsigned char*o,size_t c,size_t*p,const char*n,unsigned x,unsigned y){
+    unsigned char v[9]={(unsigned char)(x>>24),(unsigned char)(x>>16),(unsigned char)(x>>8),(unsigned char)x,
+                        (unsigned char)(y>>24),(unsigned char)(y>>16),(unsigned char)(y>>8),(unsigned char)y,3};
+    return attr(o,c,p,0x32,n,v,sizeof v);
+}
 int ipp_raw_format_supported(const unsigned char *b,size_t n){int r=ipp_check_document_format(b,n);return r<0?-1:!r;}
 
 
@@ -73,6 +78,8 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const unsigned char group=0x04,end=0x03;
     const unsigned char state[4]={0,0,0,3};
     const unsigned char accepting=1;
+    const unsigned char color=0;
+    const unsigned char copies_one[8]={0,0,0,1,0,0,0,1};
     const unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};
     const unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};
     const unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};
@@ -80,6 +87,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *model="HP LaserJet M1522n";
     const char *info="MiniBox network print server";
     const char *format="application/octet-stream";
+    const char *pwg="image/pwg-raster";
     if(!o||!r||!uri||c<9)return 0;
     if(!(p=ipp_build_status(o,c,r,0)))return 0;
     p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
@@ -101,13 +109,33 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr(o,c,&p,0x47,"charset-supported","utf-8",5))return 0;
     if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;
     if(attr(o,c,&p,0x48,"generated-natural-language-supported","en",2))return 0;
-    /* A limited IPP implementation must not claim a fully supported IPP 2.0 feature set. */
+    /* The wire parser and these basic operations accept both IPP/1.1 and
+     * IPP/2.0 requests. This does not by itself claim IPP Everywhere
+     * certification or any unsupported operation. */
     if(attr(o,c,&p,0x44,"ipp-versions-supported","1.1",3))return 0;
+    if(attr_more(o,c,&p,0x44,"2.0",3))return 0;
     if(attr(o,c,&p,0x23,"operations-supported",op_print,4))return 0;
     if(attr_more(o,c,&p,0x23,op_validate,4))return 0;
     if(attr_more(o,c,&p,0x23,op_attrs,4))return 0;
     if(attr(o,c,&p,0x49,"document-format-supported",format,strlen(format)))return 0;
+    if(attr_more(o,c,&p,0x49,pwg,strlen(pwg)))return 0;
     if(attr(o,c,&p,0x49,"document-format-default",format,strlen(format)))return 0;
+    if(attr(o,c,&p,0x22,"color-supported",&color,1))return 0;
+    if(attr(o,c,&p,0x44,"print-color-mode-supported","monochrome",10))return 0;
+    if(attr(o,c,&p,0x44,"print-color-mode-default","monochrome",10))return 0;
+    if(attr(o,c,&p,0x44,"sides-supported","one-sided",9))return 0;
+    if(attr(o,c,&p,0x44,"sides-default","one-sided",9))return 0;
+    if(attr(o,c,&p,0x33,"copies-supported",copies_one,sizeof copies_one))return 0;
+    if(attr(o,c,&p,0x44,"media-supported","iso_a4_210x297mm",16))return 0;
+    if(attr_more(o,c,&p,0x44,"na_letter_8.5x11in",18))return 0;
+    if(attr_more(o,c,&p,0x44,"na_legal_8.5x14in",17))return 0;
+    if(attr(o,c,&p,0x44,"media-default","iso_a4_210x297mm",16))return 0;
+    if(attr_resolution(o,c,&p,"printer-resolution-supported",300,300))return 0;
+    if(attr_resolution(o,c,&p,"printer-resolution-default",300,300))return 0;
+    if(attr_resolution(o,c,&p,"pwg-raster-document-resolution-supported",300,300))return 0;
+    if(attr(o,c,&p,0x44,"pwg-raster-document-type-supported","black_1",7))return 0;
+    if(attr_more(o,c,&p,0x44,"sgray_8",7))return 0;
+    if(attr_more(o,c,&p,0x44,"srgb_8",6))return 0;
     /* All print requests are processed synchronously; there is no
      * persistent asynchronous queue in this implementation. */
     {
