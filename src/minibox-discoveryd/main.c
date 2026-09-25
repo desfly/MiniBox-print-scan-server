@@ -74,15 +74,26 @@ int main(int argc, char **argv) {
      * The human service label must also be a stable per-device DNS-SD
      * instance. Otherwise two MiniBoxes (or stale Android/Windows cache
      * entries after an address change) are indistinguishable.
+     *
+     * eSCL discovery also needs the same stable UUID and a reachable admin
+     * URL in its DNS-SD TXT record. Keep those values tied to the WSD
+     * identity so Windows/Android do not see two unrelated logical devices.
      */
     rc = mb_wsd_get_identity(&identity);
     if (!rc) {
+        const char *uuid = !strncmp(identity.endpoint, "urn:uuid:", 9) ?
+                           identity.endpoint + 9 : identity.endpoint;
         unsigned i;
         for (i = 0; i < count; ++i) {
             char unique[MB_SERVICE_NAME_MAX];
             if (!mb_wsd_service_instance(services[i].name, identity.serial,
                                          unique, sizeof(unique)))
                 strcpy(services[i].name, unique);
+            rc = mb_service_add_escl_identity(&services[i], uuid, hostname);
+            if (rc) {
+                fprintf(stderr, "minibox-discoveryd: eSCL identity failed: %d\n", rc);
+                return 2;
+            }
         }
     } else {
         fprintf(stderr, "minibox-discoveryd: stable device identity unavailable: %d\n", rc);
