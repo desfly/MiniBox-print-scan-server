@@ -16,3 +16,20 @@ $CC -std=c11 -Wall -Wextra -Werror -pedantic -Isrc/minibox-discoveryd \
   src/minibox-discoveryd/mdns.c src/minibox-discoveryd/service.c \
   tests/test-mdns-query.c -o "$TMP/test-mdns-query"
 "$TMP/test-mdns-query"
+
+$CC -std=c11 -Wall -Wextra -Werror -pedantic -Isrc/minibox-discoveryd \
+  src/minibox-discoveryd/wsd_main.c \
+  src/minibox-discoveryd/wsd_runtime.c \
+  src/minibox-discoveryd/wsd_identity.c \
+  src/minibox-discoveryd/wsd.c \
+  -o "$TMP/minibox-wsdd"
+
+$CC -std=c11 -Wall -Wextra -Werror -pedantic -Isrc/minibox-discoveryd \
+  src/minibox-discoveryd/wsd_metadata.c \
+  src/minibox-discoveryd/wsd_identity.c \
+  src/minibox-discoveryd/wsd.c \
+  -o "$TMP/minibox-wsd-cgi"
+
+grep -q 'minibox-wsdd' package/minibox-mfp/Makefile
+grep -q 'minibox-wsd-cgi' package/minibox-mfp/Makefile
+printf '%s\n' 'WSD runtime build contract: OK'
