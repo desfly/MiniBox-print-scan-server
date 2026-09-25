@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "service.h"
 #include "mdns.h"
+#include "wsd_identity.h"
 #include <dirent.h>
 #include <errno.h>
 #include <signal.h>
@@ -33,6 +34,7 @@ int main(int argc, char **argv) {
     struct dirent *de;
     unsigned count = 0;
     int rc;
+    struct mb_wsd_identity identity;
 
     if (argi < argc && !strcmp(argv[argi], "--once")) {
         once = 1;
@@ -67,6 +69,24 @@ int main(int argc, char **argv) {
 
     if (gethostname(hostname, sizeof(hostname) - 1) != 0 || !hostname[0]) strcpy(hostname, "minibox");
     hostname[sizeof(hostname) - 1] = 0;
+
+    /*
+     * The human service label must also be a stable per-device DNS-SD
+     * instance. Otherwise two MiniBoxes (or stale Android/Windows cache
+     * entries after an address change) are indistinguishable.
+     */
+    rc = mb_wsd_get_identity(&identity);
+    if (!rc) {
+        unsigned i;
+        for (i = 0; i < count; ++i) {
+            char unique[MB_SERVICE_NAME_MAX];
+            if (!mb_wsd_service_instance(services[i].name, identity.serial,
+                                         unique, sizeof(unique)))
+                strcpy(services[i].name, unique);
+        }
+    } else {
+        fprintf(stderr, "minibox-discoveryd: stable device identity unavailable: %d\n", rc);
+    }
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
