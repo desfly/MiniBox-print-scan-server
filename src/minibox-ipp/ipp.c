@@ -73,7 +73,9 @@ size_t ipp_build_status(unsigned char*o,size_t c,const struct ipp_request*r,uint
     return p;
 }
 
-size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){
+size_t ipp_build_printer_attributes(unsigned char*o,size_t c,
+                                    const struct ipp_request*r,
+                                    const char*uri,const char*printer_uuid){
     size_t p=0;
     const unsigned char group=0x04,end=0x03;
     const unsigned char state[4]={0,0,0,3};
@@ -88,7 +90,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *info="MiniBox network print server";
     const char *format="application/octet-stream";
     const char *pwg="image/pwg-raster";
-    if(!o||!r||!uri||c<9)return 0;
+    if(!o||!r||!uri||!printer_uuid||!printer_uuid[0]||c<9)return 0;
     if(!(p=ipp_build_status(o,c,r,0)))return 0;
     p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
     if(put(o,c,&p,&group,1))return 0;
@@ -98,6 +100,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr(o,c,&p,0x41,"printer-make-and-model",model,strlen(model)))return 0;
     if(attr(o,c,&p,0x41,"printer-info",info,strlen(info)))return 0;
     if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;
+    if(attr(o,c,&p,0x45,"printer-uuid",printer_uuid,strlen(printer_uuid)))return 0;
     /* These REQUIRED companion values correspond to this one non-TLS,
      * unauthenticated IPP URI. Never claim TLS or authentication here. */
     if(attr(o,c,&p,0x44,"uri-authentication-supported","none",4))return 0;
