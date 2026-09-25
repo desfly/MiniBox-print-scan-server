@@ -32,10 +32,14 @@ static void free_page(struct mb_pwg_pcl *s){
     s->line_cap=s->mono_cap=0;s->line_used=0;
 }
 void mb_pwg_pcl_init(struct mb_pwg_pcl *s){
-    if(!s)return;memset(s,0,sizeof *s);s->phase=MB_PWG_MAGIC;
+    if(!s)return;
+    memset(s,0,sizeof *s);
+    s->phase=MB_PWG_MAGIC;
 }
 void mb_pwg_pcl_reset(struct mb_pwg_pcl *s){
-    if(!s)return;free_page(s);mb_pwg_pcl_init(s);
+    if(!s)return;
+    free_page(s);
+    mb_pwg_pcl_init(s);
 }
 static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     static const char pjl[]="\033%-12345X@PJL JOB NAME=\"MiniBox PWG\"\r\n@PJL ENTER LANGUAGE=PCL\r\n\033E";
