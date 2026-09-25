@@ -1,6 +1,8 @@
 # MiniBox Wi-Fi first-boot / factory-reset provisioning contract
 
 Status: **required for a future full firmware image; NOT implemented or hardware-verified in r13–r15**.
+
+> **Deferred priority (2026-09-25):** do not implement this provisioning feature until printing, physical scanning, and automatic Windows/Android discovery are all solved and physically verified.
 This is a functional specification, not an assertion that a green APK/build implements it.
 
 ## User-visible behavior
