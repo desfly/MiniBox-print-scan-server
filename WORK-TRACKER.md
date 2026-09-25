@@ -206,3 +206,15 @@ Only verified protocol evidence may be used to implement/enable the SOAPHT codec
 - This must be implemented and verified in the **full firmware image/factory reset defaults**; r13–r15 APK updates and the existing status-only web page do not meet it. The image must bake AP wireless/network/firewall/DHCP/uhttpd setup, test recoverability on AR9330, and avoid accidental lockout or unprotected credential-changing CGI. Do not factory-reset or full-flash the currently working hardware until a recovery path is verified.
 - Hardware evidence: current STA `phy0-sta0` is `192.168.55.250`, Ethernet `br-lan` is `192.168.55.251`; this shows the old `sta` matcher already had a Wi-Fi interface to prefer and **does not prove** the r15 wwan fix resolves actual Windows/Android auto-discovery. Preserve separate auto-discovery and scanner 503 tasks.
 - NEXT PROGRAMMING TASK: implement minimal authenticated Wi-Fi onboarding state machine and tab, safety/fallback tests and full-image embedded AP defaults. Then validate firstboot/reset, correct/wrong credentials, DHCP IP migration and OS discovery on actual hardware; keep current r13 untouched meanwhile.
+
+## 2026-09-25 — priority order clarified
+
+**Do not implement factory AP / Wi-Fi setup UI yet.** This work is explicitly deferred until all three core MFP goals below are solved and physically verified:
+
+1. Printing works reliably end-to-end.
+2. Scanning returns a real image reliably end-to-end.
+3. Automatic discovery/addition works on both Windows and Android for the intended printer/scanner flows.
+
+Only after those three are complete may work begin on the previously specified factory-reset AP provisioning flow, Wi-Fi scan/select/password UI, DHCP handoff and recovery behavior.
+
+The detailed future provisioning specification remains in `docs/WIFI-FIRST-BOOT-CONTRACT.md`, but it is **not the current implementation priority**. Do not let AP/UI work delay scanner 503 diagnosis, Windows discovery, Android discovery or print-path completion.
