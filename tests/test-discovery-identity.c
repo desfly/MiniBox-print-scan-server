@@ -3,17 +3,15 @@
 #include <string.h>
 
 int main(void){
-    char out[96];
-    assert(mb_wsd_service_instance("HP LaserJet M1522n @ MiniBox",
-                                   "001122aabbcc",out,sizeof out)==0);
-    assert(strcmp(out,"HP LaserJet M1522n @ MiniBox [aabbcc]")==0);
-    assert(mb_wsd_service_instance("x","123456",out,sizeof out)==0);
-    assert(strcmp(out,"x [123456]")==0);
-    assert(mb_wsd_service_instance("x","12345",out,sizeof out)<0);
-    {
-        char tiny[8];
-        assert(mb_wsd_service_instance("HP LaserJet","001122aabbcc",
-                                       tiny,sizeof tiny)<0);
-    }
+    struct mb_wsd_identity id;
+    char out[40];
+    memset(&id,0,sizeof id);
+    strcpy(id.endpoint,"urn:uuid:4d424f58-0000-4000-8000-001122aabbcc");
+    assert(mb_wsd_uuid_value(&id,out,sizeof out)==0);
+    assert(strcmp(out,"4d424f58-0000-4000-8000-001122aabbcc")==0);
+    strcpy(id.endpoint,"http://not-a-uuid");
+    assert(mb_wsd_uuid_value(&id,out,sizeof out)<0);
+    strcpy(id.endpoint,"urn:uuid:short");
+    assert(mb_wsd_uuid_value(&id,out,sizeof out)<0);
     return 0;
 }
