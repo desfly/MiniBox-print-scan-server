@@ -71,18 +71,26 @@ int main(int argc, char **argv) {
     hostname[sizeof(hostname) - 1] = 0;
 
     /*
-     * The human service label must also be a stable per-device DNS-SD
-     * instance. Otherwise two MiniBoxes (or stale Android/Windows cache
-     * entries after an address change) are indistinguishable.
+     * Keep the human-readable DNS-SD instance name unchanged by default.
+     * Publish the stable printer/service identity using the standardized
+     * UUID TXT key instead; Print and Scan share the same UUID on this MFP.
      */
     rc = mb_wsd_get_identity(&identity);
     if (!rc) {
-        unsigned i;
-        for (i = 0; i < count; ++i) {
-            char unique[MB_SERVICE_NAME_MAX];
-            if (!mb_wsd_service_instance(services[i].name, identity.serial,
-                                         unique, sizeof(unique)))
-                strcpy(services[i].name, unique);
+        char uuid[40];
+        if (!mb_wsd_uuid_value(&identity, uuid, sizeof uuid)) {
+            unsigned i;
+            for (i = 0; i < count; ++i) {
+                size_t used = strlen(services[i].txt);
+                int n = snprintf(services[i].txt + used,
+                                 sizeof services[i].txt - used,
+                                 "%sUUID=%s", used ? ";" : "", uuid);
+                if (n < 0 || (size_t)n >= sizeof services[i].txt - used) {
+                    fprintf(stderr, "minibox-discoveryd: UUID TXT overflow for %s\n",
+                            services[i].name);
+                    return 2;
+                }
+            }
         }
     } else {
         fprintf(stderr, "minibox-discoveryd: stable device identity unavailable: %d\n", rc);
