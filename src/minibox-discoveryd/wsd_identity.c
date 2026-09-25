@@ -72,3 +72,12 @@ int mb_wsd_get_identity(struct mb_wsd_identity *out){
     if(n<0||(size_t)n>=sizeof out->presentation)return -EINVAL;
     return 0;
 }
+
+int mb_wsd_service_instance(const char *base,const char *serial,
+                            char *out,size_t cap){
+    const char *suffix;int n;
+    if(!base||!base[0]||!serial||strlen(serial)<6||!out||!cap)return -EINVAL;
+    suffix=serial+strlen(serial)-6;
+    n=snprintf(out,cap,"%s [%s]",base,suffix);
+    return n<0||(size_t)n>=cap?-ENOSPC:0;
+}
