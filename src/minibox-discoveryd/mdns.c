@@ -96,6 +96,26 @@ static int packet(unsigned char *out,size_t cap,const mb_service_t *s,
     memcpy(out+p,ip,4); p+=4;
     return (int)p;
 }
+
+/* IPP Everywhere DNS-SD subtype. A subtype browse PTR points at the normal
+ * _ipp._tcp service instance; it is not a separate SRV/TXT service. */
+static int ipp_everywhere_subtype_packet(unsigned char *out,size_t cap,
+                                         const mb_service_t *s){
+    static const char subtype[]="_print._sub._ipp._tcp.local";
+    char type[96],instance[224];
+    unsigned char rdata[256];
+    size_t p=12,rp=0;
+    if(!out||!s||strcmp(s->type,"_ipp._tcp"))return 0;
+    if(label(type,sizeof type,s->type,".local")||
+       snprintf(instance,sizeof instance,"%s.%s",s->name,type)<0||
+       strlen(s->name)+1+strlen(type)>=sizeof instance)return -1;
+    memset(out,0,12);out[2]=0x84;out[7]=1;
+    if(name(rdata,sizeof rdata,&rp,instance)||
+       rr_head(out,cap,&p,subtype,12,1,(uint16_t)rp)||
+       p>cap||rp>cap-p)return -1;
+    memcpy(out+p,rdata,rp);p+=rp;
+    return (int)p;
+}
 /* Resolve a DNS question safely, including compressed QNAME pointers. */
 static int read_name(const unsigned char *q,size_t len,size_t *offset,
                      char *out,size_t cap) {
@@ -187,6 +207,15 @@ int mb_mdns_build_reply(const unsigned char *q,size_t len,
                    op>cap||rp>cap-op)return -1;
                 memcpy(out+op,rdata,rp);op+=rp;answers++;continue;
             }
+            if((kind==12||kind==255)&&
+               !strcasecmp(question,"_print._sub._ipp._tcp.local")&&
+               !strcmp(s->type,"_ipp._tcp")) {
+                n=ipp_everywhere_subtype_packet(record,sizeof record,s);
+                if(n<12||op>cap||(size_t)(n-12)>cap-op)return -1;
+                memcpy(out+op,record+12,(size_t)(n-12));
+                op+=(size_t)(n-12);answers++;
+                continue;
+            }
             match=((kind==12||kind==255)&&!strcasecmp(question,type))||
                   ((kind==33||kind==16||kind==255)&&!strcasecmp(question,inst));
             if(!match)continue;
@@ -235,6 +264,10 @@ static int announce(int fd,const struct sockaddr_in *dst,
         int n=packet(out,sizeof out,&services[i],host,ip);
         if(n<0)return -EINVAL;
         if(sendto(fd,out,(size_t)n,0,(const struct sockaddr*)dst,sizeof *dst)!=n)
+            return -errno;
+        n=ipp_everywhere_subtype_packet(out,sizeof out,&services[i]);
+        if(n<0)return -EINVAL;
+        if(n>0&&sendto(fd,out,(size_t)n,0,(const struct sockaddr*)dst,sizeof *dst)!=n)
             return -errno;
     }
     return 0;
