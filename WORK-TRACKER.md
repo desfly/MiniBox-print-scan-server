@@ -189,3 +189,32 @@ Only verified protocol evidence may be used to implement/enable the SOAPHT codec
 - Earlier physical tests established the USB SOAPHT interface/endpoints and claim/release; do not redo these in place of first-response diagnosis. Current physical print/web operation is independent of this scan failure.
 - Diagnostics-only branch `fix/soapht-503-hardware-error-detail-20260924`, based on PR #12 head `830ab8b322769e4f5e4c156badd334944d179620`: log failed USB bulk IN/OUT return code and byte count, SOAPHT control response header/status/body-stage failure and framing counters without dumping image/USB payload. Add a truncated-first-response codec regression and assert log stages. Bump runtime package release to `0.3.0-r14`. No unverified USB commands or protocol retries introduced, and **no hardware scan success claimed**.
 - NEXT: get green PR CI and r14 APK; install APK *only after checking its source/artifact identity*, then repeat one known-good platen request and collect **new** log stages (`libusb-bulk-in`, `soapht-raw-read`, `soapht-control-body`) to distinguish USB timeout/short reply, incomplete chunk framing and non-2xx response. If protocol mismatch remains, capture direct-Windows known-good SOAPHT USB transcript before altering the vendor command encoding. Keep r13 printing firmware as rollback, no full BIN flash based solely on green CI.
+
+## 2026-09-24 — automatic discovery Wi-Fi-interface defect and staged fix
+
+- Physical evidence: Windows received an mDNS IPP announcement and manual IPP/PCL6 printing succeeded, but Windows and Android automatic printer/scanner installation did not. eSCL actual image still fails 503. mDNS DNS-SD visibility alone is not end-to-end OS discovery or driverless print/scan.
+- Source audit (PR #12/#13): `minibox-discoveryd` chooses its advertised IPv4 from `getifaddrs` using substring checks for `sta/wlan/wifi/wl`, **excluding the OpenWrt Wi-Fi client L3 interface name `wwan`**. If `br-lan` or Ethernet appears before `wwan`, discovery announces the management Ethernet IP instead of the Wi-Fi client IP. This is a source-level potential failure: the live interface names and advertised A record must be confirmed on hardware.
+- Another source defect: the mDNS listener joins one multicast interface only at process start. On Wi-Fi reconnect/address change it may announce an updated A record without rejoining the corresponding multicast group, causing browse queries to be missed.
+- Separate stacked draft PR on PR #13: `fix/discovery-wifi-client-advertisement-20260924`, diagnostic package `0.3.0-r15`. Prefer OpenWrt `wwan`/wlan wireless IPv4 over Ethernet, rejoin mDNS group on address change, add deterministic interface-ranking tests. Preserve no-CUPS/no-usblp and existing print/scan paths; do not advertise nonexistent RAW 9100, WSD, IPP Everywhere or a functioning physical scanner.
+- **Remaining platform blockers**: the repository contains a WSD XML parser but the production discovery daemon has no UDP/3702 WSD service or HTTP metadata endpoint. The raw PCL6 bridge lacks IPP Everywhere PWG Raster and PDF conversion; Android automatic driverless printing cannot be claimed. eSCL scanner capabilities/status reachability does not prove Android scanner enrollment or image transfer. Physical confirmation must separately check Windows IPP/manual driver, Windows Add Printer/Scanner browse and Android service behavior.
+- NEXT: await CI on r14 diagnostics and r15 Wi-Fi discovery branch independently. Inspect actual Wi-Fi name/IP and mDNS answers on hardware before attributing auto-detection failure solely to the interface selector. Do not flash full BIN. Subsequent platform work requires a truthful WSD/driverless path, not misleading service announcements.
+
+## 2026-09-25 — mandatory Wi-Fi firstboot / factory-reset setup contract
+
+- User requirement is now recorded in `docs/WIFI-FIRST-BOOT-CONTRACT.md` (canonical detailed spec). On first boot / after factory reset, boot as a secure provisioning AP, expose a working local web UI with a Wi-Fi settings tab, scan nearby networks, choose SSID and enter password. Trial STA association and DHCP must leave a recovery AP path if joining fails.
+- Following successful join, the **router-assigned Wi-Fi DHCP address** is the MiniBox MFP network identity for web UI, IPP and eSCL; update DNS-SD on lease/reconnection without hard-coded `192.168.55.250`. The HP USB device itself does not obtain a separate IP. Wi-Fi settings must remain editable after setup.
+- This must be implemented and verified in the **full firmware image/factory reset defaults**; r13–r15 APK updates and the existing status-only web page do not meet it. The image must bake AP wireless/network/firewall/DHCP/uhttpd setup, test recoverability on AR9330, and avoid accidental lockout or unprotected credential-changing CGI. Do not factory-reset or full-flash the currently working hardware until a recovery path is verified.
+- Hardware evidence: current STA `phy0-sta0` is `192.168.55.250`, Ethernet `br-lan` is `192.168.55.251`; this shows the old `sta` matcher already had a Wi-Fi interface to prefer and **does not prove** the r15 wwan fix resolves actual Windows/Android auto-discovery. Preserve separate auto-discovery and scanner 503 tasks.
+- NEXT PROGRAMMING TASK: implement minimal authenticated Wi-Fi onboarding state machine and tab, safety/fallback tests and full-image embedded AP defaults. Then validate firstboot/reset, correct/wrong credentials, DHCP IP migration and OS discovery on actual hardware; keep current r13 untouched meanwhile.
+
+## 2026-09-25 — priority order clarified
+
+**Do not implement factory AP / Wi-Fi setup UI yet.** This work is explicitly deferred until all three core MFP goals below are solved and physically verified:
+
+1. Printing works reliably end-to-end.
+2. Scanning returns a real image reliably end-to-end.
+3. Automatic discovery/addition works on both Windows and Android for the intended printer/scanner flows.
+
+Only after those three are complete may work begin on the previously specified factory-reset AP provisioning flow, Wi-Fi scan/select/password UI, DHCP handoff and recovery behavior.
+
+The detailed future provisioning specification remains in `docs/WIFI-FIRST-BOOT-CONTRACT.md`, but it is **not the current implementation priority**. Do not let AP/UI work delay scanner 503 diagnosis, Windows discovery, Android discovery or print-path completion.
