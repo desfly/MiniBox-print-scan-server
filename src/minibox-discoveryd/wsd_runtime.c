@@ -70,7 +70,7 @@ int mb_wsdd_run(volatile sig_atomic_t *stop){
         fd_set fds;struct timeval tv={1,0};struct mb_wsd_identity latest;
         FD_ZERO(&fds);FD_SET(fd,&fds);
         rc=select(fd+1,&fds,0,0,&tv);
-        if(rc<0){if(errno==EINTR)continue;rc=-errno;break;}
+        if(rc<0){if(errno==EINTR){rc=0;continue;}rc=-errno;break;}
         if(!mb_wsd_get_identity(&latest)&&
            latest.ipv4.s_addr!=identity.ipv4.s_addr){
             if(!join_group(fd,&multicast,&latest.ipv4)){
