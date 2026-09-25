@@ -8,6 +8,8 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp
 /tmp/test-ipp
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp-format.c -o /tmp/test-ipp-format
 /tmp/test-ipp-format
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-raster/pwg_to_pcl.c tests/test-pwg-to-pcl.c -o /tmp/test-pwg-to-pcl
+/tmp/test-pwg-to-pcl
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-discoveryd/wsd.c tests/test-wsd.c -o /tmp/test-wsd
 /tmp/test-wsd
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-escl/escl.c tests/test-escl.c -o /tmp/test-escl

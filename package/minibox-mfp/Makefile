@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=16
+PKG_RELEASE:=17
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -35,6 +35,7 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-printerd/http_body.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/ipp.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/print_job.c \
+		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl.c \
 		$(PKG_BUILD_DIR)/minibox-usb/stream.c \
 		$(PKG_BUILD_DIR)/minibox-usb/libusb_m1522.c \
 		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c -lusb-1.0

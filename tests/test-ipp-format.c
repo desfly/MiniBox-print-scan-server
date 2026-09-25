@@ -21,10 +21,13 @@ int main(void){
     n=make(req,"application/octet-stream",0x49,0);
     assert(ipp_check_document_format(req,n)==0);
     assert(ipp_check_document_format(req,n-1)<0);
+    assert(ipp_document_format_kind(req,n)==IPP_DOCUMENT_RAW);
     n=make(req,"application/pdf",0x49,0);
     assert(ipp_check_document_format(req,n)==1);
+    assert(ipp_document_format_kind(req,n)==IPP_DOCUMENT_UNSUPPORTED);
     n=make(req,"image/pwg-raster",0x49,0);
-    assert(ipp_check_document_format(req,n)==1);
+    assert(ipp_check_document_format(req,n)==0);
+    assert(ipp_document_format_kind(req,n)==IPP_DOCUMENT_PWG_RASTER);
     n=make(req,"application/octet-stream",0x49,1);
     assert(ipp_check_document_format(req,n)==1);
     n=make(req,"application/octet-stream",0x44,0);
