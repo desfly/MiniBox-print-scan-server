@@ -4,4 +4,4 @@ name=HP LaserJet M1522n Scanner @ MiniBox
 type=_uscan._tcp
 port=8080
 path=/eSCL
-txt=txtvers=1;ty=HP LaserJet M1522n;rs=eSCL;representation=images;vers=2.63;is=platen
+txt=txtvers=1;ty=HP LaserJet M1522n;rs=eSCL;vers=2.63;is=platen,adf;cs=grayscale,color;pdl=image/jpeg;duplex=F;note=MiniBox MFP

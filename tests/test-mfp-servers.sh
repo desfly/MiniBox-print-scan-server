@@ -8,6 +8,26 @@ trap 'kill $P $S 2>/dev/null || true' EXIT INT TERM
 sleep 1
 curl -fsS http://127.0.0.1:18631/health | grep -q 'printerd ok'
 curl -fsS http://127.0.0.1:18080/health | grep -q 'scand ok'
+curl -fsS http://127.0.0.1:18080/eSCL/ScannerCapabilities >/tmp/escl-caps.xml
+curl -fsS http://127.0.0.1:18080/eSCL/ScannerStatus >/tmp/escl-status.xml
+python3 - <<'PY'
+import xml.etree.ElementTree as ET
+scan='http://schemas.hp.com/imaging/escl/2011/05/03'
+pwg='http://www.pwg.org/schemas/2010/12/sm'
+caps=ET.parse('/tmp/escl-caps.xml').getroot()
+assert caps.tag==f'{{{scan}}}ScannerCapabilities'
+assert caps.find(f'{{{pwg}}}Version').text=='2.63'
+assert caps.find(f'{{{pwg}}}MakeAndModel').text=='HP LaserJet M1522n @ MiniBox'
+assert caps.find(f'{{{scan}}}Platen/{{{scan}}}PlatenInputCaps') is not None
+assert caps.find(f'{{{scan}}}Adf/{{{scan}}}AdfSimplexInputCaps') is not None
+colors=[x.text for x in caps.findall('.//{%s}ColorMode'%scan)]
+assert colors==['RGB24','Grayscale8','RGB24','Grayscale8'], colors
+formats=[x.text for x in caps.findall('.//{%s}DocumentFormat'%pwg)]
+assert formats==['image/jpeg','image/jpeg'], formats
+status=ET.parse('/tmp/escl-status.xml').getroot()
+assert status.find(f'{{{pwg}}}State').text=='Idle'
+assert status.find(f'{{{scan}}}State') is None
+PY
 printf '\002\000\000\013\000\000\000\001\003' >/tmp/ipp.req
 curl -fsS -o /tmp/ipp.out -H 'Content-Type: application/ipp' --data-binary @/tmp/ipp.req http://127.0.0.1:18631/ipp/print
 python3 - <<'PY'
