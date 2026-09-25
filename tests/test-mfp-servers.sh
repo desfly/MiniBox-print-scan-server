@@ -43,6 +43,11 @@ for value in (
     b'printer-uri-supported',
     b'operations-supported',
     b'ipp-versions-supported',
+    b'image/pwg-raster',
+    b'pwg-raster-document-resolution-supported',
+    b'pwg-raster-document-type-supported',
+    b'sgray_8',
+    b'srgb_8',
 ):
     assert value in data, f'missing IPP attribute/value: {value!r}'
 assert b'ipp://' in data and b'.local/ipp/print' in data, 'printer URI not aligned with actual host name'
