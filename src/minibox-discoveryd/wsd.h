@@ -15,6 +15,7 @@ int mb_wsd_is_print_probe(const struct mb_wsd_request *r);
 int mb_wsd_is_scan_probe(const struct mb_wsd_request *r);
 int mb_wsd_is_device_probe(const struct mb_wsd_request *r);
 int mb_wsd_probe_supported(const struct mb_wsd_request *r);
+int mb_wsd_extract_message_id(const char *xml,size_t len,char *out,size_t cap);
 
 /*
  * Build one WS-Discovery ProbeMatches/ResolveMatches response.
@@ -31,5 +32,12 @@ int mb_wsd_build_match(const struct mb_wsd_request *r,
                        unsigned long instance_id,
                        unsigned long message_number,
                        char *out,size_t cap);
+
+int mb_wsd_build_metadata_response(const char *request_message_id,
+                                   const char *endpoint,
+                                   const char *xaddr,
+                                   const char *response_message_id,
+                                   const char *serial,
+                                   char *out,size_t cap);
 
 #endif
