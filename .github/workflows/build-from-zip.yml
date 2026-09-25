@@ -138,23 +138,6 @@ jobs:
           test -f "$DEST/package/minibox-mfp/src/m1522_usb_transport.c"
           test -f "$DEST/package/minibox-mfp/files/usr/sbin/minibox-m1522-descriptors"
 
-          # The custom board recipe must produce a normal OpenWrt sysupgrade image.
-          # Add the standard metadata trailer requirements if the injected recipe
-          # from the legacy build kit omitted them.
-          DEVICE_MK="$(grep -RIl 'define Device/gainstrong_minibox-v1' "$DEST/target/linux/ath79/image" | head -n1)"
-          test -n "$DEVICE_MK" || { echo 'ERROR: MiniBox device image recipe not found' >&2; exit 1; }
-          DEVICE_BLOCK="$(sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK")"
-          if ! printf '%s\n' "$DEVICE_BLOCK" | grep -q 'SUPPORTED_DEVICES.*gainstrong,minibox-v1'; then
-            sed -i '/^define Device\/gainstrong_minibox-v1$/a\  SUPPORTED_DEVICES := gainstrong,minibox-v1' "$DEVICE_MK"
-          fi
-          DEVICE_BLOCK="$(sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK")"
-          if ! printf '%s\n' "$DEVICE_BLOCK" | grep -q 'IMAGE/sysupgrade.bin.*append-metadata'; then
-            sed -i '/^define Device\/gainstrong_minibox-v1$/,/^endef$/ s#^\([[:space:]]*IMAGE/sysupgrade\.bin[[:space:]]*:=[[:space:]].*\)$#\1 | append-metadata#' "$DEVICE_MK"
-          fi
-          sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK"
-          sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK" | grep -q 'SUPPORTED_DEVICES.*gainstrong,minibox-v1'
-          sed -n '/^define Device\/gainstrong_minibox-v1$/,/^endef$/p' "$DEVICE_MK" | grep -q 'IMAGE/sysupgrade.bin.*append-metadata'
-
       - name: Configure OpenWrt
         shell: bash
         working-directory: openwrt-src
@@ -312,13 +295,29 @@ jobs:
           test -n "$FACTORY"
           test -n "$SYSUPGRADE"
           test -n "$APK"
+
+          # The legacy board injector produces a raw sysupgrade image without the
+          # standard OpenWrt fwtool metadata trailer. Add the trailer after build
+          # instead of mutating the injected device recipe (which is kit-version
+          # dependent and caused the previous CI failure).
           FWTOOL="$OPENWRT_DIR/staging_dir/host/bin/fwtool"
-          META="$GITHUB_WORKSPACE/sysupgrade-metadata.json"
           test -x "$FWTOOL" || { echo 'ERROR: fwtool not found' >&2; exit 1; }
-          rm -f "$META"
-          "$FWTOOL" -i "$META" "$SYSUPGRADE"
-          test -s "$META" || { echo 'ERROR: sysupgrade image is missing OpenWrt metadata' >&2; exit 1; }
-          grep -q 'gainstrong,minibox-v1' "$META" || { echo 'ERROR: MiniBox supported-device metadata missing' >&2; cat "$META"; exit 1; }
+          META_IN="$GITHUB_WORKSPACE/minibox-sysupgrade-metadata.json"
+          META_OUT="$GITHUB_WORKSPACE/minibox-sysupgrade-metadata.extracted.json"
+          cat > "$META_IN" <<'EOF'
+          {
+            "metadata_version": "1.1",
+            "compat_version": "1.0",
+            "supported_devices": ["gainstrong,minibox-v1"]
+          }
+          EOF
+          "$FWTOOL" -I "$META_IN" "$SYSUPGRADE"
+          rm -f "$META_OUT"
+          "$FWTOOL" -i "$META_OUT" "$SYSUPGRADE"
+          test -s "$META_OUT" || { echo 'ERROR: sysupgrade metadata extraction failed' >&2; exit 1; }
+          grep -q '"gainstrong,minibox-v1"' "$META_OUT" || { echo 'ERROR: MiniBox supported-device metadata missing' >&2; cat "$META_OUT"; exit 1; }
+          cat "$META_OUT"
+
           test "$(stat -c%s "$FACTORY")" -le 16580608
           cp WEB-UI-IMAGE-CHECKS.txt "$DIST_DIR/"
           EXPECTED_SOURCE_SHA="${{ steps.source.outputs.sha }}"
