@@ -19,7 +19,7 @@ h[352:356]=be32(595); h[356:360]=be32(842)
 h[372:376]=be32(8); h[376:380]=be32(2)
 h[384:388]=be32(8); h[388:392]=be32(8); h[392:396]=be32(8)
 h[396:400]=be32(0); h[400:404]=be32(18); h[420:424]=be32(1)
-Path('/tmp/minibox-pwg.ras').write_bytes(
+Path('tests/minibox-pwg.ras').write_bytes(
     b'RaS2'+bytes(h)+bytes([1,249,0,255,0,255,0,255,0,255]))
 PY
 ipptool -tv ipp://127.0.0.1:18631/ipp/print tests/ipp-driverless.test
