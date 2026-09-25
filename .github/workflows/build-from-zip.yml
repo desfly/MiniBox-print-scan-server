@@ -284,7 +284,10 @@ jobs:
           test -n "$APK"
           test "$(stat -c%s "$FACTORY")" -le 16580608
           cp WEB-UI-IMAGE-CHECKS.txt "$DIST_DIR/"
-          git rev-parse HEAD > "$DIST_DIR/SOURCE-COMMIT.txt"
+          ACTUAL_SOURCE_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SOURCE_SHA" = "$GITHUB_SHA" || { echo "ERROR: checkout/source SHA $ACTUAL_SOURCE_SHA != workflow GITHUB_SHA $GITHUB_SHA" >&2; exit 1; }
+          printf '%s\n' "$GITHUB_SHA" > "$DIST_DIR/SOURCE-COMMIT.txt"
+          test "$(cat "$DIST_DIR/SOURCE-COMMIT.txt")" = "$GITHUB_SHA"
           cp docs/FINALIZATION-AUDIT-2026-09-20.md "$DIST_DIR/ROLLBACK-AND-MANUAL-TEST.md"
           printf '%s\n' 'TEST-ONLY: hardware validation pending; flash_allowed=false' > "$DIST_DIR/READ-ME-FIRST.txt"
           cat > "$DIST_DIR/SBOM.spdx" <<EOF
