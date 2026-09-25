@@ -5,4 +5,4 @@ name=HP LaserJet M1522n @ MiniBox
 type=_ipp._tcp
 port=631
 path=/ipp/print
-txt=txtvers=1;qtotal=1;rp=ipp/print;ty=HP LaserJet M1522n;product=(HP LaserJet M1522n);pdl=application/octet-stream;Color=F;Scan=T;note=MiniBox MFP
+txt=txtvers=1;qtotal=1;rp=ipp/print;ty=HP LaserJet M1522n;product=(HP LaserJet M1522n);pdl=application/octet-stream,image/pwg-raster;Color=F;Duplex=F;Scan=T;note=MiniBox MFP
