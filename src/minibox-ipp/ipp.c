@@ -88,6 +88,8 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *info="MiniBox network print server";
     const char *format="application/octet-stream";
     const char *pwg="image/pwg-raster";
+    const char *printer_uuid="urn:uuid:4d424f58-0000-4000-8000-0cefafcfc53d";
+    const char *device_id="MFG:Hewlett-Packard;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL,POSTSCRIPT;CLS:PRINTER;";
     if(!o||!r||!uri||c<9)return 0;
     if(!(p=ipp_build_status(o,c,r,0)))return 0;
     p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
@@ -97,6 +99,11 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr(o,c,&p,0x42,"printer-name",printer_name,strlen(printer_name)))return 0;
     if(attr(o,c,&p,0x41,"printer-make-and-model",model,strlen(model)))return 0;
     if(attr(o,c,&p,0x41,"printer-info",info,strlen(info)))return 0;
+    /* Keep the IPP identity aligned with the UUID advertised over DNS-SD.
+     * Windows uses printer-device-id as the hardware identity when it
+     * associates an IPP queue with a model-specific print driver. */
+    if(attr(o,c,&p,0x45,"printer-uuid",printer_uuid,strlen(printer_uuid)))return 0;
+    if(attr(o,c,&p,0x41,"printer-device-id",device_id,strlen(device_id)))return 0;
     if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;
     /* These REQUIRED companion values correspond to this one non-TLS,
      * unauthenticated IPP URI. Never claim TLS or authentication here. */
