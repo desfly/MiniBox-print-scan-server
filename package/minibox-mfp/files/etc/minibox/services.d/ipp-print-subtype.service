@@ -1,0 +1,8 @@
+# MiniBox MFP IPP Everywhere discovery subtype
+# Mirrors the generic _ipp._tcp service and points to the same endpoint.
+[service]
+name=HP LaserJet M1522n @ MiniBox
+type=_print._sub._ipp._tcp
+port=631
+path=/ipp/print
+txt=txtvers=1;qtotal=1;rp=ipp/print;ty=HP LaserJet M1522n;product=(HP LaserJet M1522n);pdl=application/octet-stream,image/pwg-raster;Color=F;Duplex=F;Scan=T;note=MiniBox MFP
