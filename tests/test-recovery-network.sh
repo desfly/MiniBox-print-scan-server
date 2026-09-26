@@ -15,7 +15,7 @@ grep -q '90-minibox-recovery-network' "$MAKEFILE"
 # or inject Wi-Fi credentials/SSID. Normal sysupgrade is responsible for
 # preserving the existing Wi-Fi client configuration.
 ! grep -q "192.168.55.250" "$SCRIPT"
-! grep -Eq 'wireless|ssid|key=' "$SCRIPT"
+! grep -Ev '^[[:space:]]*#' "$SCRIPT" | grep -Eq 'wireless|ssid|key='
 
 sh -n "$SCRIPT"
 
