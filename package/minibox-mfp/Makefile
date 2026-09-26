@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=21
+PKG_RELEASE:=27
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -99,6 +99,9 @@ define Package/minibox-mfp/install
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-endpoints $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-usb $(1)/usr/sbin/
 
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/etc/uci-defaults/90-minibox-recovery-network $(1)/etc/uci-defaults/
+
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-printerd $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-scand $(1)/etc/init.d/
@@ -107,6 +110,7 @@ define Package/minibox-mfp/install
 
 	$(INSTALL_DIR) $(1)/etc/minibox/services.d
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-printer.service $(1)/etc/minibox/services.d/
+	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-print-subtype.service $(1)/etc/minibox/services.d/
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/scanner.service $(1)/etc/minibox/services.d/
 
 	$(INSTALL_DIR) $(1)/usr/libexec/minibox-mfp

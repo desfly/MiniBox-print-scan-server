@@ -2,7 +2,7 @@
 #define MINIBOX_IPP_H
 #include <stddef.h>
 #include <stdint.h>
-enum { IPP_OP_PRINT_JOB=0x0002, IPP_OP_VALIDATE_JOB=0x0004, IPP_OP_GET_PRINTER_ATTRIBUTES=0x000b };
+enum { IPP_OP_PRINT_JOB=0x0002, IPP_OP_VALIDATE_JOB=0x0004, IPP_OP_CREATE_JOB=0x0005, IPP_OP_SEND_DOCUMENT=0x0006, IPP_OP_CANCEL_JOB=0x0008, IPP_OP_GET_JOB_ATTRIBUTES=0x0009, IPP_OP_GET_JOBS=0x000a, IPP_OP_GET_PRINTER_ATTRIBUTES=0x000b };
 struct ipp_request { uint8_t major,minor; uint16_t operation; uint32_t request_id; };
 enum ipp_document_kind {
     IPP_DOCUMENT_MALFORMED=-1,

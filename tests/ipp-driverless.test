@@ -16,6 +16,14 @@
   EXPECT printer-uri-supported OF-TYPE uri IN-GROUP printer-attributes-tag
   EXPECT ipp-versions-supported OF-TYPE keyword IN-GROUP printer-attributes-tag WITH-VALUE "2.0"
   EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 2
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 4
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 5
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 6
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 8
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 9
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 10
+  EXPECT operations-supported OF-TYPE enum IN-GROUP printer-attributes-tag WITH-VALUE 11
+  EXPECT job-creation-attributes-supported OF-TYPE keyword IN-GROUP printer-attributes-tag WITH-VALUE "media"
   EXPECT document-format-supported OF-TYPE mimeMediaType IN-GROUP printer-attributes-tag WITH-VALUE "image/pwg-raster"
   EXPECT printer-resolution-supported OF-TYPE resolution IN-GROUP printer-attributes-tag
   EXPECT sides-supported OF-TYPE keyword IN-GROUP printer-attributes-tag WITH-VALUE "one-sided"

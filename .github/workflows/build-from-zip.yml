@@ -61,6 +61,7 @@ jobs:
         run: |
           tests/test-openwrt-source-injection.sh
           sh tests/test-web-ui.sh
+          sh tests/test-recovery-network.sh
 
       - name: Check ZIP and SHA-256
         shell: bash
@@ -261,6 +262,9 @@ jobs:
           check '/www/minibox/index.html present' test -s rootfs-inspect/www/minibox/index.html
           check '/www/minibox/app.js present' test -s rootfs-inspect/www/minibox/app.js
           check '/www/cgi-bin/minibox-status executable' test -x rootfs-inspect/www/cgi-bin/minibox-status
+          check 'MiniBox recovery network script executable' test -x rootfs-inspect/etc/uci-defaults/90-minibox-recovery-network
+          check 'MiniBox recovery Ethernet 192.168.55.251 baked in image' grep -q '192.168.55.251' rootfs-inspect/etc/uci-defaults/90-minibox-recovery-network
+          check 'Recovery script preserves Wi-Fi credentials' sh -c "! grep -Ev '^[[:space:]]*#' rootfs-inspect/etc/uci-defaults/90-minibox-recovery-network | grep -Eq 'wireless|ssid|key='"
 
           UHTTPD_LINK="$(find rootfs-inspect/etc/rc.d -type l -name 'S??uhttpd' -print -quit 2>/dev/null)"
           check 'uhttpd boot symlink present' test -n "$UHTTPD_LINK"

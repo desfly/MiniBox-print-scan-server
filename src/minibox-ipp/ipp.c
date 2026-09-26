@@ -39,7 +39,7 @@ int ipp_check_document_format(const unsigned char *buf,size_t len) {
     return k==IPP_DOCUMENT_MALFORMED?-1:k==IPP_DOCUMENT_UNSUPPORTED?1:0;
 }
 
-const char*ipp_operation_name(uint16_t op){switch(op){case IPP_OP_PRINT_JOB:return"Print-Job";case IPP_OP_VALIDATE_JOB:return"Validate-Job";case IPP_OP_GET_PRINTER_ATTRIBUTES:return"Get-Printer-Attributes";default:return"Unknown";}}
+const char*ipp_operation_name(uint16_t op){switch(op){case IPP_OP_PRINT_JOB:return"Print-Job";case IPP_OP_VALIDATE_JOB:return"Validate-Job";case IPP_OP_CREATE_JOB:return"Create-Job";case IPP_OP_SEND_DOCUMENT:return"Send-Document";case IPP_OP_CANCEL_JOB:return"Cancel-Job";case IPP_OP_GET_JOB_ATTRIBUTES:return"Get-Job-Attributes";case IPP_OP_GET_JOBS:return"Get-Jobs";case IPP_OP_GET_PRINTER_ATTRIBUTES:return"Get-Printer-Attributes";default:return"Unknown";}}
 
 static int put(unsigned char*o,size_t c,size_t*p,const void*v,size_t n){if(*p>c||n>c-*p)return-1;memcpy(o+*p,v,n);*p+=n;return 0;}
 static int u16(unsigned char*o,size_t c,size_t*p,unsigned v){unsigned char b[2]={(unsigned char)(v>>8),(unsigned char)v};return put(o,c,p,b,2);}
@@ -82,12 +82,19 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const unsigned char copies_one[8]={0,0,0,1,0,0,0,1};
     const unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};
     const unsigned char op_validate[4]={0,0,0,IPP_OP_VALIDATE_JOB};
+    const unsigned char op_create[4]={0,0,0,IPP_OP_CREATE_JOB};
+    const unsigned char op_send[4]={0,0,0,IPP_OP_SEND_DOCUMENT};
+    const unsigned char op_cancel[4]={0,0,0,IPP_OP_CANCEL_JOB};
+    const unsigned char op_job_attrs[4]={0,0,0,IPP_OP_GET_JOB_ATTRIBUTES};
+    const unsigned char op_jobs[4]={0,0,0,IPP_OP_GET_JOBS};
     const unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};
     const char *printer_name="HP LaserJet M1522n @ MiniBox";
     const char *model="HP LaserJet M1522n";
     const char *info="MiniBox network print server";
     const char *format="application/octet-stream";
     const char *pwg="image/pwg-raster";
+    const char *printer_uuid="urn:uuid:4d424f58-0000-4000-8000-0cefafcfc53d";
+    const char *device_id="MFG:Hewlett-Packard;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL,POSTSCRIPT;CLS:PRINTER;";
     if(!o||!r||!uri||c<9)return 0;
     if(!(p=ipp_build_status(o,c,r,0)))return 0;
     p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
@@ -97,6 +104,11 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr(o,c,&p,0x42,"printer-name",printer_name,strlen(printer_name)))return 0;
     if(attr(o,c,&p,0x41,"printer-make-and-model",model,strlen(model)))return 0;
     if(attr(o,c,&p,0x41,"printer-info",info,strlen(info)))return 0;
+    /* Keep the IPP identity aligned with the UUID advertised over DNS-SD.
+     * Windows uses printer-device-id as the hardware identity when it
+     * associates an IPP queue with a model-specific print driver. */
+    if(attr(o,c,&p,0x45,"printer-uuid",printer_uuid,strlen(printer_uuid)))return 0;
+    if(attr(o,c,&p,0x41,"printer-device-id",device_id,strlen(device_id)))return 0;
     if(attr(o,c,&p,0x45,"printer-uri-supported",uri,strlen(uri)))return 0;
     /* These REQUIRED companion values correspond to this one non-TLS,
      * unauthenticated IPP URI. Never claim TLS or authentication here. */
@@ -116,7 +128,17 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr_more(o,c,&p,0x44,"2.0",3))return 0;
     if(attr(o,c,&p,0x23,"operations-supported",op_print,4))return 0;
     if(attr_more(o,c,&p,0x23,op_validate,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_create,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_send,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_cancel,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_job_attrs,4))return 0;
+    if(attr_more(o,c,&p,0x23,op_jobs,4))return 0;
     if(attr_more(o,c,&p,0x23,op_attrs,4))return 0;
+    if(attr(o,c,&p,0x44,"job-creation-attributes-supported","copies",6))return 0;
+    if(attr_more(o,c,&p,0x44,"media",5))return 0;
+    if(attr_more(o,c,&p,0x44,"printer-resolution",18))return 0;
+    if(attr_more(o,c,&p,0x44,"sides",5))return 0;
+    if(attr_more(o,c,&p,0x44,"print-color-mode",16))return 0;
     if(attr(o,c,&p,0x49,"document-format-supported",format,strlen(format)))return 0;
     if(attr_more(o,c,&p,0x49,pwg,strlen(pwg)))return 0;
     if(attr(o,c,&p,0x49,"document-format-default",format,strlen(format)))return 0;
