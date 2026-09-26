@@ -233,11 +233,28 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
        xml_text(out,cap,&p,endpoint)||
        add(out,cap,&p,
       "</a:Address></a:EndpointReference>"
-      "<dp:Types>dp:Device p:PrintDeviceType scn:ScanDeviceType</dp:Types>"
+      "<dp:Types>dp:Device</dp:Types>"
       "<dp:ServiceId>")||
        xml_text(out,cap,&p,endpoint)||
        add(out,cap,&p,
-      "</dp:ServiceId></dp:Host></dp:Relationship></x:MetadataSection>"
+      "</dp:ServiceId></dp:Host>"
+      "<dp:Hosted><a:EndpointReference><a:Address>")||
+       xml_text(out,cap,&p,endpoint)||
+       add(out,cap,&p,
+      "#print</a:Address></a:EndpointReference>"
+      "<dp:Types>p:PrintDeviceType</dp:Types><dp:ServiceId>")||
+       xml_text(out,cap,&p,endpoint)||
+       add(out,cap,&p,
+      "#print</dp:ServiceId></dp:Hosted>"
+      "<dp:Hosted><a:EndpointReference><a:Address>")||
+       xml_text(out,cap,&p,endpoint)||
+       add(out,cap,&p,
+      "#scan</a:Address></a:EndpointReference>"
+      "<dp:Types>scn:ScanDeviceType</dp:Types><dp:ServiceId>")||
+       xml_text(out,cap,&p,endpoint)||
+       add(out,cap,&p,
+      "#scan</dp:ServiceId></dp:Hosted>"
+      "</dp:Relationship></x:MetadataSection>"
       "</x:Metadata></s:Body></s:Envelope>")||
        p>=cap)return -2;
     out[p]=0;return (int)p;
