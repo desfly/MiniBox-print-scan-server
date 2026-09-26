@@ -126,7 +126,7 @@ static int envelope_start(char *out,size_t cap,size_t *p){
       " xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\""
       " xmlns:dp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\""
       " xmlns:p=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\""
-      " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/08/wdp/scan\">");
+      " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\">");
 }
 static int header(char *out,size_t cap,size_t *p,const char *action,
                   const char *response_id,const char *relates,
@@ -202,7 +202,7 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
       " xmlns:dp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\""
       " xmlns:pnpx=\"http://schemas.microsoft.com/windows/pnpx/2005/10\""
       " xmlns:p=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\""
-      " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/08/wdp/scan\">"
+      " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\">"
       "<s:Header>"
       "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
       "<a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</a:Action>"
