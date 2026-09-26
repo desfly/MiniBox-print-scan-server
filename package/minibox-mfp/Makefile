@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=21
+PKG_RELEASE:=22
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -107,6 +107,7 @@ define Package/minibox-mfp/install
 
 	$(INSTALL_DIR) $(1)/etc/minibox/services.d
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-printer.service $(1)/etc/minibox/services.d/
+	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-print-subtype.service $(1)/etc/minibox/services.d/
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/scanner.service $(1)/etc/minibox/services.d/
 
 	$(INSTALL_DIR) $(1)/usr/libexec/minibox-mfp
