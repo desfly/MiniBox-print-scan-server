@@ -57,6 +57,14 @@ int main(void){
  contains(out,"001122334455");
  contains(out,"http://192.168.55.250/");
  contains(out,endpoint);
+ contains(out,"<dp:Types>dp:Device</dp:Types>");
+ contains(out,"<dp:Hosted><a:EndpointReference><a:Address>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#print</a:Address>");
+ contains(out,"<dp:Types>p:PrintDeviceType</dp:Types>");
+ contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#print</dp:ServiceId>");
+ contains(out,"<dp:Hosted><a:EndpointReference><a:Address>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</a:Address>");
+ contains(out,"<dp:Types>scn:ScanDeviceType</dp:Types>");
+ contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</dp:ServiceId>");
+ assert(strstr(out,"<dp:Types>dp:Device p:PrintDeviceType scn:ScanDeviceType</dp:Types>")==0);
 
  puts("WSD parse/match contract OK");
  return 0;
