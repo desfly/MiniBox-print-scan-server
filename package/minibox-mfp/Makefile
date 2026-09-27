@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=28
+PKG_RELEASE:=29
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -38,7 +38,8 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl.c \
 		$(PKG_BUILD_DIR)/minibox-usb/stream.c \
 		$(PKG_BUILD_DIR)/minibox-usb/libusb_m1522.c \
-		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c -lusb-1.0
+		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c \
+		$(PKG_BUILD_DIR)/minibox-usb/m1522_presence.c -lusb-1.0
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-scand \
 		$(PKG_BUILD_DIR)/minibox-scand/main.c \
 		$(PKG_BUILD_DIR)/minibox-scand/scan_session.c \
@@ -50,7 +51,8 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-scan/soapht_transport.c \
 		$(PKG_BUILD_DIR)/minibox-scan/soapht_m1522_io.c \
 		$(PKG_BUILD_DIR)/minibox-scan/soapht_codec.c \
-		$(PKG_BUILD_DIR)/minibox-usb/scan_m1522.c -lusb-1.0
+		$(PKG_BUILD_DIR)/minibox-usb/scan_m1522.c \
+		$(PKG_BUILD_DIR)/minibox-usb/m1522_presence.c -lusb-1.0
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-discoveryd \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/main.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/service.c \
