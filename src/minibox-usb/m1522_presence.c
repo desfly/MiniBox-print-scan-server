@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 static int read_id(const char *path,char *out,size_t cap){
     FILE *f=fopen(path,"r");size_t n;
