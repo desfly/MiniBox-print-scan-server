@@ -273,7 +273,8 @@ jobs:
 
           printf 'rootfs=%s\n' "$(basename "$ROOTFS")" | tee -a "$REPORT"
           check '/usr/sbin/uhttpd executable' test -x rootfs-inspect/usr/sbin/uhttpd
-          check '/usr/sbin/tcpdump executable' test -x rootfs-inspect/usr/sbin/tcpdump
+          # OpenWrt installs tcpdump in /usr/bin, not /usr/sbin.
+          check '/usr/bin/tcpdump executable' test -x rootfs-inspect/usr/bin/tcpdump
           check 'LuCI dispatcher present' test -e rootfs-inspect/www/cgi-bin/luci
           check '/etc/config/uhttpd present' test -s rootfs-inspect/etc/config/uhttpd
           check '/etc/init.d/uhttpd executable' test -x rootfs-inspect/etc/init.d/uhttpd
