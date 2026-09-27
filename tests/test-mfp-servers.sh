@@ -1,10 +1,16 @@
 #!/bin/sh
 set -eu
-cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl.c -o /tmp/minibox-printerd
-cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_SCAN_BACKEND src/minibox-scand/main.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c src/minibox-escl/escl.c src/minibox-printerd/http_body.c -o /tmp/minibox-scand
+cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl.c src/minibox-usb/m1522_presence.c -o /tmp/minibox-printerd
+cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_SCAN_BACKEND src/minibox-scand/main.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c src/minibox-escl/escl.c src/minibox-discoveryd/wsd_identity.c src/minibox-printerd/http_body.c src/minibox-usb/m1522_presence.c -o /tmp/minibox-scand
+USBROOT=$(mktemp -d)
+mkdir -p "$USBROOT/1-1"
+printf '03f0\n' >"$USBROOT/1-1/idVendor"
+printf '4517\n' >"$USBROOT/1-1/idProduct"
+export MINIBOX_USB_SYSFS_ROOT="$USBROOT"
+trap 'rm -rf "$USBROOT"' EXIT INT TERM
 MINIBOX_TEST_PRINT_FILE=/tmp/printed.bin /tmp/minibox-printerd 18631 >/tmp/printerd.log 2>&1 & P=$!
 /tmp/minibox-scand 18080 >/tmp/scand.log 2>&1 & S=$!
-trap 'kill $P $S 2>/dev/null || true' EXIT INT TERM
+trap 'kill $P $S 2>/dev/null || true; rm -rf "$USBROOT"' EXIT INT TERM
 sleep 1
 curl -fsS http://127.0.0.1:18631/health | grep -q 'printerd ok'
 curl -fsS http://127.0.0.1:18080/health | grep -q 'scand ok'
@@ -179,7 +185,7 @@ cmp /tmp/next.expected /tmp/next.out
 # A real backend-open failure must return 503 AND release the eSCL job state,
 # so the next valid ScanJobs POST does not become permanently stuck at 409.
 MINIBOX_TEST_SCAN_OPEN_FAIL=1 /tmp/minibox-scand 18081 >/tmp/scand-open-fail.log 2>&1 & F=$!
-trap 'kill $P $S $F 2>/dev/null || true' EXIT INT TERM
+trap 'kill $P $S $F 2>/dev/null || true; rm -rf "$USBROOT"' EXIT INT TERM
 sleep 1
 code=$(curl -sS -D /tmp/failed-job1.headers -o /tmp/failed-job1.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18081/eSCL/ScanJobs)
 [ "$code" = 201 ]
@@ -193,7 +199,7 @@ grep -qi '^Location: /eSCL/ScanJobs/2' /tmp/failed-job2.headers
 grep -q 'stage=backend-open' /tmp/scand-open-fail.log
 # Failure on the *first image read* must not produce HTTP 200 or a fake JPEG.
 MINIBOX_TEST_SCAN_READ_FAIL=1 /tmp/minibox-scand 18082 >/tmp/scand-read-fail.log 2>&1 & R=$!
-trap 'kill $P $S $F $R 2>/dev/null || true' EXIT INT TERM
+trap 'kill $P $S $F $R 2>/dev/null || true; rm -rf "$USBROOT"' EXIT INT TERM
 sleep 1
 code=$(curl -sS -D /tmp/read-job1.headers -o /tmp/read-job1.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18082/eSCL/ScanJobs)
 [ "$code" = 201 ]
