@@ -34,6 +34,7 @@ printf '\002\000\000\002\000\000\000\002\003\033EHello MiniBox\014\033E' >/tmp/p
 printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
 curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
 cmp /tmp/document.expected /tmp/printed.bin
+python3 tests/test-windows-ipp-job.py
 python3 tests/test-large-print.py >/tmp/large.size
 [ "$(cat /tmp/large.size)" -gt 65536 ]
 cmp /tmp/large.expected /tmp/printed.bin
