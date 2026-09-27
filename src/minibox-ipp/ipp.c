@@ -73,11 +73,12 @@ size_t ipp_build_status(unsigned char*o,size_t c,const struct ipp_request*r,uint
     return p;
 }
 
-size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri){
+size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_request*r,const char*uri,int mfp_online){
     size_t p=0;
     const unsigned char group=0x04,end=0x03;
-    const unsigned char state[4]={0,0,0,3};
-    const unsigned char accepting=1;
+    unsigned char state[4]={0,0,0,3};
+    unsigned char accepting=1;
+    const char *state_reason="none";
     const unsigned char color=0;
     const unsigned char copies_one[8]={0,0,0,1,0,0,0,1};
     const unsigned char op_print[4]={0,0,0,IPP_OP_PRINT_JOB};
@@ -96,6 +97,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *printer_uuid="urn:uuid:4d424f58-0000-4000-8000-0cefafcfc53d";
     const char *device_id="MFG:Hewlett-Packard;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL,POSTSCRIPT;CLS:PRINTER;";
     if(!o||!r||!uri||c<9)return 0;
+    if(!mfp_online){state[3]=5;accepting=0;state_reason="offline";}
     if(!(p=ipp_build_status(o,c,r,0)))return 0;
     p--; /* Replace the empty response's end-of-attributes tag with an attributes group. */
     if(put(o,c,&p,&group,1))return 0;
@@ -116,7 +118,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr(o,c,&p,0x44,"uri-security-supported","none",4))return 0;
     if(attr(o,c,&p,0x23,"printer-state",state,4))return 0;
     if(attr(o,c,&p,0x22,"printer-is-accepting-jobs",&accepting,1))return 0;
-    if(attr(o,c,&p,0x44,"printer-state-reasons","none",4))return 0;
+    if(attr(o,c,&p,0x44,"printer-state-reasons",state_reason,strlen(state_reason)))return 0;
     if(attr(o,c,&p,0x47,"charset-configured","utf-8",5))return 0;
     if(attr(o,c,&p,0x47,"charset-supported","utf-8",5))return 0;
     if(attr(o,c,&p,0x48,"natural-language-configured","en",2))return 0;
