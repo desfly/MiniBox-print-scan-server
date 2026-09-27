@@ -9,7 +9,11 @@ grep -q 'MiniBox print + scan server' "$root/index.html"
 grep -q '/cgi-bin/minibox-status' "$root/minibox/app.js"
 # Do not present a nonexistent TCP/9100 listener or claim physical scan success.
 grep -q 'RAW/JetDirect (порт 9100): не реалізовано' "$root/index.html"
-grep -q 'Фізичне сканування потребує окремого тесту' "$root/index.html"
+grep -q '/cgi-bin/luci/' "$root/index.html"
+grep -q 'Стан фізичного USB-зв’язку з МФУ' "$root/index.html"
+grep -q 'МФУ HP LaserJet M1522n' "$root/cgi-bin/minibox-status"
+grep -q '03f0' "$root/cgi-bin/minibox-status"
+grep -q '4517' "$root/cgi-bin/minibox-status"
 release=$(sed -n 's/^PKG_RELEASE:=//p' package/minibox-mfp/Makefile)
 test "${release:-0}" -ge 13
 grep -Eq 'DEPENDS:=.*\+uhttpd' package/minibox-mfp/Makefile
