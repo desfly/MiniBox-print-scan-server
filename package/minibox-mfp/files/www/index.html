@@ -13,6 +13,8 @@
     .ok { color: #66e3a4; } .warn { color: #ffd166; } .muted { color: #aebbd0; }
     pre { white-space: pre-wrap; margin: 0; font: .92rem ui-monospace, monospace; }
     a { color: #8ec5ff; }
+    .button { display:inline-block; padding:.7rem 1rem; border-radius:9px; background:#244a7c; color:#fff; text-decoration:none; font-weight:600; }
+    .button:hover { filter:brightness(1.12); }
   </style>
 </head>
 <body>
@@ -20,6 +22,11 @@
     <h1>MiniBox print + scan server</h1>
     <div class="muted">Компактна вбудована вебморда · uhttpd · порт 80</div>
   </header>
+  <section>
+    <h2>Керування</h2>
+    <p><a class="button" href="/cgi-bin/luci/">Відкрити стандартну панель OpenWrt (LuCI)</a></p>
+    <p class="muted">Мережа, Wi-Fi, система, резервні копії та оновлення прошивки.</p>
+  </section>
   <section>
     <h2>Стан пристрою</h2>
     <pre id="status" aria-live="polite">Завантаження…</pre>
