@@ -112,6 +112,24 @@ const char *escl_scanner_capabilities_xml(void){
     return xml;
 }
 
+
+const char *escl_scanner_capabilities_xml_identity(const char *uuid,const char *serial,const char *admin_uri){
+    static char out[4096];
+    const char *base=escl_scanner_capabilities_xml();
+    const char *needle="<scan:Platen>";
+    const char *p;
+    size_t head;
+    int n;
+    if(!uuid||!*uuid||!serial||!*serial||!admin_uri||!*admin_uri)return base;
+    p=strstr(base,needle);
+    if(!p)return base;
+    head=(size_t)(p-base);
+    n=snprintf(out,sizeof out,"%.*s<pwg:SerialNumber>%s</pwg:SerialNumber><pwg:Manufacturer>HP</pwg:Manufacturer><scan:UUID>%s</scan:UUID><scan:AdminURI>%s</scan:AdminURI>%s",
+               (int)head,base,serial,uuid,admin_uri,p);
+    if(n<0||(size_t)n>=sizeof out)return base;
+    return out;
+}
+
 const char *escl_scanner_status_xml(int busy){
     static const char idle[]=
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
