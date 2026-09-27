@@ -22,6 +22,9 @@ grep -q 'soapht_m1522_io.c' "$m"
 grep -q 'scan_m1522.c' "$m"
 grep -q 'minibox-scan-diag' "$m"
 grep -q 'libusb_bulk_transfer' src/minibox-usb/scan_m1522.c
+grep -q 'm1522_presence' package/minibox-mfp/Makefile
+grep -q 'minibox_m1522_present' src/minibox-scand/main.c
+grep -q 'Stopped' src/minibox-escl/escl.c
 
 # The verified Windows transcript now locks the real SOAP/HTTP/DIME codec into
 # the production path.  It must stream image records instead of buffering a
