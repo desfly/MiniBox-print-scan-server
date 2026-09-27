@@ -28,10 +28,12 @@ int main(void){
     assert(strstr(caps,"<scan:XResolution>300</scan:XResolution>"));
     assert(!strstr(caps,"application/pdf"));
 
-    status=escl_scanner_status_xml(0);
+    status=escl_scanner_status_xml(0,1);
     assert(strstr(status,"<pwg:State>Idle</pwg:State>"));
     assert(!strstr(status,"<scan:State>"));
-    status=escl_scanner_status_xml(1);
+    status=escl_scanner_status_xml(1,1);
     assert(strstr(status,"<pwg:State>Processing</pwg:State>"));
+    status=escl_scanner_status_xml(0,0);
+    assert(strstr(status,"<pwg:State>Stopped</pwg:State>"));
     return 0;
 }

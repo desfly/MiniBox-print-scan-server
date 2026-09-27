@@ -2,7 +2,7 @@
 #define MINIBOX_IPP_H
 #include <stddef.h>
 #include <stdint.h>
-enum { IPP_OP_PRINT_JOB=0x0002, IPP_OP_VALIDATE_JOB=0x0004, IPP_OP_GET_PRINTER_ATTRIBUTES=0x000b };
+enum { IPP_OP_PRINT_JOB=0x0002, IPP_OP_VALIDATE_JOB=0x0004, IPP_OP_CREATE_JOB=0x0005, IPP_OP_SEND_DOCUMENT=0x0006, IPP_OP_CANCEL_JOB=0x0008, IPP_OP_GET_JOB_ATTRIBUTES=0x0009, IPP_OP_GET_JOBS=0x000a, IPP_OP_GET_PRINTER_ATTRIBUTES=0x000b };
 struct ipp_request { uint8_t major,minor; uint16_t operation; uint32_t request_id; };
 enum ipp_document_kind {
     IPP_DOCUMENT_MALFORMED=-1,
@@ -18,7 +18,7 @@ int ipp_document_format_kind(const unsigned char *buf,size_t len);
 int ipp_check_document_format(const unsigned char *buf,size_t len);
 const char *ipp_operation_name(uint16_t op);
 size_t ipp_build_status(unsigned char *out,size_t cap,const struct ipp_request *r,uint16_t status);
-size_t ipp_build_printer_attributes(unsigned char *out,size_t cap,const struct ipp_request *r,const char *printer_uri);
+size_t ipp_build_printer_attributes(unsigned char *out,size_t cap,const struct ipp_request *r,const char *printer_uri,int mfp_online);
 size_t ipp_build_print_job_response(unsigned char *out,size_t cap,
                                     const struct ipp_request *r,
                                     uint32_t job_id,const char *job_uri);

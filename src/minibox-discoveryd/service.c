@@ -60,7 +60,11 @@ int mb_service_add_escl_identity(mb_service_t *s,
     char adminurl[160];
     int rc;
     if (!s || !uuid || !*uuid || !hostname || !*hostname) return -EINVAL;
-    if (strcmp(s->type, "_uscan._tcp") && strcmp(s->type, "_uscans._tcp")) return 0;
+    /* Keep the same stable UUID/admin URL across eSCL and IPP DNS-SD records.
+     * Windows and other driverless clients use UUID to correlate service
+     * advertisements with the same physical MFP. */
+    if (strcmp(s->type, "_uscan._tcp") && strcmp(s->type, "_uscans._tcp") &&
+        strcmp(s->type, "_ipp._tcp") && strcmp(s->type, "_print._sub._ipp._tcp")) return 0;
     if (snprintf(adminurl, sizeof(adminurl), "http://%s.local/", hostname) >=
         (int)sizeof(adminurl)) return -E2BIG;
     rc = append_txt_kv(s->txt, sizeof(s->txt), "UUID", uuid);

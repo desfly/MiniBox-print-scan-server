@@ -8,6 +8,23 @@ model='Gainstrong MiniBox V1.0'
 printf 'Модель: %s\n' "$model"
 printf 'Вебінтерфейс: доступний\n'
 
+
+mfp_state='відсутнє'
+mfp_usb=''
+for d in /sys/bus/usb/devices/*; do
+  [ -r "$d/idVendor" ] || continue
+  [ -r "$d/idProduct" ] || continue
+  vendor="$(cat "$d/idVendor" 2>/dev/null)"
+  product="$(cat "$d/idProduct" 2>/dev/null)"
+  if [ "$vendor" = '03f0' ] && [ "$product" = '4517' ]; then
+    mfp_state='підключено'
+    mfp_usb='03f0:4517'
+    break
+  fi
+done
+printf 'МФУ HP LaserJet M1522n: %s%s\n' "$mfp_state" "${mfp_usb:+ ($mfp_usb)}"
+printf 'Фізичний друк/сканування: %s\n' "$([ "$mfp_state" = 'підключено' ] && printf 'доступні' || printf 'недоступні')"
+
 for service in minibox-printerd minibox-scand minibox-discoveryd; do
   if "/etc/init.d/$service" running >/dev/null 2>&1; then
     state='працює'

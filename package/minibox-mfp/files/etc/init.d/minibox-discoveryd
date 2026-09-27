@@ -3,7 +3,103 @@ USE_PROCD=1
 START=92
 STOP=10
 
+MINIBOX_LAN_IP="192.168.55.251"
+MINIBOX_LAN_CIDR="192.168.55.251/24"
+MINIBOX_WIFI_SSID="Nitros"
+
+find_zone_by_name() {
+  local want="$1" s
+  for s in $(uci -q show firewall | sed -n "s/^firewall\.\([^=]*\)=zone$/\1/p"); do
+    [ "$(uci -q get firewall.$s.name)" = "$want" ] && {
+      echo "$s"
+      return 0
+    }
+  done
+  return 1
+}
+
+remove_old_br_lan_devices() {
+  local s
+  for s in $(uci -q show network | sed -n "s/^network\.\([^=]*\)=device$/\1/p"); do
+    [ "$s" = "br_lan" ] && continue
+    [ "$(uci -q get network.$s.name)" = "br-lan" ] && uci -q delete network.$s
+  done
+}
+
+ensure_network_defaults() {
+  local lan_zone wan_zone key
+
+  # Keep an already-provisioned WPA key across normal sysupgrade.  The key is
+  # intentionally not stored in Git or baked into public firmware artifacts.
+  key="$(uci -q get wireless.default_radio0.key)"
+
+  remove_old_br_lan_devices
+
+  uci -q delete network.wan
+  uci -q delete network.wan6
+
+  uci set network.br_lan='device'
+  uci set network.br_lan.name='br-lan'
+  uci set network.br_lan.type='bridge'
+  uci -q delete network.br_lan.ports
+  uci add_list network.br_lan.ports='eth0'
+  uci add_list network.br_lan.ports='eth1'
+
+  uci set network.lan='interface'
+  uci set network.lan.device='br-lan'
+  uci set network.lan.proto='static'
+  uci -q delete network.lan.ipaddr
+  uci add_list network.lan.ipaddr="$MINIBOX_LAN_CIDR"
+  uci set network.lan.metric='100'
+  uci set network.lan.auto='1'
+  uci -q delete network.lan.gateway
+  uci -q delete network.lan.dns
+
+  uci set network.wwan='interface'
+  uci set network.wwan.proto='dhcp'
+  uci set network.wwan.metric='10'
+  uci set network.wwan.auto='1'
+
+  uci set wireless.radio0.disabled='0'
+  uci set wireless.radio0.channel='auto'
+  uci set wireless.default_radio0='wifi-iface'
+  uci set wireless.default_radio0.device='radio0'
+  uci set wireless.default_radio0.mode='sta'
+  uci set wireless.default_radio0.network='wwan'
+  uci set wireless.default_radio0.ssid="$MINIBOX_WIFI_SSID"
+  uci set wireless.default_radio0.encryption='psk2'
+  uci set wireless.default_radio0.disabled='0'
+  [ -n "$key" ] && uci set wireless.default_radio0.key="$key"
+
+  lan_zone="$(find_zone_by_name lan)"
+  if [ -n "$lan_zone" ]; then
+    uci -q del_list firewall.$lan_zone.network='wwan'
+    uci add_list firewall.$lan_zone.network='wwan'
+  fi
+
+  wan_zone="$(find_zone_by_name wan)"
+  [ -n "$wan_zone" ] && uci -q del_list firewall.$wan_zone.network='wwan'
+
+  uci commit network
+  uci commit wireless
+  uci commit firewall
+
+  ubus call network reload >/dev/null 2>&1 || /etc/init.d/network reload
+  wifi reload >/dev/null 2>&1
+  /etc/init.d/firewall reload >/dev/null 2>&1
+
+  # LAN and Wi-Fi deliberately use the validated 192.168.55.0/24 management
+  # subnet.  Force replies sourced from .251 back out the Ethernet bridge so
+  # direct-cable management remains deterministic while Wi-Fi is also up.
+  sleep 2
+  ip rule del from "$MINIBOX_LAN_IP/32" table 251 priority 2510 2>/dev/null || true
+  ip rule add from "$MINIBOX_LAN_IP/32" table 251 priority 2510 2>/dev/null || true
+  ip route replace 192.168.55.0/24 dev br-lan src "$MINIBOX_LAN_IP" table 251 2>/dev/null || true
+}
+
 start_service() {
+  ensure_network_defaults
+
   procd_open_instance
   procd_set_param command /usr/sbin/minibox-discoveryd /etc/minibox/services.d
   procd_set_param respawn 3600 5 5

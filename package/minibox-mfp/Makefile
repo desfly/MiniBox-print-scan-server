@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=21
+PKG_RELEASE:=30
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -38,18 +38,21 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl.c \
 		$(PKG_BUILD_DIR)/minibox-usb/stream.c \
 		$(PKG_BUILD_DIR)/minibox-usb/libusb_m1522.c \
-		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c -lusb-1.0
+		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c \
+		$(PKG_BUILD_DIR)/minibox-usb/m1522_presence.c -lusb-1.0
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-scand \
 		$(PKG_BUILD_DIR)/minibox-scand/main.c \
 		$(PKG_BUILD_DIR)/minibox-scand/scan_session.c \
 		$(PKG_BUILD_DIR)/minibox-scand/scan_backend.c \
 		$(PKG_BUILD_DIR)/minibox-scand/m1522_backend.c \
 		$(PKG_BUILD_DIR)/minibox-escl/escl.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_identity.c \
 		$(PKG_BUILD_DIR)/minibox-printerd/http_body.c \
 		$(PKG_BUILD_DIR)/minibox-scan/soapht_transport.c \
 		$(PKG_BUILD_DIR)/minibox-scan/soapht_m1522_io.c \
 		$(PKG_BUILD_DIR)/minibox-scan/soapht_codec.c \
-		$(PKG_BUILD_DIR)/minibox-usb/scan_m1522.c -lusb-1.0
+		$(PKG_BUILD_DIR)/minibox-usb/scan_m1522.c \
+		$(PKG_BUILD_DIR)/minibox-usb/m1522_presence.c -lusb-1.0
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-discoveryd \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/main.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/service.c \
@@ -99,6 +102,9 @@ define Package/minibox-mfp/install
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-endpoints $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/minibox-scan-usb $(1)/usr/sbin/
 
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/etc/uci-defaults/90-minibox-recovery-network $(1)/etc/uci-defaults/
+
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-printerd $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-scand $(1)/etc/init.d/
@@ -107,6 +113,7 @@ define Package/minibox-mfp/install
 
 	$(INSTALL_DIR) $(1)/etc/minibox/services.d
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-printer.service $(1)/etc/minibox/services.d/
+	$(INSTALL_CONF) ./files/etc/minibox/services.d/ipp-print-subtype.service $(1)/etc/minibox/services.d/
 	$(INSTALL_CONF) ./files/etc/minibox/services.d/scanner.service $(1)/etc/minibox/services.d/
 
 	$(INSTALL_DIR) $(1)/usr/libexec/minibox-mfp

@@ -14,6 +14,8 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-discoveryd/wsd.c tests/t
 /tmp/test-wsd
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-escl/escl.c tests/test-escl.c -o /tmp/test-escl
 /tmp/test-escl
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/m1522_presence.c tests/test-m1522-presence.c -o /tmp/test-m1522-presence
+/tmp/test-m1522-presence
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c tests/test-soapht-transport.c -o /tmp/test-soapht
 /tmp/test-soapht
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c src/minibox-scan/soapht_codec.c tests/test_soapht_codec.c -o /tmp/test-soapht-codec

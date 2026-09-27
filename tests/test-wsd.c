@@ -23,7 +23,7 @@ int main(void){
  assert(mb_wsd_parse(probe,strlen(probe),&r)==0);
  assert(r.kind==MB_WSD_PROBE&&mb_wsd_is_print_probe(&r)&&mb_wsd_probe_supported(&r));
  n=mb_wsd_build_match(&r,endpoint,xaddr,response_id,1,2,out,sizeof out);assert(n>0);
- contains(out,"/ProbeMatches");contains(out,"p:PrintDeviceType");contains(out,"scn:ScanDeviceType");
+ contains(out,"/ProbeMatches");contains(out,"p:PrintDeviceType");contains(out,"scn:ScanDeviceType"); contains(out,"xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\""); assert(strstr(out,"windows/2006/08/wdp/scan")==0);
  contains(out,r.message_id);contains(out,endpoint);contains(out,xaddr);contains(out,"MetadataVersion>1");
 
  assert(mb_wsd_parse(scan_probe,strlen(scan_probe),&r)==0);
@@ -57,6 +57,14 @@ int main(void){
  contains(out,"001122334455");
  contains(out,"http://192.168.55.250/");
  contains(out,endpoint);
+ contains(out,"<dp:Types>dp:Device</dp:Types>");
+ contains(out,"<dp:Hosted><a:EndpointReference><a:Address>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#print</a:Address>");
+ contains(out,"<dp:Types>p:PrintDeviceType</dp:Types>");
+ contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#print</dp:ServiceId>");
+ contains(out,"<dp:Hosted><a:EndpointReference><a:Address>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</a:Address>");
+ contains(out,"<dp:Types>scn:ScanDeviceType</dp:Types>"); contains(out,"xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\""); assert(strstr(out,"windows/2006/08/wdp/scan")==0);
+ contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</dp:ServiceId>");
+ assert(strstr(out,"<dp:Types>dp:Device p:PrintDeviceType scn:ScanDeviceType</dp:Types>")==0);
 
  puts("WSD parse/match contract OK");
  return 0;
