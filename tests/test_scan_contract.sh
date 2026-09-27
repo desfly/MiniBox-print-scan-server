@@ -29,6 +29,10 @@ grep -q 'libusb_bulk_transfer' src/minibox-usb/scan_m1522.c
 grep -q 'verified_m1522_codec' "$c"
 grep -q 'Transfer-Encoding: chunked' "$c"
 grep -q 'image/jpeg' "$c"
+grep -q 'escl_scanner_capabilities_xml_identity' src/minibox-scand/main.c
+grep -q 'pwg:SerialNumber' src/minibox-escl/escl.c
+grep -q 'scan:UUID' src/minibox-escl/escl.c
+grep -q 'scan:AdminURI' src/minibox-escl/escl.c
 grep -Eq 'minibox_soapht_codec[[:space:]]*=[[:space:]]*&verified_m1522_codec' "$c"
 
 grep -q 'M1522_SOAPHT_CLASS' "$d"
