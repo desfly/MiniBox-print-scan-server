@@ -130,12 +130,18 @@ const char *escl_scanner_capabilities_xml_identity(const char *uuid,const char *
     return out;
 }
 
-const char *escl_scanner_status_xml(int busy){
+const char *escl_scanner_status_xml(int busy,int mfp_online){
     static const char idle[]=
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<scan:ScannerStatus xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\" "
       "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">"
       "<pwg:Version>2.63</pwg:Version><pwg:State>Idle</pwg:State>"
+      "</scan:ScannerStatus>\n";
+    static const char stopped[]=
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<scan:ScannerStatus xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\" "
+      "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">"
+      "<pwg:Version>2.63</pwg:Version><pwg:State>Stopped</pwg:State>"
       "</scan:ScannerStatus>\n";
     static const char processing[]=
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -143,5 +149,5 @@ const char *escl_scanner_status_xml(int busy){
       "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">"
       "<pwg:Version>2.63</pwg:Version><pwg:State>Processing</pwg:State>"
       "</scan:ScannerStatus>\n";
-    return busy?processing:idle;
+    return !mfp_online?stopped:(busy?processing:idle);
 }
