@@ -45,6 +45,14 @@ static int qname_local_is(const char *s,size_t n,const char *local){
     }
     return 0;
 }
+int mb_wsd_extract_action(const char *xml,size_t len,char *out,size_t cap){
+    const char *env,*env_end;size_t env_len;
+    if(!xml||!out||!cap||!len||len>65535)return -1;
+    env=element(xml,len,"Envelope");if(!env)return -2;
+    env_end=element_end(env,len-(size_t)(env-xml),"Envelope");if(!env_end)return -2;
+    env_len=(size_t)(env_end-env);
+    return text_of(env,env_len,"Action",out,cap)?-3:0;
+}
 int mb_wsd_extract_message_id(const char *xml,size_t len,char *out,size_t cap){
     const char *env,*env_end;size_t env_len;
     if(!xml||!out||!cap||!len||len>65535)return -1;
@@ -256,6 +264,46 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
       "#scan</dp:ServiceId></dp:Hosted>"
       "</dp:Relationship></x:MetadataSection>"
       "</x:Metadata></s:Body></s:Envelope>")||
+       p>=cap)return -2;
+    out[p]=0;return (int)p;
+}
+
+
+int mb_wsd_build_get_printer_elements_response(const char *request_message_id,
+                                               const char *response_message_id,
+                                               const char *serial,
+                                               char *out,size_t cap){
+    size_t p=0;
+    if(!request_message_id||!response_message_id||!serial||!out||cap<2)return -1;
+    if(!uriish(request_message_id)||!uriish(response_message_id))return -1;
+    if(add(out,cap,&p,
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+      "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\""
+      " xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\""
+      " xmlns:wprt=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\">"
+      "<s:Header><a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
+      "<a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/print/GetPrinterElementsResponse</a:Action>"
+      "<a:MessageID>")||
+       xml_text(out,cap,&p,response_message_id)||
+       add(out,cap,&p,"</a:MessageID><a:RelatesTo>")||
+       xml_text(out,cap,&p,request_message_id)||
+       add(out,cap,&p,
+      "</a:RelatesTo></s:Header><s:Body><wprt:GetPrinterElementsResponse>"
+      "<wprt:PrinterElements>"
+      "<wprt:ElementData Name=\"wprt:PrinterDescription\" Valid=\"true\">"
+      "<wprt:PrinterDescription>"
+      "<wprt:ColorSupported>false</wprt:ColorSupported>"
+      "<wprt:DeviceId>MFG:HP;MDL:LaserJet M1522n MFP;CMD:PCL;</wprt:DeviceId>"
+      "<wprt:MultipleDocumentJobsSupported>false</wprt:MultipleDocumentJobsSupported>"
+      "<wprt:PrinterName xml:lang=\"en-US\">HP LaserJet M1522n @ MiniBox</wprt:PrinterName>"
+      "<wprt:PrinterInfo xml:lang=\"en-US\">MiniBox network MFP bridge</wprt:PrinterInfo>"
+      "<wprt:PrinterLocation xml:lang=\"en-US\">MiniBox</wprt:PrinterLocation>"
+      "<wprt:SerialNumber>")||
+       xml_text(out,cap,&p,serial)||
+       add(out,cap,&p,
+      "</wprt:SerialNumber></wprt:PrinterDescription>"
+      "</wprt:ElementData></wprt:PrinterElements>"
+      "</wprt:GetPrinterElementsResponse></s:Body></s:Envelope>")||
        p>=cap)return -2;
     out[p]=0;return (int)p;
 }
