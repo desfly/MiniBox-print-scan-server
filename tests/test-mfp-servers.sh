@@ -16,7 +16,10 @@ from pathlib import Path
 data = Path('/tmp/ipp.out').read_bytes()
 assert len(data) > 9, f'Get-Printer-Attributes response too short: {len(data)}'
 assert data[:8] == b'\x02\x00\x00\x00\x00\x00\x00\x01', data[:8].hex()
-assert data[8] == 0x01, f'expected operation-attributes group, got 0x{data[8]:02x}'\nassert b'attributes-charset' in data\nassert b'attributes-natural-language' in data\nassert b'\\x04' in data[9:], 'IPP response missing printer-attributes group'
+assert data[8] == 0x01, f'expected operation-attributes group, got 0x{data[8]:02x}'
+assert b'attributes-charset' in data
+assert b'attributes-natural-language' in data
+assert bytes([0x04]) in data[9:], 'IPP response missing printer-attributes group'
 for value in (
     b'printer-name',
     b'HP LaserJet M1522n @ MiniBox',
