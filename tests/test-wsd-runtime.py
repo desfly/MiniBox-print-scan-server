@@ -49,7 +49,7 @@ try:
     types = match.find("./d:Types", ns)
     assert address is not None and address.text.startswith("urn:uuid:")
     assert xaddrs is not None and xaddrs.text.startswith("http://")
-    assert xaddrs.text.endswith("/cgi-bin/minibox-wsd")
+    assert xaddrs.text.endswith("/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery")
     assert types is not None and "PrintDeviceType" in types.text and "ScanDeviceType" in types.text
     endpoint = address.text
 
