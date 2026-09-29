@@ -119,12 +119,13 @@ define Package/minibox-mfp/install
 	$(INSTALL_DIR) $(1)/usr/libexec/minibox-mfp
 	$(CP) ./files/usr/libexec/minibox-mfp/* $(1)/usr/libexec/minibox-mfp/
 
-	$(INSTALL_DIR) $(1)/www/minibox $(1)/www/cgi-bin
+	$(INSTALL_DIR) $(1)/www/minibox $(1)/www/cgi-bin $(1)/www/StableWSDiscoveryEndpoint
 	$(INSTALL_DATA) ./files/www/index.html $(1)/www/index.html
 	$(INSTALL_DATA) ./files/www/index.html $(1)/www/minibox/index.html
 	$(INSTALL_DATA) ./files/www/minibox/app.js $(1)/www/minibox/app.js
 	$(INSTALL_BIN) ./files/www/cgi-bin/minibox-status $(1)/www/cgi-bin/minibox-status
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/cgi-bin/minibox-wsd
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery
 endef
 
 $(eval $(call BuildPackage,minibox-mfp))
