@@ -15,7 +15,7 @@ int main(void){
  const char *outside_body="<s:Envelope><s:Header><a:MessageID>urn:uuid:55555555-2222-3333-4444-555555555555</a:MessageID></s:Header></s:Envelope><s:Body><d:Probe><d:Types>p:PrintDeviceType</d:Types></d:Probe></s:Body>";
  struct mb_wsd_request r; char out[8192],message_id[192]; int n;
  const char *endpoint="urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
- const char *xaddr="http://192.168.55.250/cgi-bin/minibox-wsd";
+ const char *xaddr="http://192.168.55.250/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery";
  const char *response_id="urn:uuid:99999999-aaaa-4bbb-8ccc-dddddddddddd";
 
  assert(mb_wsd_extract_message_id(probe,strlen(probe),message_id,sizeof message_id)==0);
