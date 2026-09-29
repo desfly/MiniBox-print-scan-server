@@ -170,12 +170,13 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     return p;
 }
 
-size_t ipp_build_print_job_response(unsigned char *o,size_t cap,
-                                    const struct ipp_request *r,
-                                    uint32_t job_id,const char *job_uri){
+size_t ipp_build_job_response(unsigned char *o,size_t cap,
+                              const struct ipp_request *r,
+                              uint32_t job_id,const char *job_uri,
+                              uint32_t job_state){
     size_t p;
     const unsigned char group=0x02,end=0x03;
-    unsigned char id[4],state[4]={0,0,0,9}; /* completed */
+    unsigned char id[4],state[4]={(unsigned char)(job_state>>24),(unsigned char)(job_state>>16),(unsigned char)(job_state>>8),(unsigned char)job_state};
     if(!o||!r||!job_id||!job_uri||!job_uri[0])return 0;
     if(!(p=ipp_build_status(o,cap,r,0)))return 0;
     p--; /* Replace end-of-attributes with the required Job Attributes group. */
