@@ -66,6 +66,23 @@ int main(void){
  contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</dp:ServiceId>");
  assert(strstr(out,"<dp:Types>dp:Device p:PrintDeviceType scn:ScanDeviceType</dp:Types>")==0);
 
- puts("WSD parse/match contract OK");
+ {
+   const char *gpe="<s:Envelope><s:Header><a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/print/GetPrinterElements</a:Action><a:MessageID>urn:uuid:44444444-2222-3333-4444-555555555555</a:MessageID></s:Header><s:Body><wprt:GetPrinterElementsRequest/></s:Body></s:Envelope>";
+   char action[256];
+   assert(mb_wsd_extract_action(gpe,strlen(gpe),action,sizeof action)==0);
+   assert(strstr(action,"/GetPrinterElements")!=0);
+   assert(mb_wsd_extract_message_id(gpe,strlen(gpe),message_id,sizeof message_id)==0);
+   n=mb_wsd_build_get_printer_elements_response(message_id,response_id,"0CEFAFCFC53D",out,sizeof out);
+   assert(n>0);
+   contains(out,"/GetPrinterElementsResponse");
+   contains(out,"<a:RelatesTo>urn:uuid:44444444-2222-3333-4444-555555555555</a:RelatesTo>");
+   contains(out,"Name=\"wprt:PrinterDescription\" Valid=\"true\"");
+   contains(out,"MFG:HP;MDL:LaserJet M1522n MFP;CMD:PCL;");
+   contains(out,"<wprt:ColorSupported>false</wprt:ColorSupported>");
+   contains(out,"<wprt:MultipleDocumentJobsSupported>false</wprt:MultipleDocumentJobsSupported>");
+   contains(out,"HP LaserJet M1522n @ MiniBox");
+   contains(out,"0CEFAFCFC53D");
+ }
+ puts("WSD parse/match + GetPrinterElements contract OK");
  return 0;
 }
