@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=31
+PKG_RELEASE:=32
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -16,6 +16,21 @@ endef
 define Package/minibox-mfp/description
  Minimal IPP/eSCL/mDNS/WSD discovery runtime and libusb backend for HP LaserJet M1522n.
  No CUPS and no usblp dependency.
+endef
+
+define Package/minibox-mfp/postinst
+#!/bin/sh
+# Windows probes this canonical WSD path. Keep uhttpd's existing CGI prefix
+# and route only this URL to the proven CGI handler.
+if [ -z "${IPKG_INSTROOT}" ] && [ -f /etc/config/uhttpd ]; then
+	stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
+	if ! uci -q get uhttpd.main.alias | grep -Fqx "$stable_alias"; then
+		uci add_list uhttpd.main.alias="$stable_alias"
+		uci commit uhttpd
+	fi
+	/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+fi
+exit 0
 endef
 
 define Build/Prepare
@@ -119,13 +134,12 @@ define Package/minibox-mfp/install
 	$(INSTALL_DIR) $(1)/usr/libexec/minibox-mfp
 	$(CP) ./files/usr/libexec/minibox-mfp/* $(1)/usr/libexec/minibox-mfp/
 
-	$(INSTALL_DIR) $(1)/www/minibox $(1)/www/cgi-bin $(1)/www/StableWSDiscoveryEndpoint
+	$(INSTALL_DIR) $(1)/www/minibox $(1)/www/cgi-bin
 	$(INSTALL_DATA) ./files/www/index.html $(1)/www/index.html
 	$(INSTALL_DATA) ./files/www/index.html $(1)/www/minibox/index.html
 	$(INSTALL_DATA) ./files/www/minibox/app.js $(1)/www/minibox/app.js
 	$(INSTALL_BIN) ./files/www/cgi-bin/minibox-status $(1)/www/cgi-bin/minibox-status
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/cgi-bin/minibox-wsd
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery
 endef
 
 $(eval $(call BuildPackage,minibox-mfp))
