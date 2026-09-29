@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=32
+PKG_RELEASE:=33
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -119,6 +119,7 @@ define Package/minibox-mfp/install
 
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/90-minibox-recovery-network $(1)/etc/uci-defaults/
+	$(INSTALL_BIN) ./files/etc/uci-defaults/91-minibox-wsd $(1)/etc/uci-defaults/
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-printerd $(1)/etc/init.d/
@@ -140,6 +141,11 @@ define Package/minibox-mfp/install
 	$(INSTALL_DATA) ./files/www/minibox/app.js $(1)/www/minibox/app.js
 	$(INSTALL_BIN) ./files/www/cgi-bin/minibox-status $(1)/www/cgi-bin/minibox-status
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/cgi-bin/minibox-wsd
+
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DATA) ./files/usr/share/luci/menu.d/minibox.json $(1)/usr/share/luci/menu.d/minibox.json
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/minibox
+	$(INSTALL_DATA) ./files/www/luci-static/resources/view/minibox/home.js $(1)/www/luci-static/resources/view/minibox/home.js
 endef
 
 $(eval $(call BuildPackage,minibox-mfp))
