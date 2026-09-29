@@ -16,7 +16,10 @@ from pathlib import Path
 data = Path('/tmp/ipp.out').read_bytes()
 assert len(data) > 9, f'Get-Printer-Attributes response too short: {len(data)}'
 assert data[:8] == b'\x02\x00\x00\x00\x00\x00\x00\x01', data[:8].hex()
-assert data[8] == 0x04, f'expected printer-attributes group, got 0x{data[8]:02x}'
+assert data[8] == 0x01, f'expected operation-attributes group, got 0x{data[8]:02x}'
+assert b'attributes-charset' in data
+assert b'attributes-natural-language' in data
+assert bytes([0x04]) in data[9:], 'IPP response missing printer-attributes group'
 for value in (
     b'printer-name',
     b'HP LaserJet M1522n @ MiniBox',
@@ -34,6 +37,7 @@ printf '\002\000\000\002\000\000\000\002\003\033EHello MiniBox\014\033E' >/tmp/p
 printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
 curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
 cmp /tmp/document.expected /tmp/printed.bin
+python3 tests/test-windows-ipp-job.py
 python3 tests/test-large-print.py >/tmp/large.size
 [ "$(cat /tmp/large.size)" -gt 65536 ]
 cmp /tmp/large.expected /tmp/printed.bin
