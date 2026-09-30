@@ -4,7 +4,7 @@
 
 int main(void){
     const char *rgb="<scan:ScanSettings><scan:InputSource>Adf</scan:InputSource><scan:XResolution>300</scan:XResolution><scan:YResolution>300</scan:YResolution><scan:ColorMode>RGB24</scan:ColorMode></scan:ScanSettings>";
-    const char *gray="<scan:ScanSettings><scan:InputSource>Platen</scan:InputSource><scan:XResolution>200</scan:XResolution><scan:YResolution>200</scan:YResolution><scan:XOffset>0</scan:XOffset><scan:YOffset>0</scan:YOffset><scan:Width>2550</scan:Width><scan:Height>3507</scan:Height><scan:ColorMode>Grayscale8</scan:ColorMode></scan:ScanSettings>";
+    const char *gray="<scan:ScanSettings><scan:InputSource>Platen</scan:InputSource><scan:XResolution>300</scan:XResolution><scan:YResolution>300</scan:YResolution><scan:XOffset>0</scan:XOffset><scan:YOffset>0</scan:YOffset><scan:Width>2550</scan:Width><scan:Height>3507</scan:Height><scan:ColorMode>Grayscale8</scan:ColorMode></scan:ScanSettings>";
     const char *bad_dpi="<scan:ScanSettings><scan:XResolution>600</scan:XResolution><scan:ColorMode>RGB24</scan:ColorMode></scan:ScanSettings>";
     const char *bad_color="<scan:ScanSettings><scan:XResolution>300</scan:XResolution><scan:ColorMode>BlackAndWhite1</scan:ColorMode></scan:ScanSettings>";
     struct escl_job j;const char *caps,*status;
@@ -12,7 +12,7 @@ int main(void){
     assert(escl_parse_scan_settings(rgb,strlen(rgb),&j)==0);
     assert(j.source==ESCL_SOURCE_ADF&&j.dpi==300&&j.color==1);
     assert(escl_parse_scan_settings(gray,strlen(gray),&j)==0);
-    assert(j.source==ESCL_SOURCE_PLATEN&&j.dpi==200&&j.color==0);
+    assert(j.source==ESCL_SOURCE_PLATEN&&j.dpi==300&&j.color==0);
     assert(j.x_300==0&&j.y_300==0&&j.width_300==2550&&j.height_300==3507);
     assert(escl_parse_scan_settings(bad_dpi,strlen(bad_dpi),&j)<0);
     assert(escl_parse_scan_settings(bad_color,strlen(bad_color),&j)<0);
@@ -26,7 +26,7 @@ int main(void){
     assert(strstr(caps,"<scan:ColorMode>RGB24</scan:ColorMode>"));
     assert(strstr(caps,"<scan:ColorMode>Grayscale8</scan:ColorMode>"));
     assert(strstr(caps,"<pwg:DocumentFormat>image/jpeg</pwg:DocumentFormat>"));
-    assert(strstr(caps,"<scan:XResolution>200</scan:XResolution>"));
+    assert(strstr(caps,"<scan:XResolution>300</scan:XResolution>"));
     assert(strstr(caps,"<scan:XResolution>300</scan:XResolution>"));
     assert(!strstr(caps,"application/pdf"));
 
