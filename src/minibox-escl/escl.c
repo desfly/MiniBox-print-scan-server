@@ -27,7 +27,7 @@ int escl_parse_scan_settings(const char *xml,size_t len,struct escl_job *job){
     if(!xml||!job||!len||len>65535)return -1;
     copy=malloc(len+1);if(!copy)return -2;
     memcpy(copy,xml,len);copy[len]=0;
-    job->source=ESCL_SOURCE_PLATEN;job->dpi=300;job->color=1;
+    job->source=ESCL_SOURCE_PLATEN;job->dpi=300;job->color=1;\n    job->x_300=0;job->y_300=0;job->width_300=2550;job->height_300=3507;
 
     r=text_field(copy,"InputSource",field,sizeof field);
     if(r<0){free(copy);return -3;}
@@ -41,7 +41,7 @@ int escl_parse_scan_settings(const char *xml,size_t len,struct escl_job *job){
     if(r<0){free(copy);return -4;}
     if(r==0){
         char *end=0;unsigned long v=strtoul(field,&end,10);
-        if(!end||*end||v!=300){free(copy);return -4;}
+        if(!end||*end||(v!=200&&v!=300)){free(copy);return -4;}
         job->dpi=(unsigned)v;
     }
 
@@ -50,6 +50,22 @@ int escl_parse_scan_settings(const char *xml,size_t len,struct escl_job *job){
     if(r==0){
         char *end=0;unsigned long v=strtoul(field,&end,10);
         if(!end||*end||v!=job->dpi){free(copy);return -4;}
+    }
+
+    {
+        static const char *names[]={"XOffset","YOffset","Width","Height"};
+        unsigned *values[]={&job->x_300,&job->y_300,&job->width_300,&job->height_300};
+        size_t i;
+        for(i=0;i<4;i++){
+            r=text_field(copy,names[i],field,sizeof field);
+            if(r<0){free(copy);return -6;}
+            if(r==0){
+                char *end=0;unsigned long v=strtoul(field,&end,10);
+                if(!end||*end||v>20000){free(copy);return -6;}
+                *values[i]=(unsigned)v;
+            }
+        }
+        if(!job->width_300||!job->height_300){free(copy);return -6;}
     }
 
     r=text_field(copy,"ColorMode",field,sizeof field);
