@@ -100,7 +100,9 @@ int main(void)
     assert(strstr(m.requests,"<InputSource>Platen</InputSource>"));
     assert(strstr(m.requests,"<ImagesToTransfer>0</ImagesToTransfer>"));
     assert(strstr(m.requests,"<InputMediaSize><Width>8500</Width><Height>11690</Height></InputMediaSize>"));
-    assert(strstr(m.requests,"<ScanRegionWidth>8500</ScanRegionWidth><ScanRegionHeight>11690</ScanRegionHeight>"));\n    assert(strstr(m.requests,"<ColorProcessing>RGB24</ColorProcessing>"));\n    assert(strstr(m.requests,"<Resolution><Width>200</Width><Height>200</Height></Resolution>"));
+    assert(strstr(m.requests,"<ScanRegionWidth>8500</ScanRegionWidth><ScanRegionHeight>11690</ScanRegionHeight>"));
+    assert(strstr(m.requests,"<ColorProcessing>RGB24</ColorProcessing>"));
+    assert(strstr(m.requests,"<Resolution><Width>200</Width><Height>200</Height></Resolution>"));
     assert(strstr(m.requests,"RetrieveImageRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     assert(!minibox_soapht_codec->finish(&s));
