@@ -297,9 +297,9 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
         "<wscn:CreateScanJobRequest><ScanIdentifier></ScanIdentifier><ScanTicket>"
         "<JobDescription></JobDescription><DocumentParameters><Format>jfif</Format>"
-        "<CompressionQualityFactor>0</CompressionQualityFactor><ImagesToTransfer>%s</ImagesToTransfer>"
+        "<CompressionQualityFactor>0</CompressionQualityFactor><ImagesToTransfer>0</ImagesToTransfer>"
         "<InputSource>%s</InputSource><ContentType>Auto</ContentType><InputSize>"
-        "<InputMediaSize><Width>2550</Width><Height>3508</Height></InputMediaSize>"
+        "<InputMediaSize><Width>%u</Width><Height>%u</Height></InputMediaSize>"
         "<DocumentSizeAutoDetect>false</DocumentSizeAutoDetect></InputSize><Exposure>"
         "<AutoExposure>false</AutoExposure><ExposureSettings><Contrast>0</Contrast>"
         "</ExposureSettings></Exposure><MediaSides><MediaFront><ScanRegion>"
@@ -310,7 +310,7 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "</DocumentParameters><RetrieveImageTimeout>300</RetrieveImageTimeout>"
         "<ScanManufacturingParameters><DisableImageProcessing>false</DisableImageProcessing>"
         "</ScanManufacturingParameters></ScanTicket></wscn:CreateScanJobRequest>"
-        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", images, source, color, dpi, dpi);
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", source, width, height, x, y, width, height, color, dpi, dpi);
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
