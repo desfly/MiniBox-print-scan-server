@@ -18,6 +18,10 @@ on:
       - 'src/minibox-escl/escl.c'
       - 'src/minibox-escl/escl.h'
       - 'tests/test-escl.c'
+      - 'src/minibox-scand/main.c'
+      - 'src/minibox-scand/scan_session.c'
+      - 'src/minibox-scand/scan_backend.c'
+      - 'tests/test_scand_http.c'
       - '.github/workflows/soapht-unit.yml'
   workflow_dispatch:
 
@@ -43,3 +47,7 @@ jobs:
         run: gcc -std=c99 -Wall -Wextra -Werror tests/test-escl.c src/minibox-escl/escl.c -o /tmp/test_escl
       - name: Run eSCL settings test
         run: /tmp/test_escl
+      - name: Compile eSCL HTTP path test
+        run: gcc -std=c99 -Wall -Wextra -Werror tests/test_scand_http.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c src/minibox-escl/escl.c src/minibox-printerd/http_body.c -o /tmp/test_scand_http
+      - name: Run eSCL HTTP path test
+        run: /tmp/test_scand_http
