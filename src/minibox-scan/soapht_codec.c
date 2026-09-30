@@ -285,7 +285,8 @@ static const char get_elements_xml[] =
 static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
 {
     const char *source = job->source == ESCL_SOURCE_ADF ? "ADF" : "Platen";
-    const char *color = job->color ? "RGB24" : "GrayScale8";
+    const char *color = job->color ? "RGB24" : "Grayscale8";
+    const char *images = job->source == ESCL_SOURCE_PLATEN ? "1" : "0";
     unsigned dpi = job->dpi >= 75 && job->dpi <= 1200 ? job->dpi : 300;
     int n = snprintf(out, cap,
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -296,20 +297,20 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
         "<wscn:CreateScanJobRequest><ScanIdentifier></ScanIdentifier><ScanTicket>"
         "<JobDescription></JobDescription><DocumentParameters><Format>jfif</Format>"
-        "<CompressionQualityFactor>0</CompressionQualityFactor><ImagesToTransfer>0</ImagesToTransfer>"
+        "<CompressionQualityFactor>0</CompressionQualityFactor><ImagesToTransfer>%s</ImagesToTransfer>"
         "<InputSource>%s</InputSource><ContentType>Auto</ContentType><InputSize>"
-        "<InputMediaSize><Width>8500</Width><Height>11690</Height></InputMediaSize>"
+        "<InputMediaSize><Width>2550</Width><Height>3508</Height></InputMediaSize>"
         "<DocumentSizeAutoDetect>false</DocumentSizeAutoDetect></InputSize><Exposure>"
         "<AutoExposure>false</AutoExposure><ExposureSettings><Contrast>0</Contrast>"
         "</ExposureSettings></Exposure><MediaSides><MediaFront><ScanRegion>"
         "<ScanRegionXOffset>0</ScanRegionXOffset><ScanRegionYOffset>0</ScanRegionYOffset>"
-        "<ScanRegionWidth>8500</ScanRegionWidth><ScanRegionHeight>11690</ScanRegionHeight>"
+        "<ScanRegionWidth>2550</ScanRegionWidth><ScanRegionHeight>3508</ScanRegionHeight>"
         "</ScanRegion><ColorProcessing>%s</ColorProcessing><Resolution>"
         "<Width>%u</Width><Height>%u</Height></Resolution></MediaFront></MediaSides>"
         "</DocumentParameters><RetrieveImageTimeout>300</RetrieveImageTimeout>"
         "<ScanManufacturingParameters><DisableImageProcessing>false</DisableImageProcessing>"
         "</ScanManufacturingParameters></ScanTicket></wscn:CreateScanJobRequest>"
-        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", source, color, dpi, dpi);
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", source, images, color, dpi, dpi);
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
@@ -448,7 +449,31 @@ static int codec_end_page(struct soapht_session *transport, int *more_pages)
 
 static int codec_finish(struct soapht_session *transport)
 {
-    (void)transport;
+    char xml[1024];
+    int rc;
+    if (!transport) return -1;
+    if (state.started && state.job_id[0]) {
+        int n = snprintf(xml, sizeof(xml),
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n"
+            "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+            "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
+            "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+            "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
+            "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
+            "<wscn:CancelJobRequest><JobId>%s</JobId><JobToken></JobToken>"
+            "<DocumentDescription></DocumentDescription></wscn:CancelJobRequest>"
+            "</SOAP-ENV:Body></SOAP-ENV:Envelope>", state.job_id);
+        if (n <= 0 || (size_t)n >= sizeof(xml)) {
+            memset(&state, 0, sizeof(state));
+            return -2;
+        }
+        rc = control_request(transport, xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-cancel-job rc=%d job=%s\\n", rc, state.job_id);
+            memset(&state, 0, sizeof(state));
+            return -3;
+        }
+    }
     memset(&state, 0, sizeof(state));
     return 0;
 }
