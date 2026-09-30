@@ -41,6 +41,8 @@ jobs:
             -o /tmp/test_soapht_codec
       - name: Run SOAPHT codec test
         run: /tmp/test_soapht_codec
+      - name: Verify SOAPHT against captured M1522 stream
+        run: python3 tests/test_soapht_reference.py
       - name: Compile M1522 USB retry test
         run: gcc -std=c99 -Wall -Wextra -Werror -Itests/mock-libusb tests/test_m1522_retry.c -o /tmp/test_m1522_retry
       - name: Run M1522 USB retry test
