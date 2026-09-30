@@ -155,10 +155,10 @@ int main(void)
         }
         assert(!minibox_soapht_codec->finish(&as));
         soapht_close(&as);
-        n=0; { const char *p=adf.requests; while((p=strstr(p,"CreateScanJobRequest"))){n++;p+=20;} } assert(n==1);
-        n=0; { const char *p=adf.requests; while((p=strstr(p,"RetrieveImageRequest"))){n++;p+=20;} } assert(n==2);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CreateScanJobRequest>"))){n++;p+=27;} } assert(n==1);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:RetrieveImageRequest>"))){n++;p+=26;} } assert(n==2);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
-        n=0; { const char *p=adf.requests; while((p=strstr(p,"CancelJobRequest"))){n++;p+=16;} } assert(n==1);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==1);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
     }
     puts("verified M1522 SOAPHT codec and truncated-response diagnostics: OK");
