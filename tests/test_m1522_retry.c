@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <libusb-1.0/libusb.h>
 int usleep(unsigned int);
 
 static int seq_rc[8],seq_done[8],seq_len,calls;
