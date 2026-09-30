@@ -66,7 +66,7 @@ int mb_wsd_get_identity(struct mb_wsd_identity *out){
                "urn:uuid:4d424f58-0000-4000-8000-%s",out->serial);
     if(n<0||(size_t)n>=sizeof out->endpoint)return -EINVAL;
     if(!inet_ntop(AF_INET,&out->ipv4,ip,sizeof ip))return -errno;
-    n=snprintf(out->xaddr,sizeof out->xaddr,"http://%s/cgi-bin/minibox-wsd",ip);
+    n=snprintf(out->xaddr,sizeof out->xaddr,"http://%s/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery",ip);
     if(n<0||(size_t)n>=sizeof out->xaddr)return -EINVAL;
     n=snprintf(out->presentation,sizeof out->presentation,"http://%s/",ip);
     if(n<0||(size_t)n>=sizeof out->presentation)return -EINVAL;

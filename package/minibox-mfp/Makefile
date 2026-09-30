@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=30
+PKG_RELEASE:=33
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -10,12 +10,27 @@ define Package/minibox-mfp
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=MiniBox MFP Wi-Fi print and scan bridge
-  DEPENDS:=+libusb-1.0 +uhttpd
+  DEPENDS:=+libusb-1.0 +uhttpd +luci-light +tcpdump
 endef
 
 define Package/minibox-mfp/description
  Minimal IPP/eSCL/mDNS/WSD discovery runtime and libusb backend for HP LaserJet M1522n.
  No CUPS and no usblp dependency.
+endef
+
+define Package/minibox-mfp/postinst
+#!/bin/sh
+# Windows probes this canonical WSD path. Keep uhttpd's existing CGI prefix
+# and route only this URL to the proven CGI handler.
+if [ -z "${IPKG_INSTROOT}" ] && [ -f /etc/config/uhttpd ]; then
+	stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
+	if ! uci -q get uhttpd.main.alias | grep -Fqx "$stable_alias"; then
+		uci add_list uhttpd.main.alias="$stable_alias"
+		uci commit uhttpd
+	fi
+	/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+fi
+exit 0
 endef
 
 define Build/Prepare
@@ -104,6 +119,7 @@ define Package/minibox-mfp/install
 
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/90-minibox-recovery-network $(1)/etc/uci-defaults/
+	$(INSTALL_BIN) ./files/etc/uci-defaults/91-minibox-wsd $(1)/etc/uci-defaults/
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/minibox-printerd $(1)/etc/init.d/
@@ -125,6 +141,11 @@ define Package/minibox-mfp/install
 	$(INSTALL_DATA) ./files/www/minibox/app.js $(1)/www/minibox/app.js
 	$(INSTALL_BIN) ./files/www/cgi-bin/minibox-status $(1)/www/cgi-bin/minibox-status
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi $(1)/www/cgi-bin/minibox-wsd
+
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DATA) ./files/usr/share/luci/menu.d/minibox.json $(1)/usr/share/luci/menu.d/minibox.json
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/minibox
+	$(INSTALL_DATA) ./files/www/luci-static/resources/view/minibox/home.js $(1)/www/luci-static/resources/view/minibox/home.js
 endef
 
 $(eval $(call BuildPackage,minibox-mfp))

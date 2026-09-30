@@ -35,7 +35,7 @@ static void response_id(char *out,size_t cap,const char *serial){
     (void)serial;
 }
 int main(void){
-    char body[BODY_MAX],out[RESPONSE_MAX],request_id[192],reply_id[96];
+    char body[BODY_MAX],out[RESPONSE_MAX],request_id[192],reply_id[96],action[256];
     size_t body_len;int n;struct mb_wsd_identity id;const char *method=getenv("REQUEST_METHOD");
     if(!method||strcmp(method,"POST")){
         error_response("405 Method Not Allowed","WSD metadata requires HTTP POST\n");return 0;
@@ -46,12 +46,20 @@ int main(void){
     if(mb_wsd_extract_message_id(body,body_len,request_id,sizeof request_id)){
         error_response("400 Bad Request","Missing WSD MessageID\n");return 0;
     }
+    if(mb_wsd_extract_action(body,body_len,action,sizeof action)){
+        /* Older metadata Get requests observed from WSDAPI can omit Action. */
+        action[0]=0;
+    }
     if(mb_wsd_get_identity(&id)){
         error_response("503 Service Unavailable","MiniBox network identity unavailable\n");return 0;
     }
     response_id(reply_id,sizeof reply_id,id.serial);
-    n=mb_wsd_build_metadata_response(request_id,id.endpoint,id.xaddr,reply_id,
-                                     id.serial,id.presentation,out,sizeof out);
+    if(strstr(action,"/GetPrinterElements")){
+        n=mb_wsd_build_get_printer_elements_response(request_id,reply_id,id.serial,out,sizeof out);
+    } else {
+        n=mb_wsd_build_metadata_response(request_id,id.endpoint,id.xaddr,reply_id,
+                                         id.serial,id.presentation,out,sizeof out);
+    }
     if(n<=0){
         error_response("500 Internal Server Error","WSD metadata response failed\n");return 0;
     }
