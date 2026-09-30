@@ -310,7 +310,7 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "</DocumentParameters><RetrieveImageTimeout>300</RetrieveImageTimeout>"
         "<ScanManufacturingParameters><DisableImageProcessing>false</DisableImageProcessing>"
         "</ScanManufacturingParameters></ScanTicket></wscn:CreateScanJobRequest>"
-        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", source, images, color, dpi, dpi);
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", images, source, color, dpi, dpi);
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
