@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
     struct libusb_config_descriptor *c=NULL;
@@ -73,18 +74,21 @@ int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,si
     int done=0,r=0,attempt;
     if(!h||!h->dev||!h->bulk_in||!buf||!got||!cap||cap>(size_t)INT_MAX)return -1;
     *got=0;
-    /* HPLIP retries transient channel failures before declaring the stream dead. */
-    for(attempt=0;attempt<4;attempt++){
+    /* bb_soapht performs one read plus four retries.  A zero-byte read is
+     * "no data yet", not EOF; transient timeout/I/O failures use the same
+     * 100 ms spacing before the next attempt. */
+    for(attempt=0;attempt<5;attempt++){
         done=0;
         r=libusb_bulk_transfer(h->dev,h->bulk_in,buf,(int)cap,&done,timeout_ms);
         if(!r && done>0){
             *got=(size_t)done;
             return 0;
         }
-        fprintf(stderr, "minibox-scand: stage=libusb-bulk-in rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d attempt=%d/4\n",
+        fprintf(stderr, "minibox-scand: stage=libusb-bulk-in rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d attempt=%d/5\n",
                 r, done, cap, h->bulk_in, timeout_ms, attempt+1);
         if(r!=LIBUSB_ERROR_TIMEOUT && r!=LIBUSB_ERROR_IO && !(r==0 && done==0))
             return r;
+        if(attempt<4) usleep(100000);
     }
     return r ? r : LIBUSB_ERROR_TIMEOUT;
 }
