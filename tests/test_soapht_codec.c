@@ -95,10 +95,14 @@ int main(void)
     assert(strstr(m.requests,"GetScannerElements"));
     assert(strstr(m.requests,"CreateScanJobRequest"));
     assert(strstr(m.requests,"<InputSource>Platen</InputSource>"));
-    assert(strstr(m.requests,"<Width>200</Width><Height>200</Height>"));
+    assert(strstr(m.requests,"<ImagesToTransfer>1</ImagesToTransfer>"));
+    assert(strstr(m.requests,"<InputMediaSize><Width>2550</Width><Height>3508</Height></InputMediaSize>"));
+    assert(strstr(m.requests,"<ColorProcessing>RGB24</ColorProcessing>"));
     assert(strstr(m.requests,"RetrieveImageRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     assert(!minibox_soapht_codec->finish(&s));
+    assert(strstr(m.requests,"CancelJobRequest"));
+    assert(strstr(m.requests,"<JobId>2</JobId>"));
     soapht_close(&s);
     {
         struct mock truncated={0};
