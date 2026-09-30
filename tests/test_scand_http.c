@@ -36,9 +36,9 @@ int main(void){
  { const char *p=strstr(out,"\r\n\r\n"); assert(p); p+=4; assert((unsigned char)p[0]==0xff&&(unsigned char)p[1]==0xd8); assert(!memcmp(p+2,"MINIBOX",7)); }
  minibox_scan_session_reset(&scan); next_job=1; test_pages_done=0; setenv("MINIBOX_TEST_SCAN_MORE_PAGES","2",1);
  body="<scan:ScanSettings><scan:InputSource>Adf</scan:InputSource><scan:XResolution>300</scan:XResolution><scan:YResolution>300</scan:YResolution><scan:ColorMode>RGB24</scan:ColorMode></scan:ScanSettings>";
- snprintf(req,sizeof req,"POST /eSCL/ScanJobs HTTP/1.1\\r\\nHost: localhost\\r\\nContent-Length: %zu\\r\\n\\r\\n%s",strlen(body),body);
- request(req,out,sizeof out); assert(strstr(out,"HTTP/1.1 201 Created\\r\\n")); assert(sscanf(strstr(out,"Location:"),"Location: /eSCL/ScanJobs/%u",&id)==1);
- snprintf(loc,sizeof loc,"GET /eSCL/ScanJobs/%u/NextDocument HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n",id); request(loc,out,sizeof out); assert(strstr(out,"HTTP/1.1 200 OK")); assert(scan.state==MINIBOX_SCAN_PAGE_DONE&&scan.page==1);
+ snprintf(req,sizeof req,"POST /eSCL/ScanJobs HTTP/1.1\r\nHost: localhost\r\nContent-Length: %zu\r\n\r\n%s",strlen(body),body);
+ request(req,out,sizeof out); assert(strstr(out,"HTTP/1.1 201 Created\r\n")); assert(sscanf(strstr(out,"Location:"),"Location: /eSCL/ScanJobs/%u",&id)==1);
+ snprintf(loc,sizeof loc,"GET /eSCL/ScanJobs/%u/NextDocument HTTP/1.1\r\nHost: localhost\r\n\r\n",id); request(loc,out,sizeof out); assert(strstr(out,"HTTP/1.1 200 OK")); assert(scan.state==MINIBOX_SCAN_PAGE_DONE&&scan.page==1);
  request(loc,out,sizeof out); assert(strstr(out,"HTTP/1.1 200 OK")); assert(scan.state==MINIBOX_SCAN_DONE&&scan.page==2); assert(scan.id==id); unsetenv("MINIBOX_TEST_SCAN_MORE_PAGES");
  puts("verified eSCL ScanJobs -> NextDocument -> JPEG HTTP path and two-page ADF reuse: OK");
  return 0;
