@@ -27,6 +27,7 @@ int main(void){
     assert(strstr(caps,"<scan:ColorMode>Grayscale8</scan:ColorMode>"));
     assert(strstr(caps,"<pwg:DocumentFormat>image/jpeg</pwg:DocumentFormat>"));
     assert(strstr(caps,"<scan:XResolution>300</scan:XResolution>"));
+    assert(strstr(caps,"<scan:MinHeight>3507</scan:MinHeight><scan:MaxHeight>3507</scan:MaxHeight>"));
     assert(strstr(caps,"<scan:XResolution>300</scan:XResolution>"));
     assert(!strstr(caps,"application/pdf"));
 
