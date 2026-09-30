@@ -17,7 +17,7 @@ struct body_reader {
 };
 
 struct codec_state {
-    int started, retrieve_started, image_done;
+    int started, retrieve_started, image_done, adf;
     char job_id[32];
     struct body_reader image;
     size_t record_left, record_pad;
@@ -372,6 +372,7 @@ static int codec_start(struct soapht_session *transport,
     memcpy(state.job_id, a + 7, n);
     state.job_id[n] = 0;
     free(response);
+    state.adf = job->source == ESCL_SOURCE_ADF;
     state.started = 1;
     return 0;
 }
@@ -450,9 +451,34 @@ static int codec_read_image(struct soapht_session *transport,
 
 static int codec_end_page(struct soapht_session *transport, int *more_pages)
 {
-    (void)transport;
-    if (!more_pages || !state.image_done) return -1;
+    char *response = 0;
+    int rc;
+    if (!transport || !more_pages || !state.image_done) return -1;
     *more_pages = 0;
+    if (!state.adf) return 0;
+
+    rc = control_request(transport, get_elements_xml, &response);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-adf-status rc=%d\n", rc);
+        return -2;
+    }
+    if (strstr(response, "<PaperInADF>true</PaperInADF>")) *more_pages = 1;
+    else if (!strstr(response, "<PaperInADF>false</PaperInADF>")) {
+        fprintf(stderr, "minibox-scand: stage=soapht-adf-paper rc=-3\n");
+        free(response);
+        return -3;
+    }
+    free(response);
+
+    if (*more_pages) {
+        memset(&state.image, 0, sizeof(state.image));
+        state.retrieve_started = 0;
+        state.image_done = 0;
+        state.record_left = state.record_pad = 0;
+        state.record_flags = 0;
+        state.record_is_image = 0;
+        state.image_continues = 0;
+    }
     return 0;
 }
 
