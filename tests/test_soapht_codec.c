@@ -84,7 +84,7 @@ int main(void)
     struct mock m={0};
     struct soapht_io io={op,wr,rd,cl};
     struct soapht_session s;
-    struct escl_job job={ESCL_SOURCE_PLATEN,200,1};
+    struct escl_job job={ESCL_SOURCE_PLATEN,200,1,0,0,2550,3507};
     unsigned char image[32]; size_t off=0,got; int more=-1;
     assert(!soapht_open(&s,&io,&m));
     assert(minibox_soapht_codec);
@@ -98,9 +98,9 @@ int main(void)
     assert(strstr(m.requests,"GetScannerElements"));
     assert(strstr(m.requests,"CreateScanJobRequest"));
     assert(strstr(m.requests,"<InputSource>Platen</InputSource>"));
-    assert(strstr(m.requests,"<ImagesToTransfer>1</ImagesToTransfer>"));
-    assert(strstr(m.requests,"<InputMediaSize><Width>2550</Width><Height>3508</Height></InputMediaSize>"));
-    assert(strstr(m.requests,"<ColorProcessing>RGB24</ColorProcessing>"));
+    assert(strstr(m.requests,"<ImagesToTransfer>0</ImagesToTransfer>"));
+    assert(strstr(m.requests,"<InputMediaSize><Width>8500</Width><Height>11690</Height></InputMediaSize>"));
+    assert(strstr(m.requests,"<ScanRegionWidth>8500</ScanRegionWidth><ScanRegionHeight>11690</ScanRegionHeight>"));\n    assert(strstr(m.requests,"<ColorProcessing>RGB24</ColorProcessing>"));\n    assert(strstr(m.requests,"<Resolution><Width>200</Width><Height>200</Height></Resolution>"));
     assert(strstr(m.requests,"RetrieveImageRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     assert(!minibox_soapht_codec->finish(&s));
