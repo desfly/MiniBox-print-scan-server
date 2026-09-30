@@ -43,7 +43,7 @@ static void stage_response(struct mock *m)
         if (m->truncate_first_response) m->response_len -= 7;
     } else if (m->request_no == 2) {
         set_http(m, created, sizeof(created)-1, 202, "application/soap+xml");
-    } else {
+    } else if (m->request_no == 3) {
         memset(p, 0, 12); p[0]=0x0c; put32(p+8,4); p+=12;
         memcpy(p,"meta",4); p+=4;
         memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
@@ -52,6 +52,9 @@ static void stage_response(struct mock *m)
         memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
         *p++='B'; *p++=0xff; *p++=0xd9; *p++=0;
         set_http(m, dime, (size_t)(p-dime), 200, "application/dime");
+    } else {
+        static const unsigned char cancelled[] = "<CancelJobResponse/>";
+        set_http(m, cancelled, sizeof(cancelled)-1, 202, "application/soap+xml");
     }
 }
 
