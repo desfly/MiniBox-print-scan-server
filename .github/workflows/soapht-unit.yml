@@ -1,0 +1,30 @@
+name: SOAPHT unit test
+
+on:
+  push:
+    branches:
+      - work/m1522-protocol-correct
+    paths:
+      - 'src/minibox-scan/soapht_codec.c'
+      - 'src/minibox-scan/soapht_codec.h'
+      - 'src/minibox-scan/soapht_transport.c'
+      - 'src/minibox-scan/soapht_transport.h'
+      - 'src/minibox-escl/escl.h'
+      - 'tests/test_soapht_codec.c'
+      - '.github/workflows/soapht-unit.yml'
+  workflow_dispatch:
+
+jobs:
+  soapht-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile SOAPHT codec test
+        run: |
+          gcc -std=c99 -Wall -Wextra -Werror \
+            tests/test_soapht_codec.c \
+            src/minibox-scan/soapht_codec.c \
+            src/minibox-scan/soapht_transport.c \
+            -o /tmp/test_soapht_codec
+      - name: Run SOAPHT codec test
+        run: /tmp/test_soapht_codec
