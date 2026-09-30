@@ -489,7 +489,7 @@ static int codec_finish(struct soapht_session *transport)
     if (!transport) return -1;
     if (state.started && state.job_id[0]) {
         int n = snprintf(xml, sizeof(xml),
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n"
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
             "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
             "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
@@ -504,7 +504,7 @@ static int codec_finish(struct soapht_session *transport)
         }
         rc = control_request(transport, xml, 0);
         if (rc) {
-            fprintf(stderr, "minibox-scand: stage=soapht-cancel-job rc=%d job=%s\\n", rc, state.job_id);
+            fprintf(stderr, "minibox-scand: stage=soapht-cancel-job rc=%d job=%s\n", rc, state.job_id);
             memset(&state, 0, sizeof(state));
             return -3;
         }
