@@ -32,16 +32,16 @@ static void set_http(struct mock *m, const unsigned char *body, size_t body_len,
     m->response_pos = 0;
 }
 
-static void make_dime(struct mock *m, unsigned char tag)
+static void make_dime(struct mock *m, unsigned char first, unsigned char second)
 {
     unsigned char dime[128], *p=dime;
     memset(p,0,12); p[0]=0x0c; put32(p+8,4); p+=12;
     memcpy(p,"meta",4); p+=4;
     memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
     memcpy(p,"image/jpeg",10); p+=10; *p++=0; *p++=0;
-    *p++=0xff; *p++=0xd8; *p++=tag; *p++=0;
+    *p++=0xff; *p++=0xd8; *p++=first; *p++=0;
     memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
-    *p++=tag; *p++=0xff; *p++=0xd9; *p++=0;
+    *p++=second; *p++=0xff; *p++=0xd9; *p++=0;
     set_http(m,dime,(size_t)(p-dime),200,"application/dime");
 }
 
@@ -57,16 +57,16 @@ static void stage_response(struct mock *m)
             set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
             if (m->truncate_first_response) m->response_len -= 7;
         } else if (m->request_no == 2) set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
-        else if (m->request_no == 3) make_dime(m,'A');
+        else if (m->request_no == 3) make_dime(m,'A','B');
         else set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
         return;
     }
     switch (m->request_no) {
     case 1: set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml"); break;
     case 2: set_http(m,created,sizeof(created)-1,202,"application/soap+xml"); break;
-    case 3: make_dime(m,'A'); break;
+    case 3: make_dime(m,'A','1'); break;
     case 4: set_http(m,adf_more,sizeof(adf_more)-1,202,"application/soap+xml"); break;
-    case 5: make_dime(m,'B'); break;
+    case 5: make_dime(m,'B','2'); break;
     case 6: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
     default: set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml"); break;
     }
@@ -148,6 +148,8 @@ int main(void)
                 off+=got;
             } while(got);
             assert(off==6);
+            if(page==0) assert(!memcmp(image,"\xff\xd8" "A1\xff\xd9",6));
+            else assert(!memcmp(image,"\xff\xd8" "B2\xff\xd9",6));
             assert(!minibox_soapht_codec->end_page(&as,&mp));
             assert(mp==(page==0));
         }
