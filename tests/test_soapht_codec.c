@@ -11,6 +11,7 @@ struct mock {
     size_t requests_len;
     int request_no;
     int truncate_first_response;
+    int adf_mode;
 };
 
 static void put16(unsigned char *p, unsigned v)
@@ -31,30 +32,43 @@ static void set_http(struct mock *m, const unsigned char *body, size_t body_len,
     m->response_pos = 0;
 }
 
+static void make_dime(struct mock *m, unsigned char tag)
+{
+    unsigned char dime[128], *p=dime;
+    memset(p,0,12); p[0]=0x0c; put32(p+8,4); p+=12;
+    memcpy(p,"meta",4); p+=4;
+    memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
+    memcpy(p,"image/jpeg",10); p+=10; *p++=0; *p++=0;
+    *p++=0xff; *p++=0xd8; *p++=tag; *p++=0;
+    memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
+    *p++=tag; *p++=0xff; *p++=0xd9; *p++=0;
+    set_http(m,dime,(size_t)(p-dime),200,"application/dime");
+}
+
 static void stage_response(struct mock *m)
 {
     static const unsigned char elements[] = "<ScanElements/>";
+    static const unsigned char adf_more[] = "<ScanElements><PaperInADF>true</PaperInADF></ScanElements>";
+    static const unsigned char adf_done[] = "<ScanElements><PaperInADF>false</PaperInADF></ScanElements>";
     static const unsigned char created[] = "<CreateScanJobResponseType><JobId>2</JobId></CreateScanJobResponseType>";
-    unsigned char dime[128], *p = dime;
-    if (m->request_no == 1) {
-        set_http(m, elements, sizeof(elements)-1, 202, "application/soap+xml");
-        /* Simulate the physical 503: USB response ends before the terminating
-         * chunk, so control_request must log the read/framing failure. */
-        if (m->truncate_first_response) m->response_len -= 7;
-    } else if (m->request_no == 2) {
-        set_http(m, created, sizeof(created)-1, 202, "application/soap+xml");
-    } else if (m->request_no == 3) {
-        memset(p, 0, 12); p[0]=0x0c; put32(p+8,4); p+=12;
-        memcpy(p,"meta",4); p+=4;
-        memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
-        memcpy(p,"image/jpeg",10); p+=10; *p++=0; *p++=0;
-        *p++=0xff; *p++=0xd8; *p++='A'; *p++=0;
-        memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
-        *p++='B'; *p++=0xff; *p++=0xd9; *p++=0;
-        set_http(m, dime, (size_t)(p-dime), 200, "application/dime");
-    } else {
-        static const unsigned char cancelled[] = "<CancelJobResponse/>";
-        set_http(m, cancelled, sizeof(cancelled)-1, 202, "application/soap+xml");
+    static const unsigned char cancelled[] = "<CancelJobResponse/>";
+    if (!m->adf_mode) {
+        if (m->request_no == 1) {
+            set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
+            if (m->truncate_first_response) m->response_len -= 7;
+        } else if (m->request_no == 2) set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
+        else if (m->request_no == 3) make_dime(m,'A');
+        else set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
+        return;
+    }
+    switch (m->request_no) {
+    case 1: set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml"); break;
+    case 2: set_http(m,created,sizeof(created)-1,202,"application/soap+xml"); break;
+    case 3: make_dime(m,'A'); break;
+    case 4: set_http(m,adf_more,sizeof(adf_more)-1,202,"application/soap+xml"); break;
+    case 5: make_dime(m,'B'); break;
+    case 6: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
+    default: set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml"); break;
     }
 }
 
@@ -117,6 +131,33 @@ int main(void)
         assert(minibox_soapht_codec->start(&failing,&job)==-2);
         soapht_close(&failing);
         assert(truncated.request_no==1);
+    }
+    {
+        struct mock adf={0};
+        struct soapht_session as;
+        struct escl_job ajob={ESCL_SOURCE_ADF,200,1,0,0,2550,3507};
+        size_t page, n;
+        int mp=-1;
+        adf.adf_mode=1;
+        assert(!soapht_open(&as,&io,&adf));
+        assert(!minibox_soapht_codec->start(&as,&ajob));
+        for(page=0;page<2;page++){
+            off=0;
+            do {
+                assert(!minibox_soapht_codec->read_image(&as,image+off,2,&got));
+                off+=got;
+            } while(got);
+            assert(off==6);
+            assert(!minibox_soapht_codec->end_page(&as,&mp));
+            assert(mp==(page==0));
+        }
+        assert(!minibox_soapht_codec->finish(&as));
+        soapht_close(&as);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"CreateScanJobRequest"))){n++;p+=20;} } assert(n==1);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"RetrieveImageRequest"))){n++;p+=20;} } assert(n==2);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=18;} } assert(n==3);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"CancelJobRequest"))){n++;p+=16;} } assert(n==1);
+        assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
     }
     puts("verified M1522 SOAPHT codec and truncated-response diagnostics: OK");
     return 0;
