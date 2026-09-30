@@ -3,7 +3,6 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
     struct libusb_config_descriptor *c=NULL;
@@ -86,7 +85,6 @@ int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,si
                 r, done, cap, h->bulk_in, timeout_ms, attempt+1);
         if(r!=LIBUSB_ERROR_TIMEOUT && r!=LIBUSB_ERROR_IO && !(r==0 && done==0))
             return r;
-        if(attempt<3) usleep(100000);
     }
     return r ? r : LIBUSB_ERROR_TIMEOUT;
 }
