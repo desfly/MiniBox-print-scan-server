@@ -19,7 +19,7 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/m1522_presence.c tes
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c tests/test-soapht-transport.c -o /tmp/test-soapht
 /tmp/test-soapht
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c src/minibox-scan/soapht_codec.c tests/test_soapht_codec.c -o /tmp/test-soapht-codec
-/tmp/test-soapht-codec 2>/tmp/minibox-soapht-failure.log
+/tmp/test-soapht-codec 2>/tmp/minibox-soapht-failure.log || { cat /tmp/minibox-soapht-failure.log >&2; exit 1; }
 grep -q 'stage=soapht-raw-read' /tmp/minibox-soapht-failure.log
 grep -q 'stage=soapht-control-body' /tmp/minibox-soapht-failure.log
 grep -q 'stage=soapht-get-elements rc=-4' /tmp/minibox-soapht-failure.log
