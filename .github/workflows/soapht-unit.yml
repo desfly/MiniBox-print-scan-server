@@ -15,6 +15,9 @@ on:
       - 'src/minibox-usb/scan_m1522.h'
       - 'tests/test_m1522_retry.c'
       - 'tests/mock-libusb/**'
+      - 'src/minibox-escl/escl.c'
+      - 'src/minibox-escl/escl.h'
+      - 'tests/test-escl.c'
       - '.github/workflows/soapht-unit.yml'
   workflow_dispatch:
 
@@ -36,3 +39,7 @@ jobs:
         run: gcc -std=c99 -Wall -Wextra -Werror -Itests/mock-libusb tests/test_m1522_retry.c -o /tmp/test_m1522_retry
       - name: Run M1522 USB retry test
         run: /tmp/test_m1522_retry
+      - name: Compile eSCL settings test
+        run: gcc -std=c99 -Wall -Wextra -Werror tests/test-escl.c src/minibox-escl/escl.c -o /tmp/test_escl
+      - name: Run eSCL settings test
+        run: /tmp/test_escl
