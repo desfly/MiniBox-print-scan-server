@@ -3,19 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
-#define LIBUSB_ERROR_IO (-1)
-#define LIBUSB_ERROR_TIMEOUT (-7)
-#define LIBUSB_TRANSFER_TYPE_MASK 3
-#define LIBUSB_TRANSFER_TYPE_BULK 2
-#define LIBUSB_ENDPOINT_IN 0x80
-typedef struct libusb_context libusb_context;
-typedef struct libusb_device_handle libusb_device_handle;
-typedef struct libusb_device libusb_device;
-struct libusb_endpoint_descriptor { unsigned char bEndpointAddress,bmAttributes; };
-struct libusb_interface_descriptor { unsigned char bInterfaceNumber,bInterfaceClass,bInterfaceSubClass,bInterfaceProtocol,bNumEndpoints; const struct libusb_endpoint_descriptor *endpoint; };
-struct libusb_interface { int num_altsetting; const struct libusb_interface_descriptor *altsetting; };
-struct libusb_config_descriptor { unsigned char bNumInterfaces; const struct libusb_interface *interface; };
+int usleep(unsigned int);
 
 static int seq_rc[8],seq_done[8],seq_len,calls;
 int libusb_bulk_transfer(libusb_device_handle*d,unsigned char ep,unsigned char*b,int n,int*done,unsigned int t)
