@@ -11,6 +11,8 @@ on:
       - 'src/minibox-scan/soapht_transport.h'
       - 'src/minibox-escl/escl.h'
       - 'tests/test_soapht_codec.c'
+      - 'tests/test_soapht_reference.py'
+      - 'tests/reference/m1522-soapht-2026-09-16/**'
       - 'src/minibox-usb/scan_m1522.c'
       - 'src/minibox-usb/scan_m1522.h'
       - 'tests/test_m1522_retry.c'
