@@ -282,12 +282,20 @@ static const char get_elements_xml[] =
     "<wscn:GetScannerElements></wscn:GetScannerElements>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
+static unsigned escl300_to_soapht1000(unsigned v)
+{
+    return (v * 10u + 1u) / 3u;
+}
+
 static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
 {
     const char *source = job->source == ESCL_SOURCE_ADF ? "ADF" : "Platen";
-    const char *color = job->color ? "RGB24" : "Grayscale8";
-    const char *images = job->source == ESCL_SOURCE_PLATEN ? "1" : "0";
-    unsigned dpi = job->dpi >= 75 && job->dpi <= 1200 ? job->dpi : 300;
+    const char *color = job->color ? "RGB24" : "GrayScale8";
+    unsigned dpi = (job->dpi == 200 || job->dpi == 300) ? job->dpi : 300;
+    unsigned x = escl300_to_soapht1000(job->x_300);
+    unsigned y = escl300_to_soapht1000(job->y_300);
+    unsigned width = escl300_to_soapht1000(job->width_300);
+    unsigned height = escl300_to_soapht1000(job->height_300);
     int n = snprintf(out, cap,
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
@@ -303,14 +311,15 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "<DocumentSizeAutoDetect>false</DocumentSizeAutoDetect></InputSize><Exposure>"
         "<AutoExposure>false</AutoExposure><ExposureSettings><Contrast>0</Contrast>"
         "</ExposureSettings></Exposure><MediaSides><MediaFront><ScanRegion>"
-        "<ScanRegionXOffset>0</ScanRegionXOffset><ScanRegionYOffset>0</ScanRegionYOffset>"
-        "<ScanRegionWidth>2550</ScanRegionWidth><ScanRegionHeight>3508</ScanRegionHeight>"
+        "<ScanRegionXOffset>%u</ScanRegionXOffset><ScanRegionYOffset>%u</ScanRegionYOffset>"
+        "<ScanRegionWidth>%u</ScanRegionWidth><ScanRegionHeight>%u</ScanRegionHeight>"
         "</ScanRegion><ColorProcessing>%s</ColorProcessing><Resolution>"
         "<Width>%u</Width><Height>%u</Height></Resolution></MediaFront></MediaSides>"
         "</DocumentParameters><RetrieveImageTimeout>300</RetrieveImageTimeout>"
         "<ScanManufacturingParameters><DisableImageProcessing>false</DisableImageProcessing>"
         "</ScanManufacturingParameters></ScanTicket></wscn:CreateScanJobRequest>"
-        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", source, width, height, x, y, width, height, color, dpi, dpi);
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>",
+        source, width, height, x, y, width, height, color, dpi, dpi);
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
