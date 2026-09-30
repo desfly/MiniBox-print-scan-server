@@ -20,6 +20,7 @@
 #endif
 static volatile sig_atomic_t stop; static void on_signal(int s){(void)s;stop=1;}
 static unsigned next_job=1; static struct minibox_scan_session scan;
+static struct minibox_scan_stream scan_stream;
 #define SCAN_REQUEST_MAX 65536
 #define CLIENT_TIMEOUT_SEC 15
 static int send_all(int f,const void*p,size_t n){const unsigned char*q=p;while(n){ssize_t w=send(f,q,n,0);if(w<0){if(errno==EINTR)continue;return-1;}q+=w;n-=(size_t)w;}return 0;}
@@ -37,7 +38,7 @@ static unsigned test_pages_done; static int tb_open(void*v,const struct escl_job
 static const struct minibox_scan_backend *scan_backend=&minibox_m1522_scan_backend; static void *scan_backend_ctx;
 #endif
 static int stream_document(int f){
- struct minibox_scan_stream s={0}; unsigned char buf[16384];
+ struct minibox_scan_stream *s=&scan_stream; unsigned char buf[16384];
  size_t got=0, first=0; int more=0, started=0, rc;
  const char*h="HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nConnection: close\r\n\r\n";
 #ifndef MINIBOX_TEST_SCAN_BACKEND
@@ -47,7 +48,7 @@ static int stream_document(int f){
   fprintf(stderr,"minibox-scand: scan job=%u stage=backend-missing\n",scan.id);
   minibox_scan_session_fail(&scan);return -1;
  }
- rc=minibox_scan_stream_open(&s,scan_backend,scan_backend_ctx,&scan.settings);
+ rc=s->opened?0:minibox_scan_stream_open(s,scan_backend,scan_backend_ctx,&scan.settings);
  if(rc){
   fprintf(stderr,"minibox-scand: scan job=%u stage=backend-open rc=%d\n",scan.id,rc);
   minibox_scan_session_fail(&scan);return -1;
@@ -55,7 +56,7 @@ static int stream_document(int f){
  /* Never send HTTP 200/image/jpeg before at least the actual JPEG SOI is
   * received. On a first-read error return a valid HTTP 503 to the client. */
  while(first<2){
-  got=0;rc=minibox_scan_stream_read(&s,buf+first,sizeof buf-first,&got);
+  got=0;rc=minibox_scan_stream_read(s,buf+first,sizeof buf-first,&got);
   if(rc||!got||got>sizeof buf-first){
    fprintf(stderr,"minibox-scand: scan job=%u stage=first-image-read rc=%d got=%zu\n",scan.id,rc,got);
    goto fail;
@@ -70,7 +71,7 @@ static int stream_document(int f){
  started=1;
  if(send_all(f,h,strlen(h))||send_all(f,buf,first))goto fail;
  for(;;){
-  got=0;rc=minibox_scan_stream_read(&s,buf,sizeof buf,&got);
+  got=0;rc=minibox_scan_stream_read(s,buf,sizeof buf,&got);
   if(rc||got>sizeof buf){
    fprintf(stderr,"minibox-scand: scan job=%u stage=image-read rc=%d got=%zu\n",scan.id,rc,got);
    goto fail;
@@ -78,15 +79,15 @@ static int stream_document(int f){
   if(!got)break;
   if(send_all(f,buf,got))goto fail;
  }
- rc=minibox_scan_stream_end_page(&s,&more);
+ rc=minibox_scan_stream_end_page(s,&more);
  if(rc){
   fprintf(stderr,"minibox-scand: scan job=%u stage=end-page rc=%d\n",scan.id,rc);
   goto fail;
  }
- minibox_scan_stream_close(&s);
+ if(!more) minibox_scan_stream_close(s);
  return minibox_scan_session_end_page(&scan,more);
 fail:
- minibox_scan_stream_close(&s);
+ minibox_scan_stream_close(s);
  minibox_scan_session_fail(&scan);
  return started?-2:-1;
 }
