@@ -15,6 +15,8 @@ struct mock {
     int malformed_create_response;
     int fail_retrieve_status;
     int malformed_dime;
+    int fail_adf_status;
+    int missing_adf_paper;
     int adf_mode;
 };
 
@@ -94,7 +96,14 @@ static void stage_response(struct mock *m)
     case 1: set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml"); break;
     case 2: set_http(m,created,sizeof(created)-1,202,"application/soap+xml"); break;
     case 3: make_dime(m,'A','1'); break;
-    case 4: set_http(m,adf_more,sizeof(adf_more)-1,202,"application/soap+xml"); break;
+    case 4:
+        if (m->fail_adf_status) {
+            static const unsigned char failed[] = "<Fault/>";
+            set_http(m,failed,sizeof(failed)-1,503,"application/soap+xml");
+        } else if (m->missing_adf_paper) {
+            set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
+        } else set_http(m,adf_more,sizeof(adf_more)-1,202,"application/soap+xml");
+        break;
     case 5: make_dime(m,'B','2'); break;
     case 6: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
     default: set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml"); break;
@@ -189,6 +198,42 @@ int main(void)
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==1);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
+    }
+    {
+        struct mock adf_status_fail={0};
+        struct soapht_session asf;
+        struct escl_job ajob={ESCL_SOURCE_ADF,200,1,0,0,2550,3507};
+        size_t n;
+        adf_status_fail.adf_mode=1;
+        adf_status_fail.fail_adf_status=1;
+        assert(!soapht_open(&asf,&io,&adf_status_fail));
+        assert(!minibox_soapht_codec->start(&asf,&ajob));
+        do {
+            assert(!minibox_soapht_codec->read_image(&asf,image,2,&got));
+        } while(got);
+        assert(minibox_soapht_codec->end_page(&asf,&more)==-2);
+        assert(!minibox_soapht_codec->finish(&asf));
+        n=0; { const char *p=adf_status_fail.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
+        assert(n==1);
+        soapht_close(&asf);
+    }
+    {
+        struct mock adf_paper_missing={0};
+        struct soapht_session apm;
+        struct escl_job ajob={ESCL_SOURCE_ADF,200,1,0,0,2550,3507};
+        size_t n;
+        adf_paper_missing.adf_mode=1;
+        adf_paper_missing.missing_adf_paper=1;
+        assert(!soapht_open(&apm,&io,&adf_paper_missing));
+        assert(!minibox_soapht_codec->start(&apm,&ajob));
+        do {
+            assert(!minibox_soapht_codec->read_image(&apm,image,2,&got));
+        } while(got);
+        assert(minibox_soapht_codec->end_page(&apm,&more)==-3);
+        assert(!minibox_soapht_codec->finish(&apm));
+        n=0; { const char *p=adf_paper_missing.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
+        assert(n==1);
+        soapht_close(&apm);
     }
     {
         struct mock retrieve_fail={0};
