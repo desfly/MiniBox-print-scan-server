@@ -19,6 +19,7 @@ struct mock {
     int missing_adf_paper;
     int adf_mode;
     int retrieve_empty_reads;
+    int retrieve_mid_header_empty_reads;
 };
 
 static void put16(unsigned char *p, unsigned v)
@@ -131,6 +132,12 @@ static int rd(void *v,unsigned char *b,size_t cap,size_t *got)
         *got = 0;
         return -7;
     }
+    if (m->request_no == 3 && m->response_pos > 0 &&
+        m->retrieve_mid_header_empty_reads > 0) {
+        --m->retrieve_mid_header_empty_reads;
+        *got = 0;
+        return -7;
+    }
     left=m->response_len-m->response_pos; n=left<7?left:7;
     if(n>cap)n=cap;
     memcpy(b,m->response+m->response_pos,n);m->response_pos+=n;*got=n;
@@ -148,6 +155,7 @@ int main(void)
     /* Hardware regression: M1522 may start the scan head, then return several
      * empty RetrieveImage transport windows before the first HTTP byte. */
     m.retrieve_empty_reads=3;
+    m.retrieve_mid_header_empty_reads=3;
     assert(!soapht_open(&s,&io,&m));
     assert(minibox_soapht_codec);
     assert(!minibox_soapht_codec->start(&s,&job));
