@@ -3,7 +3,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
+#include <sys/select.h>
 
 static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
     struct libusb_config_descriptor *c=NULL;
@@ -71,10 +71,10 @@ int m1522_scan_write(struct m1522_scan_handle *h,const unsigned char *buf,size_t
 }
 
 static void retry_delay_100ms(void){
-    struct timespec ts;
-    ts.tv_sec=0;
-    ts.tv_nsec=100000000L;
-    while(nanosleep(&ts,&ts)!=0){}
+    struct timeval tv;
+    tv.tv_sec=0;
+    tv.tv_usec=100000;
+    (void)select(0,NULL,NULL,NULL,&tv);
 }
 
 int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,size_t *got,int timeout_ms){
