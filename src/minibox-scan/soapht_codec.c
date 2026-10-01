@@ -425,37 +425,50 @@ static void retrieve_retry_delay(void)
     (void)select(0, NULL, NULL, NULL, &tv);
 }
 
+static int retrieve_headers_complete(const unsigned char *buf, size_t len)
+{
+    size_t i;
+    for (i = 3; i < len; ++i)
+        if (buf[i - 3] == '\r' && buf[i - 2] == '\n' &&
+            buf[i - 1] == '\r' && buf[i] == '\n')
+            return 1;
+    return 0;
+}
+
 static int reader_begin_retrieve(struct body_reader *r,
                                  struct soapht_session *transport)
 {
-    int attempt;
+    int idle = 0, rc = 0;
+    size_t got = 0;
     /*
-     * A real M1522 can accept RetrieveImage and start moving the scan head
-     * before it has any response bytes ready.  One transport read already
-     * waits through the verified 5 x zero-byte USB reads (~0.4 s).  Permit
-     * up to 30 such empty windows, separated by 100 ms: about 15 s total.
-     * This applies only before the first RetrieveImage response byte; once
-     * any byte arrives, the normal reader/parser and transport retry policy
-     * are unchanged.
+     * M1522 may pause not only before the first RetrieveImage byte, but
+     * between fragments of the HTTP response headers.  Prime the complete
+     * header here and tolerate up to 30 consecutive no-data transport
+     * windows.  Once CRLFCRLF is buffered, normal parsing/streaming resumes.
      */
     memset(r, 0, sizeof(*r));
     r->transport = transport;
-    for (attempt = 1; attempt <= 30; ++attempt) {
-        size_t got = 0;
-        int rc = soapht_read(transport, r->raw, sizeof(r->raw), &got);
-        if (!rc && got) {
-            r->raw_pos = 0;
-            r->raw_len = got;
-            return reader_parse_headers(r);
-        }
-        if (attempt == 30) {
-            fprintf(stderr,
-                    "minibox-scand: stage=soapht-retrieve-ready rc=%d got=%zu attempt=%d/30\n",
-                    rc, got, attempt);
+    while (idle < 30) {
+        if (r->raw_len >= SOAPHT_HEADER_MAX || r->raw_len == sizeof(r->raw))
             return -1;
+        got = 0;
+        rc = soapht_read(transport, r->raw + r->raw_len,
+                         sizeof(r->raw) - r->raw_len, &got);
+        if (!rc && got) {
+            r->raw_len += got;
+            idle = 0;
+            if (retrieve_headers_complete(r->raw, r->raw_len)) {
+                r->raw_pos = 0;
+                return reader_parse_headers(r);
+            }
+            continue;
         }
-        retrieve_retry_delay();
+        ++idle;
+        if (idle < 30) retrieve_retry_delay();
     }
+    fprintf(stderr,
+            "minibox-scand: stage=soapht-retrieve-ready rc=%d got=%zu idle=%d/30 buffered=%zu\n",
+            rc, got, idle, r->raw_len);
     return -1;
 }
 
