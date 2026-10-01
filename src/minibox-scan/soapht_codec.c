@@ -595,7 +595,7 @@ static int codec_finish(struct soapht_session *transport)
     char xml[1024];
     int rc;
     if (!transport) return -1;
-    if (state.started && state.job_id[0]) {
+    /* The verified M1522 platen capture ends after RetrieveImage: it does not\n     * send CancelJob on the successful path.  CancelJob is only an abort for\n     * a job that has not completed its image. */\n    if (state.started && state.job_id[0] && !state.image_done) {
         int n = snprintf(xml, sizeof(xml),
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
