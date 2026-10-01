@@ -144,7 +144,14 @@ static int consume_chunk_crlf(struct body_reader *r)
 {
     unsigned char a, b;
     if (raw_byte(r, &a) || raw_byte(r, &b)) return -1;
-    return (a == '\r' && b == '\n') ? 0 : -1;
+    if (a != '\r' || b != '\n') {
+        size_t pending = r->raw_len - r->raw_pos;
+        fprintf(stderr,
+                "minibox-scand: stage=soapht-chunk-crlf rc=-2 a=0x%02x b=0x%02x raw_pending=%zu\\n",
+                (unsigned)a, (unsigned)b, pending);
+        return -1;
+    }
+    return 0;
 }
 
 static int body_read(struct body_reader *r, unsigned char *out,
