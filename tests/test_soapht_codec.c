@@ -21,6 +21,7 @@ struct mock {
     int retrieve_empty_reads;
     int retrieve_mid_header_empty_reads;
     int retrieve_body_empty_reads;
+    int control_body_empty_reads;
     int request_before_response_drained;
 };
 
@@ -129,6 +130,15 @@ static int rd(void *v,unsigned char *b,size_t cap,size_t *got)
 {
     struct mock *m=v;
     size_t left,n;
+    if (m->request_no == 1 && m->control_body_empty_reads > 0) {
+        const char *h = strstr((const char *)m->response, "\r\n\r\n");
+        size_t body_at = h ? (size_t)(h - (const char *)m->response) + 4 : m->response_len;
+        if (m->response_pos > body_at + 7) {
+            --m->control_body_empty_reads;
+            *got = 0;
+            return 0;
+        }
+    }
     if (m->request_no == 3 && m->retrieve_empty_reads > 0) {
         --m->retrieve_empty_reads;
         *got = 0;
@@ -165,6 +175,9 @@ int main(void)
     unsigned char image[32]; size_t off=0,got; int more=-1;
     /* Hardware regression: M1522 may start the scan head, then return several
      * empty RetrieveImage transport windows before the first HTTP byte. */
+    /* Hardware regression: GetScannerElements may deliver part of its
+     * chunked body, then a successful zero-byte USB window before the rest. */
+    m.control_body_empty_reads=3;
     m.retrieve_empty_reads=3;
     m.retrieve_mid_header_empty_reads=3;
     m.retrieve_body_empty_reads=3;
