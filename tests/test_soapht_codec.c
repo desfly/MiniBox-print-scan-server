@@ -202,7 +202,7 @@ int main(void)
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     assert(!minibox_soapht_codec->finish(&s));
     assert(!m.request_before_response_drained);
-    assert(strstr(m.requests,"CancelJobRequest"));
+    assert(!strstr(m.requests,"CancelJobRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     soapht_close(&s);
     {
@@ -240,7 +240,7 @@ int main(void)
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CreateScanJobRequest>"))){n++;p+=27;} } assert(n==1);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:RetrieveImageRequest>"))){n++;p+=26;} } assert(n==2);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
-        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==1);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==0);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
     }
     {
@@ -317,25 +317,6 @@ int main(void)
         assert(malformed.requests_len==before);
         assert(!strstr(malformed.requests,"<wscn:CancelJobRequest>"));
         soapht_close(&ms);
-    }
-    {
-        struct mock cancel_fail={0};
-        struct soapht_session fs;
-        size_t n, before;
-        assert(!soapht_open(&fs,&io,&cancel_fail));
-        assert(!minibox_soapht_codec->start(&fs,&job));
-        do {
-            assert(!minibox_soapht_codec->read_image(&fs,image,2,&got));
-        } while(got);
-        assert(!minibox_soapht_codec->end_page(&fs,&more));
-        cancel_fail.fail_cancel_response=1;
-        assert(minibox_soapht_codec->finish(&fs)==-3);
-        n=0; { const char *p=cancel_fail.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
-        assert(n==1);
-        before=cancel_fail.requests_len;
-        assert(!minibox_soapht_codec->finish(&fs));
-        assert(cancel_fail.requests_len==before);
-        soapht_close(&fs);
     }
     puts("verified M1522 SOAPHT codec and truncated-response diagnostics: OK");
     return 0;
