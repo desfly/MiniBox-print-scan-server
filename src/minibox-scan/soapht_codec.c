@@ -57,7 +57,11 @@ static int raw_fill(struct body_reader *r)
         got = 0;
         rc = soapht_read(r->transport, r->raw, sizeof(r->raw), &got);
         if (!rc && got) break;
-        if (!r->tolerate_gaps || ++idle >= 30) {
+        /* RetrieveImage tolerates both transient transport errors and empty
+         * windows. Control responses only tolerate successful zero-byte
+         * windows: a real transport error must still fail immediately. */
+        if (!r->tolerate_gaps || (r->tolerate_gaps == 2 && rc) ||
+            ++idle >= 30) {
             fprintf(stderr,
                     "minibox-scand: stage=soapht-raw-read rc=%d got=%zu idle=%d\n",
                     rc, got, idle);
@@ -281,6 +285,11 @@ static int control_request(struct soapht_session *transport, const char *xml,
         fprintf(stderr, "minibox-scand: stage=soapht-control-http status=%d\n", r.status);
         return -2;
     }
+    /* Captured M1522 GetScannerElements responses can contain a successful
+     * zero-byte USB read between fragments of a chunked control body. Keep
+     * the parsed framing state and wait through that gap, but do not hide
+     * actual transport errors. */
+    r.tolerate_gaps = 2;
     body = malloc(SOAPHT_CONTROL_MAX + 1);
     if (!body) return -3;
     while (!r.done) {
