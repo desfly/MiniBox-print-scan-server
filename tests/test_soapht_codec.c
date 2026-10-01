@@ -13,6 +13,8 @@ struct mock {
     int truncate_first_response;
     int fail_cancel_response;
     int malformed_create_response;
+    int fail_retrieve_status;
+    int malformed_dime;
     int adf_mode;
 };
 
@@ -65,7 +67,23 @@ static void stage_response(struct mock *m)
             else
                 set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
         }
-        else if (m->request_no == 3) make_dime(m,'A','B');
+        else if (m->request_no == 3) {
+            if (m->fail_retrieve_status) {
+                static const unsigned char failed[] = "<Fault/>";
+                set_http(m,failed,sizeof(failed)-1,503,"application/soap+xml");
+            } else {
+                make_dime(m,'A','B');
+                if (m->malformed_dime) {
+                    const char *h = strstr((char *)m->response,"\r\n\r\n");
+                    if (h) {
+                        unsigned char *p=(unsigned char *)h+4;
+                        while (*p && *p!='\r') p++;
+                        if (p[0]=='\r' && p[1]=='\n') p+=2;
+                        *p=0;
+                    }
+                }
+            }
+        }
         else {
             set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
             if (m->fail_cancel_response) m->response_len = 0;
@@ -171,6 +189,32 @@ int main(void)
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==1);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
+    }
+    {
+        struct mock retrieve_fail={0};
+        struct soapht_session rs;
+        size_t n;
+        retrieve_fail.fail_retrieve_status=1;
+        assert(!soapht_open(&rs,&io,&retrieve_fail));
+        assert(!minibox_soapht_codec->start(&rs,&job));
+        assert(minibox_soapht_codec->read_image(&rs,image,2,&got)==-2);
+        assert(!minibox_soapht_codec->finish(&rs));
+        n=0; { const char *p=retrieve_fail.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
+        assert(n==1);
+        soapht_close(&rs);
+    }
+    {
+        struct mock bad_dime={0};
+        struct soapht_session ds;
+        size_t n;
+        bad_dime.malformed_dime=1;
+        assert(!soapht_open(&ds,&io,&bad_dime));
+        assert(!minibox_soapht_codec->start(&ds,&job));
+        assert(minibox_soapht_codec->read_image(&ds,image,2,&got)==-4);
+        assert(!minibox_soapht_codec->finish(&ds));
+        n=0; { const char *p=bad_dime.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
+        assert(n==1);
+        soapht_close(&ds);
     }
     {
         struct mock malformed={0};
