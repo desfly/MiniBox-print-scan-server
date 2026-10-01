@@ -11,6 +11,7 @@ struct mock {
     size_t requests_len;
     int request_no;
     int truncate_first_response;
+    int fail_cancel_response;
     int adf_mode;
 };
 
@@ -58,7 +59,10 @@ static void stage_response(struct mock *m)
             if (m->truncate_first_response) m->response_len -= 7;
         } else if (m->request_no == 2) set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
         else if (m->request_no == 3) make_dime(m,'A','B');
-        else set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
+        else {
+            set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
+            if (m->fail_cancel_response) m->response_len = 0;
+        }
         return;
     }
     switch (m->request_no) {
@@ -160,6 +164,25 @@ int main(void)
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==1);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
+    }
+    {
+        struct mock cancel_fail={0};
+        struct soapht_session fs;
+        size_t n, before;
+        assert(!soapht_open(&fs,&io,&cancel_fail));
+        assert(!minibox_soapht_codec->start(&fs,&job));
+        do {
+            assert(!minibox_soapht_codec->read_image(&fs,image,2,&got));
+        } while(got);
+        assert(!minibox_soapht_codec->end_page(&fs,&more));
+        cancel_fail.fail_cancel_response=1;
+        assert(minibox_soapht_codec->finish(&fs)==-3);
+        n=0; { const char *p=cancel_fail.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
+        assert(n==1);
+        before=cancel_fail.requests_len;
+        assert(!minibox_soapht_codec->finish(&fs));
+        assert(cancel_fail.requests_len==before);
+        soapht_close(&fs);
     }
     puts("verified M1522 SOAPHT codec and truncated-response diagnostics: OK");
     return 0;
