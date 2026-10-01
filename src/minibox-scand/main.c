@@ -69,7 +69,7 @@ static int stream_document(int f){
  }
  /* Once a successful HTTP response starts it cannot be replaced by 503. */
  started=1;
- if(send_all(f,h,strlen(h))||send_all(f,buf,first))goto fail;
+ if(send_all(f,h,strlen(h))||send_all(f,buf,first)){fprintf(stderr,"minibox-scand: scan job=%u stage=client-send-first errno=%d\n",scan.id,errno);goto fail;}
  for(;;){
   got=0;rc=minibox_scan_stream_read(s,buf,sizeof buf,&got);
   if(rc||got>sizeof buf){
@@ -77,7 +77,7 @@ static int stream_document(int f){
    goto fail;
   }
   if(!got)break;
-  if(send_all(f,buf,got))goto fail;
+  if(send_all(f,buf,got)){fprintf(stderr,"minibox-scand: scan job=%u stage=client-send rc=-1 errno=%d got=%zu\n",scan.id,errno,got);goto fail;}
  }
  rc=minibox_scan_stream_end_page(s,&more);
  if(rc){
