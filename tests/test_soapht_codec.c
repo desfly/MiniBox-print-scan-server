@@ -12,6 +12,7 @@ struct mock {
     int request_no;
     int truncate_first_response;
     int fail_cancel_response;
+    int malformed_create_response;
     int adf_mode;
 };
 
@@ -57,7 +58,13 @@ static void stage_response(struct mock *m)
         if (m->request_no == 1) {
             set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
             if (m->truncate_first_response) m->response_len -= 7;
-        } else if (m->request_no == 2) set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
+        } else if (m->request_no == 2) {
+            static const unsigned char malformed[] = "<CreateScanJobResponseType/>";
+            if (m->malformed_create_response)
+                set_http(m,malformed,sizeof(malformed)-1,202,"application/soap+xml");
+            else
+                set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
+        }
         else if (m->request_no == 3) make_dime(m,'A','B');
         else {
             set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
@@ -164,6 +171,19 @@ int main(void)
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==1);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
+    }
+    {
+        struct mock malformed={0};
+        struct soapht_session ms;
+        size_t before;
+        malformed.malformed_create_response=1;
+        assert(!soapht_open(&ms,&io,&malformed));
+        assert(minibox_soapht_codec->start(&ms,&job)==-4);
+        before=malformed.requests_len;
+        assert(!minibox_soapht_codec->finish(&ms));
+        assert(malformed.requests_len==before);
+        assert(!strstr(malformed.requests,"<wscn:CancelJobRequest>"));
+        soapht_close(&ms);
     }
     {
         struct mock cancel_fail={0};
