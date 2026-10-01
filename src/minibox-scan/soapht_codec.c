@@ -412,12 +412,46 @@ static int next_dime_record(void)
     return 0;
 }
 
-static void retrieve_ready_delay(void)
+static void retrieve_retry_delay(void)
 {
     struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
     (void)select(0, NULL, NULL, NULL, &tv);
+}
+
+static int reader_begin_retrieve(struct body_reader *r,
+                                 struct soapht_session *transport)
+{
+    int attempt;
+    /*
+     * A real M1522 can accept RetrieveImage and start moving the scan head
+     * before it has any response bytes ready.  One transport read already
+     * waits through the verified 5 x zero-byte USB reads (~0.4 s).  Permit
+     * up to 30 such empty windows, separated by 100 ms: about 15 s total.
+     * This applies only before the first RetrieveImage response byte; once
+     * any byte arrives, the normal reader/parser and transport retry policy
+     * are unchanged.
+     */
+    memset(r, 0, sizeof(*r));
+    r->transport = transport;
+    for (attempt = 1; attempt <= 30; ++attempt) {
+        size_t got = 0;
+        int rc = soapht_read(transport, r->raw, sizeof(r->raw), &got);
+        if (!rc && got) {
+            r->raw_pos = 0;
+            r->raw_len = got;
+            return reader_begin(r, transport);
+        }
+        if (attempt == 30) {
+            fprintf(stderr,
+                    "minibox-scand: stage=soapht-retrieve-ready rc=%d got=%zu attempt=%d/30\n",
+                    rc, got, attempt);
+            return -1;
+        }
+        retrieve_retry_delay();
+    }
+    return -1;
 }
 
 static int begin_retrieve(struct soapht_session *transport)
@@ -425,11 +459,7 @@ static int begin_retrieve(struct soapht_session *transport)
     char xml[2048];
     if (make_retrieve_xml(xml, sizeof(xml), state.job_id) ||
         send_request(transport, xml)) return -1;
-    /* The M1522 can accept RetrieveImage before its scan engine has produced
-     * the first SOAPHT response bytes.  Keep this readiness wait local to
-     * RetrieveImage: control requests must retain their fail-fast behavior. */
-    retrieve_ready_delay();
-    if (reader_begin(&state.image, transport)) return -1;
+    if (reader_begin_retrieve(&state.image, transport)) return -1;
     if (state.image.status != 200) return -2;
     state.retrieve_started = 1;
     return 0;
