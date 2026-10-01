@@ -18,6 +18,7 @@ struct mock {
     int fail_adf_status;
     int missing_adf_paper;
     int adf_mode;
+    int retrieve_empty_reads;
 };
 
 static void put16(unsigned char *p, unsigned v)
@@ -124,7 +125,13 @@ static int wr(void *v,const unsigned char *b,size_t n)
 static int rd(void *v,unsigned char *b,size_t cap,size_t *got)
 {
     struct mock *m=v;
-    size_t left=m->response_len-m->response_pos,n=left<7?left:7;
+    size_t left,n;
+    if (m->request_no == 3 && m->retrieve_empty_reads > 0) {
+        --m->retrieve_empty_reads;
+        *got = 0;
+        return -7;
+    }
+    left=m->response_len-m->response_pos; n=left<7?left:7;
     if(n>cap)n=cap;
     memcpy(b,m->response+m->response_pos,n);m->response_pos+=n;*got=n;
     return n?0:-1;
@@ -138,6 +145,9 @@ int main(void)
     struct soapht_session s;
     struct escl_job job={ESCL_SOURCE_PLATEN,200,1,0,0,2550,3507};
     unsigned char image[32]; size_t off=0,got; int more=-1;
+    /* Hardware regression: M1522 may start the scan head, then return several
+     * empty RetrieveImage transport windows before the first HTTP byte. */
+    m.retrieve_empty_reads=3;
     assert(!soapht_open(&s,&io,&m));
     assert(minibox_soapht_codec);
     assert(!minibox_soapht_codec->start(&s,&job));
