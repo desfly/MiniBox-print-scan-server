@@ -531,11 +531,37 @@ static int codec_read_image(struct soapht_session *transport,
     return 0;
 }
 
+static int finish_image_response(void)
+{
+    unsigned char scratch[256];
+    size_t got;
+    int rc;
+
+    /*
+     * JPEG completion is DIME-level completion, not HTTP-body completion.
+     * Consume the remaining chunk framing/trailers before the next SOAP
+     * request.  Otherwise CancelJob can start while RetrieveImage bytes are
+     * still pending and the M1522 leaves the completed job active.
+     */
+    while (!state.image.done) {
+        got = 0;
+        rc = body_read(&state.image, scratch, sizeof(scratch), &got);
+        if (rc || (!got && !state.image.done)) {
+            fprintf(stderr,
+                    "minibox-scand: stage=soapht-retrieve-drain rc=%d got=%zu done=%d\\n",
+                    rc, got, state.image.done);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int codec_end_page(struct soapht_session *transport, int *more_pages)
 {
     char *response = 0;
     int rc;
     if (!transport || !more_pages || !state.image_done) return -1;
+    if (finish_image_response()) return -4;
     *more_pages = 0;
     if (!state.adf) return 0;
 
