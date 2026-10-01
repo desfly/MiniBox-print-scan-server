@@ -21,6 +21,7 @@ struct mock {
     int retrieve_empty_reads;
     int retrieve_mid_header_empty_reads;
     int retrieve_body_empty_reads;
+    int request_before_response_drained;
 };
 
 static void put16(unsigned char *p, unsigned v)
@@ -187,6 +188,7 @@ int main(void)
     assert(strstr(m.requests,"RetrieveImageRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     assert(!minibox_soapht_codec->finish(&s));
+    assert(!m.request_before_response_drained);
     assert(strstr(m.requests,"CancelJobRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
     soapht_close(&s);
