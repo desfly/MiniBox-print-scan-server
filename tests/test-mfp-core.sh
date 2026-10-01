@@ -27,4 +27,6 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_session.c tes
 /tmp/test-scan-session
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_backend.c tests/test-scan-backend.c -o /tmp/test-scan-backend
 /tmp/test-scan-backend
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-printerd/http_body.c src/minibox-escl/escl.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c tests/test_scand_http.c -o /tmp/test-scand-http
+/tmp/test-scand-http
 echo 'MFP core contract OK'
