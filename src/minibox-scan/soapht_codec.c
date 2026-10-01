@@ -113,13 +113,11 @@ static int contains_header(const char *headers, const char *needle)
     return 0;
 }
 
-static int reader_begin(struct body_reader *r, struct soapht_session *transport)
+static int reader_parse_headers(struct body_reader *r)
 {
     char header[SOAPHT_HEADER_MAX], line[128];
     size_t n = 0;
     unsigned char c;
-    memset(r, 0, sizeof(*r));
-    r->transport = transport;
     while (n + 1 < sizeof(header)) {
         if (raw_byte(r, &c)) return -1;
         header[n++] = (char)c;
@@ -138,6 +136,13 @@ static int reader_begin(struct body_reader *r, struct soapht_session *transport)
     }
     (void)line;
     return 0;
+}
+
+static int reader_begin(struct body_reader *r, struct soapht_session *transport)
+{
+    memset(r, 0, sizeof(*r));
+    r->transport = transport;
+    return reader_parse_headers(r);
 }
 
 static int consume_chunk_crlf(struct body_reader *r)
@@ -441,7 +446,7 @@ static int reader_begin_retrieve(struct body_reader *r,
         if (!rc && got) {
             r->raw_pos = 0;
             r->raw_len = got;
-            return reader_begin(r, transport);
+            return reader_parse_headers(r);
         }
         if (attempt == 30) {
             fprintf(stderr,
