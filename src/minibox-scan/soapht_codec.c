@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 
 #define SOAPHT_RAW_BUFFER 4096
 #define SOAPHT_HEADER_MAX 2048
@@ -404,11 +405,24 @@ static int next_dime_record(void)
     return 0;
 }
 
+static void retrieve_ready_delay(void)
+{
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    (void)select(0, NULL, NULL, NULL, &tv);
+}
+
 static int begin_retrieve(struct soapht_session *transport)
 {
     char xml[2048];
     if (make_retrieve_xml(xml, sizeof(xml), state.job_id) ||
-        send_request(transport, xml) || reader_begin(&state.image, transport)) return -1;
+        send_request(transport, xml)) return -1;
+    /* The M1522 can accept RetrieveImage before its scan engine has produced
+     * the first SOAPHT response bytes.  Keep this readiness wait local to
+     * RetrieveImage: control requests must retain their fail-fast behavior. */
+    retrieve_ready_delay();
+    if (reader_begin(&state.image, transport)) return -1;
     if (state.image.status != 200) return -2;
     state.retrieve_started = 1;
     return 0;
