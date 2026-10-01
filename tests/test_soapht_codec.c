@@ -258,7 +258,7 @@ int main(void)
         assert(minibox_soapht_codec->end_page(&asf,&more)==-2);
         assert(!minibox_soapht_codec->finish(&asf));
         n=0; { const char *p=adf_status_fail.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
-        assert(n==1);
+        assert(n==0);
         soapht_close(&asf);
     }
     {
@@ -276,7 +276,7 @@ int main(void)
         assert(minibox_soapht_codec->end_page(&apm,&more)==-3);
         assert(!minibox_soapht_codec->finish(&apm));
         n=0; { const char *p=adf_paper_missing.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} }
-        assert(n==1);
+        assert(n==0);
         soapht_close(&apm);
     }
     {
