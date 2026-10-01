@@ -15,6 +15,7 @@ struct body_reader {
     size_t raw_pos, raw_len;
     size_t content_left, chunk_left;
     int chunked, need_chunk_crlf, done, status;
+    int tolerate_gaps;
 };
 
 struct codec_state {
@@ -39,16 +40,35 @@ static unsigned long read_be32(const unsigned char *p)
 
 static size_t pad4(size_t n) { return (n + 3u) & ~(size_t)3u; }
 
+static void retrieve_retry_delay(void)
+{
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
+    (void)select(0, NULL, NULL, NULL, &tv);
+}
+
 static int raw_fill(struct body_reader *r)
 {
     size_t got = 0;
-    int rc;
+    int rc = 0, idle = 0;
     if (r->raw_pos < r->raw_len) return 0;
-    rc = soapht_read(r->transport, r->raw, sizeof(r->raw), &got);
-    if (rc || !got) {
-        fprintf(stderr, "minibox-scand: stage=soapht-raw-read rc=%d got=%zu\n", rc, got);
-        return -1;
-    }
+    do {
+        got = 0;
+        rc = soapht_read(r->transport, r->raw, sizeof(r->raw), &got);
+        if (!rc && got) break;
+        if (!r->tolerate_gaps || ++idle >= 30) {
+            fprintf(stderr,
+                    "minibox-scand: stage=soapht-raw-read rc=%d got=%zu idle=%d\n",
+                    rc, got, idle);
+            return -1;
+        }
+        retrieve_retry_delay();
+    } while (1);
+    if (idle)
+        fprintf(stderr,
+                "minibox-scand: stage=soapht-retrieve-body-resume idle=%d got=%zu\n",
+                idle, got);
     r->raw_pos = 0;
     r->raw_len = got;
     return 0;
@@ -417,14 +437,6 @@ static int next_dime_record(void)
     return 0;
 }
 
-static void retrieve_retry_delay(void)
-{
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 100000;
-    (void)select(0, NULL, NULL, NULL, &tv);
-}
-
 static int retrieve_headers_complete(const unsigned char *buf, size_t len)
 {
     size_t i;
@@ -448,6 +460,7 @@ static int reader_begin_retrieve(struct body_reader *r,
      */
     memset(r, 0, sizeof(*r));
     r->transport = transport;
+    r->tolerate_gaps = 1;
     while (idle < 30) {
         if (r->raw_len >= SOAPHT_HEADER_MAX || r->raw_len == sizeof(r->raw))
             return -1;
