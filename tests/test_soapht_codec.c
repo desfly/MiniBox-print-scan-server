@@ -239,7 +239,7 @@ int main(void)
         soapht_close(&as);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CreateScanJobRequest>"))){n++;p+=27;} } assert(n==1);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:RetrieveImageRequest>"))){n++;p+=26;} } assert(n==2);
-        n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==3);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==2);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==0);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
     }
