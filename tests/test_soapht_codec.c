@@ -114,7 +114,7 @@ static void stage_response(struct mock *m)
                         /* Corrupt the first DIME byte after the first HTTP
                          * chunk-size line. */
                         unsigned char *p=(unsigned char *)h+4;
-                        char *e=strstr((char *)p,"\\r\\n");
+                        char *e=strstr((char *)p,"\r\n");
                         if (e) *((unsigned char *)e+2)=0;
                     }
                 }
