@@ -214,7 +214,12 @@ int main(void)
     assert(minibox_soapht_codec);
     assert(!minibox_soapht_codec->start(&s,&job));
     do {
-        assert(!minibox_soapht_codec->read_image(&s,image+off,2,&got));
+        {
+            int rrc=minibox_soapht_codec->read_image(&s,image+off,2,&got);
+            if (rrc) fprintf(stderr,"TEST read_image rc=%d off=%zu got=%zu response_pos=%zu/%zu request_no=%d\\n",
+                             rrc,off,got,m.response_pos,m.response_len,m.request_no);
+            assert(!rrc);
+        }
         off+=got;
     } while(got);
     assert(off==6 && !memcmp(image,"\xff\xd8" "AB\xff\xd9",6));
