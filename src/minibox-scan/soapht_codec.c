@@ -480,8 +480,6 @@ static int reader_begin_retrieve(struct body_reader *r,
             r->raw_len += got;
             idle = 0;
             if (retrieve_headers_complete(r->raw, r->raw_len)) {
-                char line[64], *end;
-                unsigned long first_chunk;
                 r->raw_pos = 0;
                 if (reader_parse_headers(r)) return -1;
                 /*
@@ -493,11 +491,18 @@ static int reader_begin_retrieve(struct body_reader *r,
                  * the image.  The final record is flags=0x0a, data_len=560
                  * and ends exactly at JPEG EOI.
                  */
+                /*
+                 * M1522 RetrieveImage switches from the HTTP/SOAP envelope
+                 * directly to the DIME stream.  The captured boundary is
+                 * "...Envelope>" followed immediately by the DIME header
+                 * 09 10 00 04 00 03 00 0a 00 00 08 00.  There is no
+                 * "800\\r\\n" chunk-size line to consume here.
+                 *
+                 * The device nevertheless advertises Transfer-Encoding:
+                 * chunked, so disable HTTP chunk parsing and preserve every
+                 * already-buffered byte for the DIME parser.
+                 */
                 if (r->chunked) {
-                    if (read_line_raw(r, line, sizeof(line))) return -1;
-                    first_chunk = strtoul(line, &end, 16);
-                    if (end == line || (*end && *end != ';') || !first_chunk)
-                        return -1;
                     r->chunked = 0;
                     r->content_left = (size_t)-1;
                 }
