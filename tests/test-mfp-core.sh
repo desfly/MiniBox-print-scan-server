@@ -22,7 +22,7 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c 
 /tmp/test-soapht-codec 2>/tmp/minibox-soapht-failure.log || { cat /tmp/minibox-soapht-failure.log >&2; exit 1; }
 grep -q 'stage=soapht-raw-read' /tmp/minibox-soapht-failure.log
 grep -q 'stage=soapht-control-body' /tmp/minibox-soapht-failure.log
-grep -q 'stage=soapht-get-elements rc=-4' /tmp/minibox-soapht-failure.log
+grep -Eq 'stage=soapht-get-elements( index=[0-9]+)? rc=-4' /tmp/minibox-soapht-failure.log
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_session.c tests/test-scan-session.c -o /tmp/test-scan-session
 /tmp/test-scan-session
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_backend.c tests/test-scan-backend.c -o /tmp/test-scan-backend
