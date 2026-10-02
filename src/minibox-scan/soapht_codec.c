@@ -443,6 +443,10 @@ static int next_dime_record(void)
         (type_len == 10 && !memcmp(type, "image/jpeg", 10)) ||
         (type_len == 0 && state.image_continues);
     state.image_continues = state.record_is_image && (h[0] & 0x01u);
+    fprintf(stderr,
+            "minibox-scand: stage=soapht-dime flags=0x%02x data_len=%zu type_len=%zu image=%d continues=%d\\n",
+            (unsigned)state.record_flags, state.record_left, type_len,
+            state.record_is_image, state.image_continues);
     return 0;
 }
 
