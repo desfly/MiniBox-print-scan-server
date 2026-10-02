@@ -364,7 +364,7 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "</ScanRegion><ColorProcessing>%s</ColorProcessing><Resolution>"
         "<Width>%u</Width><Height>%u</Height></Resolution></MediaFront></MediaSides>"
         "</DocumentParameters><RetrieveImageTimeout>300</RetrieveImageTimeout>"
-        "<ScanManufacturingParameters><DisableImageProcessing>false</DisableImageProcessing>"
+        "<ScanManufacturingParameters><ImageProcessingRemoval>removeNone</ImageProcessingRemoval>"
         "</ScanManufacturingParameters></ScanTicket></wscn:CreateScanJobRequest>"
         "</SOAP-ENV:Body></SOAP-ENV:Envelope>",
         source, width, height, x, y, width, height, color, dpi, dpi);
