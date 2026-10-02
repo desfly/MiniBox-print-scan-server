@@ -94,9 +94,8 @@ static void stage_response(struct mock *m)
                 if (m->malformed_dime) {
                     const char *h = strstr((char *)m->response,"\r\n\r\n");
                     if (h) {
+                        /* RetrieveImage body starts directly with DIME. */
                         unsigned char *p=(unsigned char *)h+4;
-                        while (*p && *p!='\r') p++;
-                        if (p[0]=='\r' && p[1]=='\n') p+=2;
                         *p=0;
                     }
                 }
