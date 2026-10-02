@@ -495,26 +495,19 @@ static int reader_begin_retrieve(struct body_reader *r,
                 r->raw_pos = 0;
                 if (reader_parse_headers(r)) return -1;
                 /*
-                 * Verified M1522 RetrieveImage capture advertises HTTP
-                 * Transfer-Encoding: chunked and emits one leading "800\\r\\n",
-                 * but does not emit CRLF/new chunk headers every 0x800 bytes.
-                 * The remainder is a continuous DIME stream.  Consume that
-                 * single transport prefix, then let DIME data_len/CF/ME frame
-                 * the image.  The final record is flags=0x0a, data_len=560
-                 * and ends exactly at JPEG EOI.
-                 */
-                /*
-                 * M1522 RetrieveImage switches from the HTTP/SOAP envelope
-                 * directly to the DIME stream.  The captured boundary is
-                 * "...Envelope>" followed immediately by the DIME header
-                 * 09 10 00 04 00 03 00 0a 00 00 08 00.  There is no
-                 * "800\\r\\n" chunk-size line to consume here.
-                 *
-                 * The device nevertheless advertises Transfer-Encoding:
-                 * chunked, so disable HTTP chunk parsing and preserve every
-                 * already-buffered byte for the DIME parser.
+                 * M1522 RetrieveImage advertises Transfer-Encoding: chunked,
+                 * emits exactly one leading chunk-size line ("800\\r\\n"),
+                 * then continues as a raw DIME stream without HTTP chunk
+                 * delimiters between the 0x800-byte DIME payload records.
+                 * Consume only that leading line, then disable HTTP chunk
+                 * parsing and preserve the remaining buffered DIME bytes.
                  */
                 if (r->chunked) {
+                    char line[64], *end;
+                    unsigned long first_chunk;
+                    if (read_line_raw(r, line, sizeof(line))) return -1;
+                    first_chunk = strtoul(line, &end, 16);
+                    if (end == line || *end || first_chunk != 0x800ul) return -1;
                     r->chunked = 0;
                     r->content_left = (size_t)-1;
                 }
