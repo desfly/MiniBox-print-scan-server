@@ -69,10 +69,15 @@ static int raw_fill(struct body_reader *r)
         }
         retrieve_retry_delay();
     } while (1);
-    if (idle)
+    if (idle) {
+        size_t i, dump = got < 16 ? got : 16;
         fprintf(stderr,
-                "minibox-scand: stage=soapht-retrieve-body-resume idle=%d got=%zu\n",
+                "minibox-scand: stage=soapht-retrieve-body-resume idle=%d got=%zu bytes=",
                 idle, got);
+        for (i = 0; i < dump; ++i)
+            fprintf(stderr, "%02x", r->raw[i]);
+        fprintf(stderr, "\n");
+    }
     r->raw_pos = 0;
     r->raw_len = got;
     return 0;
@@ -424,7 +429,14 @@ static int next_dime_record(void)
     unsigned char h[12], type[64];
     size_t options_len, id_len, type_len, data_len;
     if (body_exact(&state.image, h, sizeof(h))) return -1;
-    if ((h[0] & 0xf8u) != 0x08u) return -2;
+    if ((h[0] & 0xf8u) != 0x08u) {
+        size_t i;
+        fprintf(stderr, "minibox-scand: stage=soapht-dime-header-invalid bytes=");
+        for (i = 0; i < sizeof(h); ++i)
+            fprintf(stderr, "%02x", h[i]);
+        fprintf(stderr, "\n");
+        return -2;
+    }
     options_len = read_be16(h + 2);
     id_len = read_be16(h + 4);
     type_len = read_be16(h + 6);
