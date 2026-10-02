@@ -52,8 +52,8 @@ static void make_dime(struct mock *m, unsigned char first, unsigned char second)
 
     /* Make the DIME stream cross a real 0x800 HTTP chunk boundary inside a
      * DIME header.  The metadata length is 4-byte aligned, as DIME requires. */
-    memset(p,0,12); p[0]=0x0c; put32(p+8,2012); p+=12;
-    meta=p; memset(meta,'M',2012); p+=2012;
+    memset(p,0,12); p[0]=0x0c; put32(p+8,2028); p+=12;
+    meta=p; memset(meta,'M',2028); p+=2028;
 
     memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
     memcpy(p,"image/jpeg",10); p+=10; *p++=0; *p++=0;
