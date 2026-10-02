@@ -23,7 +23,7 @@ static unsigned next_job=1; static struct minibox_scan_session scan;
 static struct minibox_scan_stream scan_stream;
 #define SCAN_REQUEST_MAX 65536
 #define CLIENT_TIMEOUT_SEC 15
-static int send_all(int f,const void*p,size_t n){const unsigned char*q=p;while(n){ssize_t w=send(f,q,n,0);if(w<0){if(errno==EINTR)continue;return-1;}q+=w;n-=(size_t)w;}return 0;}
+static int send_all(int f,const void*p,size_t n){const unsigned char*q=p;while(n){ssize_t w=send(f,q,n,0);if(w<0){if(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK)continue;return-1;}if(!w){errno=EPIPE;return-1;}q+=w;n-=(size_t)w;}return 0;}
 static void outx(int f,int code,const char*reason,const char*type,const char*extra,const char*body){char h[768];size_t n=strlen(body);int m=snprintf(h,sizeof h,"HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\n%sConnection: close\r\n\r\n",code,reason,type,n,extra?extra:"");if(m>0){send_all(f,h,(size_t)m);send_all(f,body,n);}}
 static const char *reason_for(int code){switch(code){case 200:return "OK";case 201:return "Created";case 400:return "Bad Request";case 404:return "Not Found";case 409:return "Conflict";case 503:return "Service Unavailable";default:return "Error";}}
 static void out(int f,int code,const char*type,const char*body){outx(f,code,reason_for(code),type,NULL,body);}
