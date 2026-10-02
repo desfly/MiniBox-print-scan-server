@@ -64,8 +64,8 @@ static void make_dime(struct mock *m, unsigned char first, unsigned char second)
     dime_len=(size_t)(p-dime);
 
     n = snprintf((char *)m->response, sizeof(m->response),
-        "HTTP/1.1 200 OK\\r\\nContent-Type: application/dime\\r\\n"
-        "Transfer-Encoding: chunked\\r\\n\\r\\n");
+        "HTTP/1.1 200 OK\r\nContent-Type: application/dime\r\n"
+        "Transfer-Encoding: chunked\r\n\r\n");
     assert(n > 0);
 
     while (off < dime_len) {
@@ -73,13 +73,13 @@ static void make_dime(struct mock *m, unsigned char first, unsigned char second)
         int hn;
         if (chunk > 0x800u) chunk = 0x800u;
         hn = snprintf((char *)m->response+n, sizeof(m->response)-(size_t)n,
-                      "%lX\\r\\n", (unsigned long)chunk);
+                      "%lX\r\n", (unsigned long)chunk);
         assert(hn > 0); n += hn;
         memcpy(m->response+n,dime+off,chunk); n += (int)chunk;
-        memcpy(m->response+n,"\\r\\n",2); n += 2;
+        memcpy(m->response+n,"\r\n",2); n += 2;
         off += chunk;
     }
-    memcpy(m->response+n,"0\\r\\n\\r\\n",5); n += 5;
+    memcpy(m->response+n,"0\r\n\r\n",5); n += 5;
     m->response_len=(size_t)n;
     m->response_pos=0;
 }
