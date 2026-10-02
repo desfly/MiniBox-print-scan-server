@@ -139,18 +139,21 @@ static void stage_response(struct mock *m)
     static const unsigned char adf_done[] = "<ScanElements><PaperInADF>false</PaperInADF></ScanElements>";
     static const unsigned char created[] = "<CreateScanJobResponseType><JobId>2</JobId></CreateScanJobResponseType>";
     static const unsigned char cancelled[] = "<CancelJobResponse/>";
+    /* Verified Windows/HPLIP sequence begins with seven complete
+     * GetScannerElements exchanges. */
+    if (m->request_no >= 1 && m->request_no <= 7) {
+        set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
+        if (m->request_no == 1 && m->truncate_first_response) m->response_len -= 7;
+        return;
+    }
     if (!m->adf_mode) {
-        if (m->request_no == 1) {
-            set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
-            if (m->truncate_first_response) m->response_len -= 7;
-        } else if (m->request_no == 2) {
+        if (m->request_no == 8) {
             static const unsigned char malformed[] = "<CreateScanJobResponseType/>";
             if (m->malformed_create_response)
                 set_http(m,malformed,sizeof(malformed)-1,202,"application/soap+xml");
             else
                 set_http(m,created,sizeof(created)-1,202,"application/soap+xml");
-        }
-        else if (m->request_no == 3) {
+        } else if (m->request_no == 9) {
             if (m->fail_retrieve_status) {
                 static const unsigned char failed[] = "<Fault/>";
                 set_http(m,failed,sizeof(failed)-1,503,"application/soap+xml");
@@ -160,26 +163,22 @@ static void stage_response(struct mock *m)
                 if (m->malformed_dime) {
                     const char *h = strstr((char *)m->response,"\r\n\r\n");
                     if (h) {
-                        /* Corrupt the first DIME byte after the first HTTP
-                         * chunk-size line. */
                         unsigned char *p=(unsigned char *)h+4;
                         char *e=strstr((char *)p,"\r\n");
                         if (e) *((unsigned char *)e+2)=0;
                     }
                 }
             }
-        }
-        else {
+        } else {
             set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml");
             if (m->fail_cancel_response) m->response_len = 0;
         }
         return;
     }
     switch (m->request_no) {
-    case 1: set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml"); break;
-    case 2: set_http(m,created,sizeof(created)-1,202,"application/soap+xml"); break;
-    case 3: make_dime(m,'A','1'); break;
-    case 4:
+    case 8: set_http(m,created,sizeof(created)-1,202,"application/soap+xml"); break;
+    case 9: make_dime(m,'A','1'); break;
+    case 10:
         if (m->fail_adf_status) {
             static const unsigned char failed[] = "<Fault/>";
             set_http(m,failed,sizeof(failed)-1,503,"application/soap+xml");
@@ -187,8 +186,8 @@ static void stage_response(struct mock *m)
             set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
         } else set_http(m,adf_more,sizeof(adf_more)-1,202,"application/soap+xml");
         break;
-    case 5: make_dime(m,'B','2'); break;
-    case 6: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
+    case 11: make_dime(m,'B','2'); break;
+    case 12: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
     default: set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml"); break;
     }
 }
@@ -217,7 +216,7 @@ static int rd(void *v,unsigned char *b,size_t cap,size_t *got)
             return 0;
         }
     }
-    if (m->request_no == 3 && m->retrieve_empty_reads > 0) {
+    if (m->request_no == 9 && m->retrieve_empty_reads > 0) {
         --m->retrieve_empty_reads;
         *got = 0;
         return -7;
@@ -228,7 +227,7 @@ static int rd(void *v,unsigned char *b,size_t cap,size_t *got)
         *got = 0;
         return -7;
     }
-    if (m->request_no == 3 && m->retrieve_body_empty_reads > 0) {
+    if (m->request_no == 9 && m->retrieve_body_empty_reads > 0) {
         const char *h = strstr((const char *)m->response, "\r\n\r\n");
         size_t body_at = h ? (size_t)(h - (const char *)m->response) + 4 : m->response_len;
         if (m->response_pos > body_at + 7) {
