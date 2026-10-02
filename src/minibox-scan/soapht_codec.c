@@ -257,7 +257,7 @@ static int send_request(struct soapht_session *transport, const char *xml)
     int hn = snprintf(header, sizeof(header),
         "POST / HTTP/1.1\r\n"
         "Host: http:0\r\n"
-        "User-Agent: gSOAP/2.7\r\n"
+        "User-Agent: gSOAP/2.8\r\n"
         "Content-Type: application/soap+xml; charset=utf-8\r\n"
         "Transfer-Encoding: chunked\r\n"
         "Connection: close\r\n\r\n");
@@ -394,10 +394,19 @@ static int codec_start(struct soapht_session *transport,
     memset(&state, 0, sizeof(state));
     if (!transport || !job) return -1;
     {
-        int rc = control_request(transport, get_elements_xml, 0);
-        if (rc) {
-            fprintf(stderr, "minibox-scand: stage=soapht-get-elements rc=%d\n", rc);
-            return -2;
+        unsigned i;
+        /*
+         * Match the verified Windows/HPLIP M1522 session exactly: seven
+         * GetScannerElements exchanges precede CreateScanJob.
+         */
+        for (i = 0; i < 7; ++i) {
+            int rc = control_request(transport, get_elements_xml, 0);
+            if (rc) {
+                fprintf(stderr,
+                        "minibox-scand: stage=soapht-get-elements index=%u rc=%d\n",
+                        i + 1, rc);
+                return -2;
+            }
         }
     }
     if (make_create_xml(xml, sizeof(xml), job)) {
