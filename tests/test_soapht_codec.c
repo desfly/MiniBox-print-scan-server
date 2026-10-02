@@ -46,6 +46,7 @@ static void set_http(struct mock *m, const unsigned char *body, size_t body_len,
 static void make_dime(struct mock *m, unsigned char first, unsigned char second)
 {
     unsigned char dime[128], *p=dime;
+    int n;
     memset(p,0,12); p[0]=0x0c; put32(p+8,4); p+=12;
     memcpy(p,"meta",4); p+=4;
     memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
@@ -53,7 +54,17 @@ static void make_dime(struct mock *m, unsigned char first, unsigned char second)
     *p++=0xff; *p++=0xd8; *p++=first; *p++=0;
     memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
     *p++=second; *p++=0xff; *p++=0xd9; *p++=0;
-    set_http(m,dime,(size_t)(p-dime),200,"application/dime");
+
+    /* M1522 capture: RetrieveImage advertises chunked transfer encoding,
+     * but the HTTP header terminator is followed directly by DIME bytes. */
+    n = snprintf((char *)m->response, sizeof(m->response),
+        "HTTP/1.1 200 OK\r\nContent-Type: application/dime\r\n"
+        "Transfer-Encoding: chunked\r\n\r\n");
+    assert(n > 0);
+    memcpy(m->response+n,dime,(size_t)(p-dime));
+    n += (int)(p-dime);
+    m->response_len=(size_t)n;
+    m->response_pos=0;
 }
 
 static void stage_response(struct mock *m)
