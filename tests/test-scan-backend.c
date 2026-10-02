@@ -13,7 +13,7 @@ static void mock_close(void *v){((struct mock_ctx*)v)->closed++;}
 static const struct minibox_scan_backend backend={mock_open,mock_read,mock_end,mock_close};
 
 int main(void){
- struct minibox_scan_stream s={0}; struct mock_ctx c={0}; struct escl_job j={ESCL_SOURCE_PLATEN,300,1};
+ struct minibox_scan_stream s={0}; struct mock_ctx c={0}; struct escl_job j={ESCL_SOURCE_PLATEN,300,1,0,0,0,0};
  unsigned char out[sizeof(jpeg)]={0},buf[3]; size_t total=0,got=0; int more=-1;
  assert(minibox_scan_stream_open(&s,&backend,&c,&j)==0); assert(c.opened);
  while(total<sizeof(out)){assert(minibox_scan_stream_read(&s,buf,sizeof(buf),&got)==0);assert(got>0);memcpy(out+total,buf,got);total+=got;}
