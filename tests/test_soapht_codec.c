@@ -221,7 +221,7 @@ static int rd(void *v,unsigned char *b,size_t cap,size_t *got)
         *got = 0;
         return -7;
     }
-    if (m->request_no == 3 && m->response_pos > 0 &&
+    if (m->request_no == 9 && m->response_pos > 0 &&
         m->retrieve_mid_header_empty_reads > 0) {
         --m->retrieve_mid_header_empty_reads;
         *got = 0;
