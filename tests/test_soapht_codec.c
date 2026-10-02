@@ -55,11 +55,12 @@ static void make_dime(struct mock *m, unsigned char first, unsigned char second)
     memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
     *p++=second; *p++=0xff; *p++=0xd9; *p++=0;
 
-    /* M1522 capture: RetrieveImage advertises chunked transfer encoding,
-     * but the HTTP header terminator is followed directly by DIME bytes. */
+    /* M1522 capture: RetrieveImage advertises chunked transfer encoding
+     * and emits one leading 800 chunk marker before the continuous DIME
+     * stream.  It does not add chunk delimiters between DIME records. */
     n = snprintf((char *)m->response, sizeof(m->response),
         "HTTP/1.1 200 OK\r\nContent-Type: application/dime\r\n"
-        "Transfer-Encoding: chunked\r\n\r\n");
+        "Transfer-Encoding: chunked\r\n\r\n800\r\n");
     assert(n > 0);
     memcpy(m->response+n,dime,(size_t)(p-dime));
     n += (int)(p-dime);
@@ -94,8 +95,10 @@ static void stage_response(struct mock *m)
                 if (m->malformed_dime) {
                     const char *h = strstr((char *)m->response,"\r\n\r\n");
                     if (h) {
-                        /* RetrieveImage body starts directly with DIME. */
+                        /* Skip the captured leading 800\\r\\n marker and
+                         * corrupt the first DIME byte itself. */
                         unsigned char *p=(unsigned char *)h+4;
+                        p += 5;
                         *p=0;
                     }
                 }
