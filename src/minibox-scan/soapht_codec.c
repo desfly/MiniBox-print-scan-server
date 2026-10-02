@@ -25,6 +25,7 @@ struct codec_state {
     size_t record_left, record_pad;
     unsigned char record_flags;
     int record_is_image, image_continues;
+    unsigned dime_record_no;
 };
 
 static struct codec_state state;
@@ -441,6 +442,13 @@ static int next_dime_record(void)
     id_len = read_be16(h + 4);
     type_len = read_be16(h + 6);
     data_len = (size_t)read_be32(h + 8);
+    ++state.dime_record_no;
+    if (state.dime_record_no <= 3 || (h[0] & 0x02u))
+        fprintf(stderr,
+                "minibox-scand: stage=soapht-dime-header record=%u flags=0x%02x options=%zu id=%zu type=%zu data=%zu chunk_left=%zu raw_pending=%zu\n",
+                state.dime_record_no, (unsigned)h[0], options_len, id_len,
+                type_len, data_len, state.image.chunk_left,
+                state.image.raw_len - state.image.raw_pos);
     if (options_len > 4096 || id_len > 4096 || type_len >= sizeof(type)) return -3;
     if (body_skip(&state.image, pad4(options_len)) ||
         body_skip(&state.image, pad4(id_len))) return -4;
