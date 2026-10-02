@@ -45,25 +45,41 @@ static void set_http(struct mock *m, const unsigned char *body, size_t body_len,
 
 static void make_dime(struct mock *m, unsigned char first, unsigned char second)
 {
-    unsigned char dime[128], *p=dime;
+    unsigned char dime[4096], *p=dime;
+    unsigned char *meta;
+    size_t dime_len, off = 0;
     int n;
-    memset(p,0,12); p[0]=0x0c; put32(p+8,4); p+=12;
-    memcpy(p,"meta",4); p+=4;
+
+    /* Make the DIME stream cross a real 0x800 HTTP chunk boundary inside a
+     * DIME header.  This is the framing seen in the Windows USBPcap. */
+    memset(p,0,12); p[0]=0x0c; put32(p+8,2000); p+=12;
+    meta=p; memset(meta,'M',2000); p+=2000;
+
     memset(p,0,12); p[0]=0x09; put16(p+6,10); put32(p+8,3); p+=12;
     memcpy(p,"image/jpeg",10); p+=10; *p++=0; *p++=0;
     *p++=0xff; *p++=0xd8; *p++=first; *p++=0;
+
     memset(p,0,12); p[0]=0x0a; put32(p+8,3); p+=12;
     *p++=second; *p++=0xff; *p++=0xd9; *p++=0;
+    dime_len=(size_t)(p-dime);
 
-    /* M1522 capture: RetrieveImage advertises chunked transfer encoding
-     * and emits one leading 800 chunk marker before the continuous DIME
-     * stream.  It does not add chunk delimiters between DIME records. */
     n = snprintf((char *)m->response, sizeof(m->response),
-        "HTTP/1.1 200 OK\r\nContent-Type: application/dime\r\n"
-        "Transfer-Encoding: chunked\r\n\r\n800\r\n");
+        "HTTP/1.1 200 OK\\r\\nContent-Type: application/dime\\r\\n"
+        "Transfer-Encoding: chunked\\r\\n\\r\\n");
     assert(n > 0);
-    memcpy(m->response+n,dime,(size_t)(p-dime));
-    n += (int)(p-dime);
+
+    while (off < dime_len) {
+        size_t chunk = dime_len - off;
+        int hn;
+        if (chunk > 0x800u) chunk = 0x800u;
+        hn = snprintf((char *)m->response+n, sizeof(m->response)-(size_t)n,
+                      "%lX\\r\\n", (unsigned long)chunk);
+        assert(hn > 0); n += hn;
+        memcpy(m->response+n,dime+off,chunk); n += (int)chunk;
+        memcpy(m->response+n,"\\r\\n",2); n += 2;
+        off += chunk;
+    }
+    memcpy(m->response+n,"0\\r\\n\\r\\n",5); n += 5;
     m->response_len=(size_t)n;
     m->response_pos=0;
 }
@@ -95,11 +111,11 @@ static void stage_response(struct mock *m)
                 if (m->malformed_dime) {
                     const char *h = strstr((char *)m->response,"\r\n\r\n");
                     if (h) {
-                        /* Skip the captured leading 800\\r\\n marker and
-                         * corrupt the first DIME byte itself. */
+                        /* Corrupt the first DIME byte after the first HTTP
+                         * chunk-size line. */
                         unsigned char *p=(unsigned char *)h+4;
-                        p += 5;
-                        *p=0;
+                        char *e=strstr((char *)p,"\\r\\n");
+                        if (e) *((unsigned char *)e+2)=0;
                     }
                 }
             }
