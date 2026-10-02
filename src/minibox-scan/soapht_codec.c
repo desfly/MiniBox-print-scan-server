@@ -443,10 +443,6 @@ static int next_dime_record(void)
         (type_len == 10 && !memcmp(type, "image/jpeg", 10)) ||
         (type_len == 0 && state.image_continues);
     state.image_continues = state.record_is_image && (h[0] & 0x01u);
-    fprintf(stderr,
-            "minibox-scand: stage=soapht-dime flags=0x%02x data_len=%zu type_len=%zu image=%d continues=%d\\n",
-            (unsigned)state.record_flags, state.record_left, type_len,
-            state.record_is_image, state.image_continues);
     return 0;
 }
 
@@ -484,8 +480,28 @@ static int reader_begin_retrieve(struct body_reader *r,
             r->raw_len += got;
             idle = 0;
             if (retrieve_headers_complete(r->raw, r->raw_len)) {
+                char line[64], *end;
+                unsigned long first_chunk;
                 r->raw_pos = 0;
-                return reader_parse_headers(r);
+                if (reader_parse_headers(r)) return -1;
+                /*
+                 * Verified M1522 RetrieveImage capture advertises HTTP
+                 * Transfer-Encoding: chunked and emits one leading "800\\r\\n",
+                 * but does not emit CRLF/new chunk headers every 0x800 bytes.
+                 * The remainder is a continuous DIME stream.  Consume that
+                 * single transport prefix, then let DIME data_len/CF/ME frame
+                 * the image.  The final record is flags=0x0a, data_len=560
+                 * and ends exactly at JPEG EOI.
+                 */
+                if (r->chunked) {
+                    if (read_line_raw(r, line, sizeof(line))) return -1;
+                    first_chunk = strtoul(line, &end, 16);
+                    if (end == line || (*end && *end != ';') || !first_chunk)
+                        return -1;
+                    r->chunked = 0;
+                    r->content_left = (size_t)-1;
+                }
+                return 0;
             }
             continue;
         }
