@@ -542,26 +542,13 @@ static int codec_read_image(struct soapht_session *transport,
 
 static int finish_image_response(void)
 {
-    unsigned char scratch[256];
-    size_t got;
-    int rc;
-
     /*
-     * JPEG completion is DIME-level completion, not HTTP-body completion.
-     * Consume the remaining chunk framing/trailers before the next SOAP
-     * request.  Otherwise CancelJob can start while RetrieveImage bytes are
-     * still pending and the M1522 leaves the completed job active.
+     * The verified M1522 platen exchange completes at the final DIME image
+     * record.  Do not wait for an HTTP-body terminator here: the device can
+     * leave the RetrieveImage transport open after the complete JPEG/DIME
+     * record, which otherwise turns successful scans into an endless series
+     * of zero-byte bulk reads.
      */
-    while (!state.image.done) {
-        got = 0;
-        rc = body_read(&state.image, scratch, sizeof(scratch), &got);
-        if (rc || (!got && !state.image.done)) {
-            fprintf(stderr,
-                    "minibox-scand: stage=soapht-retrieve-drain rc=%d got=%zu done=%d\\n",
-                    rc, got, state.image.done);
-            return -1;
-        }
-    }
     return 0;
 }
 
