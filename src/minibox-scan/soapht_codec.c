@@ -495,22 +495,13 @@ static int reader_begin_retrieve(struct body_reader *r,
                 r->raw_pos = 0;
                 if (reader_parse_headers(r)) return -1;
                 /*
-                 * M1522 RetrieveImage advertises Transfer-Encoding: chunked,
-                 * emits exactly one leading chunk-size line ("800\\r\\n"),
-                 * then continues as a raw DIME stream without HTTP chunk
-                 * delimiters between the 0x800-byte DIME payload records.
-                 * Consume only that leading line, then disable HTTP chunk
-                 * parsing and preserve the remaining buffered DIME bytes.
+                 * The verified Windows USBPcap shows RetrieveImage is normal
+                 * HTTP/1.1 chunked transfer encoding throughout the DIME
+                 * stream: each 0x800-byte body chunk is followed by
+                 * "\\r\\n800\\r\\n" before the next body chunk.  Keep
+                 * chunk parsing enabled so those framing bytes never reach
+                 * the DIME/JPEG parser.
                  */
-                if (r->chunked) {
-                    char line[64], *end;
-                    unsigned long first_chunk;
-                    if (read_line_raw(r, line, sizeof(line))) return -1;
-                    first_chunk = strtoul(line, &end, 16);
-                    if (end == line || *end || first_chunk != 0x800ul) return -1;
-                    r->chunked = 0;
-                    r->content_left = (size_t)-1;
-                }
                 return 0;
             }
             continue;
