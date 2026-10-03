@@ -207,7 +207,7 @@ code=$(curl -sS -D /tmp/read-next.headers -o /tmp/read-next.out -w '%{http_code}
 [ "$code" = 503 ]
 grep -qi '^Content-Type: text/plain' /tmp/read-next.headers
 grep -q 'M1522 scan backend unavailable' /tmp/read-next.out
-grep -q 'stage=first-image-read' /tmp/scand-read-fail.log
+grep -q 'stage=image-read' /tmp/scand-read-fail.log
 code=$(curl -sS -D /tmp/read-job2.headers -o /tmp/read-job2.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18082/eSCL/ScanJobs)
 [ "$code" = 201 ]
 grep -qi '^Location: /eSCL/ScanJobs/2' /tmp/read-job2.headers
