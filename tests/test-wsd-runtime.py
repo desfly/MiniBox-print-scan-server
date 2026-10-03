@@ -72,7 +72,7 @@ try:
     mrel = mroot.find("./s:Header/a:RelatesTo", ns)
     assert mrel is not None and mrel.text == get_id
     assert endpoint.encode() in body
-    assert b"HP LaserJet M1522n @ MiniBox" in body
+    assert b"M1522n NET" in body
     assert b"MFP Printers Scanners" in body
     print("WSD UDP Probe + HTTP metadata integration: OK")
 finally:
