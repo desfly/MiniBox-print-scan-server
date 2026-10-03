@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/time.h>
 
 static int find_soapht(libusb_device *d,struct m1522_scan_handle *h){
     struct libusb_config_descriptor *c=NULL;
@@ -78,28 +79,51 @@ static void retry_delay_100ms(void){
 }
 
 int m1522_scan_read(struct m1522_scan_handle *h,unsigned char *buf,size_t cap,size_t *got,int timeout_ms){
-    int done=0,r=0,attempt;
+    int done=0,r=0,error_attempt=0;
+    unsigned long zero_reads=0;
+    struct timeval started,now;
+    long elapsed_ms;
     if(!h||!h->dev||!h->bulk_in||!buf||!got||!cap||cap>(size_t)INT_MAX)return -1;
     *got=0;
-    /* Verified bb_soapht behavior:
-     * - zero-byte success: initial read + 4 retries (5 total);
-     * - HPMUD timeout/I/O status path: initial read + 3 retries (4 total).
-     * All retries are spaced by 100 ms. */
-    for(attempt=0;;attempt++){
-        int max_attempts;
+    /*
+     * M1522 uses successful zero-length bulk-IN completions as flow-control
+     * while scan data is being produced.  The verified USBPcap contains
+     * tens of thousands of these between non-empty packets (up to ~11 s
+     * before RetrieveImage data and ~2 s inside the image).  Sleeping 100 ms
+     * after every few zero completions throttles the stream so severely that
+     * Windows waits forever after the physical scan has completed.
+     *
+     * Drain zero-length successes immediately for one caller timeout window.
+     * Real libusb timeout/I/O errors keep the bounded retry/backoff path.
+     */
+    gettimeofday(&started,NULL);
+    for(;;){
         done=0;
         r=libusb_bulk_transfer(h->dev,h->bulk_in,buf,(int)cap,&done,timeout_ms);
         if(!r && done>0){
             *got=(size_t)done;
             return 0;
         }
-        if(!r && done==0) max_attempts=5;
-        else if(r==LIBUSB_ERROR_TIMEOUT || r==LIBUSB_ERROR_IO) max_attempts=4;
-        else return r;
-        fprintf(stderr, "minibox-scand: stage=libusb-bulk-in rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d attempt=%d/%d\n",
-                r, done, cap, h->bulk_in, timeout_ms, attempt+1, max_attempts);
-        if(attempt+1>=max_attempts)
-            return r ? r : LIBUSB_ERROR_TIMEOUT;
-        retry_delay_100ms();
+        if(!r && done==0){
+            ++zero_reads;
+            gettimeofday(&now,NULL);
+            elapsed_ms=(long)(now.tv_sec-started.tv_sec)*1000L+
+                       (long)(now.tv_usec-started.tv_usec)/1000L;
+            if(elapsed_ms < timeout_ms) continue;
+            fprintf(stderr,
+                    "minibox-scand: stage=libusb-bulk-in rc=0 bytes=0 requested=%zu ep=0x%02x timeout_ms=%d zero_reads=%lu elapsed_ms=%ld\n",
+                    cap,h->bulk_in,timeout_ms,zero_reads,elapsed_ms);
+            return LIBUSB_ERROR_TIMEOUT;
+        }
+        if(r==LIBUSB_ERROR_TIMEOUT || r==LIBUSB_ERROR_IO){
+            ++error_attempt;
+            fprintf(stderr,
+                    "minibox-scand: stage=libusb-bulk-in rc=%d bytes=%d requested=%zu ep=0x%02x timeout_ms=%d attempt=%d/4\n",
+                    r,done,cap,h->bulk_in,timeout_ms,error_attempt);
+            if(error_attempt>=4)return r;
+            retry_delay_100ms();
+            continue;
+        }
+        return r;
     }
 }
