@@ -23,7 +23,7 @@ int main(void){
     caps=escl_scanner_capabilities_xml();
     assert(strstr(caps,"xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\""));
     assert(strstr(caps,"<pwg:Version>2.63</pwg:Version>"));
-    assert(strstr(caps,"<pwg:MakeAndModel>HP LaserJet M1522n @ MiniBox</pwg:MakeAndModel>"));
+    assert(strstr(caps,"<pwg:MakeAndModel>M1522n NET</pwg:MakeAndModel>"));
     assert(strstr(caps,"<scan:PlatenInputCaps>"));
     assert(strstr(caps,"<scan:AdfSimplexInputCaps>"));
     assert(strstr(caps,"<scan:ColorMode>RGB24</scan:ColorMode>"));
