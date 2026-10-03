@@ -221,14 +221,14 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
        add(out,cap,&p,
       "</a:RelatesTo></s:Header><s:Body><x:Metadata>"
       "<x:MetadataSection Dialect=\"http://schemas.xmlsoap.org/ws/2006/02/devprof/ThisDevice\">"
-      "<dp:ThisDevice><dp:FriendlyName>HP LaserJet M1522n @ MiniBox</dp:FriendlyName>"
+      "<dp:ThisDevice><dp:FriendlyName>M1522n NET</dp:FriendlyName>"
       "<dp:FirmwareVersion>MiniBox-MFP 0.3.0</dp:FirmwareVersion><dp:SerialNumber>")||
        xml_text(out,cap,&p,serial)||
        add(out,cap,&p,
       "</dp:SerialNumber></dp:ThisDevice></x:MetadataSection>"
       "<x:MetadataSection Dialect=\"http://schemas.xmlsoap.org/ws/2006/02/devprof/ThisModel\">"
       "<dp:ThisModel><dp:Manufacturer>HP</dp:Manufacturer>"
-      "<dp:ModelName>HP LaserJet M1522n @ MiniBox</dp:ModelName>"
+      "<dp:ModelName>M1522n NET</dp:ModelName>"
       "<dp:ModelNumber>M1522n</dp:ModelNumber>"
       "<dp:PresentationUrl>")||
        xml_text(out,cap,&p,presentation_url)||
@@ -295,7 +295,7 @@ int mb_wsd_build_get_printer_elements_response(const char *request_message_id,
       "<wprt:ColorSupported>false</wprt:ColorSupported>"
       "<wprt:DeviceId>MFG:HP;MDL:LaserJet M1522n MFP;CMD:PCL;</wprt:DeviceId>"
       "<wprt:MultipleDocumentJobsSupported>false</wprt:MultipleDocumentJobsSupported>"
-      "<wprt:PrinterName xml:lang=\"en-US\">HP LaserJet M1522n @ MiniBox</wprt:PrinterName>"
+      "<wprt:PrinterName xml:lang=\"en-US\">M1522n NET</wprt:PrinterName>"
       "<wprt:PrinterInfo xml:lang=\"en-US\">MiniBox network MFP bridge</wprt:PrinterInfo>"
       "<wprt:PrinterLocation xml:lang=\"en-US\">MiniBox</wprt:PrinterLocation>"
       "<wprt:SerialNumber>")||
