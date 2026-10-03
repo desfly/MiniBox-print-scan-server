@@ -86,7 +86,7 @@ const char *escl_scanner_capabilities_xml(void){
       "xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\" "
       "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">"
       "<pwg:Version>2.63</pwg:Version>"
-      "<pwg:MakeAndModel>HP LaserJet M1522n @ MiniBox</pwg:MakeAndModel>"
+      "<pwg:MakeAndModel>M1522n NET</pwg:MakeAndModel>"
       "<scan:Platen><scan:PlatenInputCaps>"
       "<scan:MinWidth>2550</scan:MinWidth><scan:MaxWidth>2550</scan:MaxWidth>"
       "<scan:MinHeight>3507</scan:MinHeight><scan:MaxHeight>3507</scan:MaxHeight>"
