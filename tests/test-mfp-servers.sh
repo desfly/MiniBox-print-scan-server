@@ -38,7 +38,7 @@ pwg='http://www.pwg.org/schemas/2010/12/sm'
 caps=ET.parse('/tmp/escl-caps.xml').getroot()
 assert caps.tag==f'{{{scan}}}ScannerCapabilities'
 assert caps.find(f'{{{pwg}}}Version').text=='2.63'
-assert caps.find(f'{{{pwg}}}MakeAndModel').text=='HP LaserJet M1522n @ MiniBox'
+assert caps.find(f'{{{pwg}}}MakeAndModel').text=='M1522n NET'
 assert caps.find(f'{{{scan}}}Platen/{{{scan}}}PlatenInputCaps') is not None
 assert caps.find(f'{{{scan}}}Adf/{{{scan}}}AdfSimplexInputCaps') is not None
 colors=[x.text for x in caps.findall('.//{%s}ColorMode'%scan)]
@@ -78,7 +78,7 @@ for expected_tag, expected_name, expected_value in (
 assert data[pos] == 0x04, f'missing printer-attributes group at {pos}'
 for value in (
     b'printer-name',
-    b'HP LaserJet M1522n @ MiniBox',
+    b'M1522n NET',
     b'printer-make-and-model',
     b'HP LaserJet M1522n',
     b'printer-uri-supported',
