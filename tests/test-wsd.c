@@ -52,7 +52,7 @@ int main(void){
                                   out,sizeof out);
  assert(n>0);
  contains(out,"/transfer/GetResponse");
- contains(out,"HP LaserJet M1522n @ MiniBox");
+ contains(out,"M1522n NET");
  contains(out,"MFP Printers Scanners");
  contains(out,"001122334455");
  contains(out,"http://192.168.55.250/");
@@ -80,7 +80,7 @@ int main(void){
    contains(out,"MFG:HP;MDL:LaserJet M1522n MFP;CMD:PCL;");
    contains(out,"<wprt:ColorSupported>false</wprt:ColorSupported>");
    contains(out,"<wprt:MultipleDocumentJobsSupported>false</wprt:MultipleDocumentJobsSupported>");
-   contains(out,"HP LaserJet M1522n @ MiniBox");
+   contains(out,"M1522n NET");
    contains(out,"0CEFAFCFC53D");
  }
  puts("WSD parse/match + GetPrinterElements contract OK");
