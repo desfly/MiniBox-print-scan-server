@@ -1,6 +1,6 @@
 # MiniBox MFP scanner DNS-SD contract
 [service]
-name=HP LaserJet M1522n Scanner @ MiniBox
+name=M1522n NET
 type=_uscan._tcp
 port=8080
 path=/eSCL
