@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Install libusb development headers
-        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev
+      - name: Install host-only protocol test tools
+        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev cups-ipp-utils
       - name: Compile and exercise IPP/eSCL server transports
         run: sh tests/test-mfp-servers.sh
       - name: Validate print and protocol core
@@ -27,6 +27,8 @@ jobs:
         run: sh tests/compile-libusb-backend.sh
       - name: Validate procd runtime definitions
         run: sh tests/test-procd-runtime.sh
+      - name: Validate embedded web UI contract
+        run: sh tests/test-web-ui.sh
       - name: Enforce no CUPS and no usblp
         run: |
           set -euo pipefail

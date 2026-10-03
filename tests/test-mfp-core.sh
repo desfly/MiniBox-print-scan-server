@@ -6,14 +6,27 @@ cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/stream.c src/minibox
 /tmp/test-print-job
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp.c -o /tmp/test-ipp
 /tmp/test-ipp
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-ipp/ipp.c tests/test-ipp-format.c -o /tmp/test-ipp-format
+/tmp/test-ipp-format
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-raster/pwg_to_pcl.c tests/test-pwg-to-pcl.c -o /tmp/test-pwg-to-pcl
+/tmp/test-pwg-to-pcl
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-discoveryd/wsd.c tests/test-wsd.c -o /tmp/test-wsd
+/tmp/test-wsd
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-escl/escl.c tests/test-escl.c -o /tmp/test-escl
 /tmp/test-escl
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/m1522_presence.c tests/test-m1522-presence.c -o /tmp/test-m1522-presence
+/tmp/test-m1522-presence
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c tests/test-soapht-transport.c -o /tmp/test-soapht
 /tmp/test-soapht
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scan/soapht_transport.c src/minibox-scan/soapht_codec.c tests/test_soapht_codec.c -o /tmp/test-soapht-codec
-/tmp/test-soapht-codec
+/tmp/test-soapht-codec 2>/tmp/minibox-soapht-failure.log || { cat /tmp/minibox-soapht-failure.log >&2; exit 1; }
+grep -q 'stage=soapht-raw-read' /tmp/minibox-soapht-failure.log
+grep -q 'stage=soapht-control-body' /tmp/minibox-soapht-failure.log
+grep -Eq 'stage=soapht-get-elements( index=[0-9]+)? rc=-4' /tmp/minibox-soapht-failure.log
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_session.c tests/test-scan-session.c -o /tmp/test-scan-session
 /tmp/test-scan-session
 cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-scand/scan_backend.c tests/test-scan-backend.c -o /tmp/test-scan-backend
 /tmp/test-scan-backend
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-printerd/http_body.c src/minibox-escl/escl.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c tests/test_scand_http.c -o /tmp/test-scand-http
+/tmp/test-scand-http
 echo 'MFP core contract OK'
