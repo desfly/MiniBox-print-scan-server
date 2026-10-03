@@ -42,7 +42,7 @@ int escl_parse_scan_settings(const char *xml,size_t len,struct escl_job *job){
     if(r<0){free(copy);return -4;}
     if(r==0){
         char *end=0;unsigned long v=strtoul(field,&end,10);
-        if(!end||*end||v!=300){free(copy);return -4;}
+        if(!end||*end||(v!=200&&v!=300)){free(copy);return -4;}
         job->dpi=(unsigned)v;
     }
 
