@@ -89,7 +89,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const unsigned char op_job_attrs[4]={0,0,0,IPP_OP_GET_JOB_ATTRIBUTES};
     const unsigned char op_jobs[4]={0,0,0,IPP_OP_GET_JOBS};
     const unsigned char op_attrs[4]={0,0,0,IPP_OP_GET_PRINTER_ATTRIBUTES};
-    const char *printer_name="HP LaserJet M1522n @ MiniBox";
+    const char *printer_name="M1522n NET";
     const char *model="HP LaserJet M1522n";
     const char *info="MiniBox network print server";
     const char *format="application/octet-stream";
