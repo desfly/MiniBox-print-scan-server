@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=34
+PKG_RELEASE:=35
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -22,15 +22,17 @@ define Package/minibox-mfp/postinst
 #!/bin/sh
 # Windows probes this canonical WSD path. Keep uhttpd's existing CGI prefix
 # and route only this URL to the proven CGI handler.
-if [ -z "${IPKG_INSTROOT}" ] && [ -f /etc/config/uhttpd ]; then
-	stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
-	if ! uci -q get uhttpd.main.alias | grep -Fqx "$stable_alias"; then
-		uci add_list uhttpd.main.alias="$stable_alias"
-		uci commit uhttpd
+if [ -z "${IPKG_INSTROOT}" ]; then
+	if [ -f /etc/config/uhttpd ]; then
+		stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
+		if ! uci -q get uhttpd.main.alias | grep -Fqx "$stable_alias"; then
+			uci add_list uhttpd.main.alias="$stable_alias"
+			uci commit uhttpd
+		fi
+		/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 	fi
-	/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 	# Replacing the APK replaces /usr/sbin/minibox-scand on disk. Ensure procd
-	# actually launches that new binary; otherwise the old process keeps running.
+	# launches the new binary even if uhttpd is absent or temporarily unconfigured.
 	/etc/init.d/minibox-scand restart >/dev/null 2>&1 || true
 fi
 exit 0
