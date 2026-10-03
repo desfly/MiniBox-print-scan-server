@@ -386,6 +386,30 @@ static int make_retrieve_xml(char *out, size_t cap, const char *job_id)
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
+static int make_get_job_info_xml(char *out, size_t cap, const char *job_id)
+{
+    int n = snprintf(out, cap,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
+        "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+        "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
+        "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
+        "<wscn:GetJobInfo><jobId>%s</jobId></wscn:GetJobInfo>"
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", job_id);
+    return n > 0 && (size_t)n < cap ? 0 : -1;
+}
+
+static const char get_previous_image_pad_info_xml[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
+    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+    "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
+    "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
+    "<wscn:GetPreviousImagePadInfo></wscn:GetPreviousImagePadInfo>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
 static int codec_start(struct soapht_session *transport,
                        const struct escl_job *job)
 {
@@ -580,13 +604,21 @@ static int codec_read_image(struct soapht_session *transport,
 
 static int finish_image_response(void)
 {
-    /*
-     * The verified M1522 platen exchange completes at the final DIME image
-     * record.  Do not wait for an HTTP-body terminator here: the device can
-     * leave the RetrieveImage transport open after the complete JPEG/DIME
-     * record, which otherwise turns successful scans into an endless series
-     * of zero-byte bulk reads.
-     */
+    unsigned char discard[256];
+    size_t got = 0;
+    int rc;
+    /* Clean Windows capture: final DIME is followed by the normal chunked
+     * terminator. Consume it before the post-image SOAP requests. */
+    while (!state.image.done) {
+        rc = body_read(&state.image, discard, sizeof(discard), &got);
+        if (rc || (!got && !state.image.done)) {
+            fprintf(stderr,
+                    "minibox-scand: stage=soapht-retrieve-finish rc=%d got=%zu chunk_left=%zu raw_pending=%zu\n",
+                    rc, got, state.image.chunk_left,
+                    state.image.raw_len - state.image.raw_pos);
+            return -1;
+        }
+    }
     return 0;
 }
 
@@ -596,6 +628,22 @@ static int codec_end_page(struct soapht_session *transport, int *more_pages)
     int rc;
     if (!transport || !more_pages || !state.image_done) return -1;
     if (finish_image_response()) return -4;
+    {
+        char xml[1024];
+        if (make_get_job_info_xml(xml, sizeof(xml), state.job_id)) return -5;
+        rc = control_request(transport, xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-get-job-info rc=%d job=%s\n",
+                    rc, state.job_id);
+            return -5;
+        }
+        rc = control_request(transport, get_previous_image_pad_info_xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-get-previous-image-pad-info rc=%d job=%s\n",
+                    rc, state.job_id);
+            return -6;
+        }
+    }
     *more_pages = 0;
     if (!state.adf) return 0;
 
@@ -629,9 +677,8 @@ static int codec_finish(struct soapht_session *transport)
     char xml[1024];
     int rc;
     if (!transport) return -1;
-    /* The verified M1522 platen capture ends after RetrieveImage: it does not
-     * send CancelJob on the successful path.  CancelJob is only an abort for
-     * a job that has not completed its image. */
+    /* Successful platen capture ends with GetJobInfo and
+     * GetPreviousImagePadInfo, not CancelJob. */
     if (state.started && state.job_id[0] && !state.image_done) {
         int n = snprintf(xml, sizeof(xml),
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
