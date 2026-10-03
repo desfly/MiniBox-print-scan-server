@@ -178,7 +178,9 @@ static void stage_response(struct mock *m)
     switch (m->request_no) {
     case 8: set_http(m,created,sizeof(created)-1,202,"application/soap+xml"); break;
     case 9: make_dime(m,'A','1'); break;
-    case 10:
+    case 10: case 11:
+        set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml"); break;
+    case 12:
         if (m->fail_adf_status) {
             static const unsigned char failed[] = "<Fault/>";
             set_http(m,failed,sizeof(failed)-1,503,"application/soap+xml");
@@ -186,8 +188,10 @@ static void stage_response(struct mock *m)
             set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml");
         } else set_http(m,adf_more,sizeof(adf_more)-1,202,"application/soap+xml");
         break;
-    case 11: make_dime(m,'B','2'); break;
-    case 12: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
+    case 13: make_dime(m,'B','2'); break;
+    case 14: case 15:
+        set_http(m,elements,sizeof(elements)-1,202,"application/soap+xml"); break;
+    case 16: set_http(m,adf_done,sizeof(adf_done)-1,202,"application/soap+xml"); break;
     default: set_http(m,cancelled,sizeof(cancelled)-1,202,"application/soap+xml"); break;
     }
 }
@@ -277,6 +281,8 @@ int main(void)
     assert(strstr(m.requests,"<Resolution><Width>200</Width><Height>200</Height></Resolution>"));
     assert(strstr(m.requests,"RetrieveImageRequest"));
     assert(strstr(m.requests,"<JobId>2</JobId>"));
+    assert(strstr(m.requests,"<wscn:GetJobInfo><jobId>2</jobId></wscn:GetJobInfo>"));
+    assert(strstr(m.requests,"<wscn:GetPreviousImagePadInfo></wscn:GetPreviousImagePadInfo>"));
     assert(!minibox_soapht_codec->finish(&s));
     assert(!m.request_before_response_drained);
     assert(!strstr(m.requests,"CancelJobRequest"));
@@ -316,7 +322,10 @@ int main(void)
         soapht_close(&as);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CreateScanJobRequest>"))){n++;p+=27;} } assert(n==1);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:RetrieveImageRequest>"))){n++;p+=26;} } assert(n==2);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:GetJobInfo>"))){n++;p+=17;} } assert(n==2);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:GetPreviousImagePadInfo>"))){n++;p+=32;} } assert(n==2);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<JobId>2</JobId>"))){n++;p+=16;} } assert(n==2);
+        n=0; { const char *p=adf.requests; while((p=strstr(p,"<jobId>2</jobId>"))){n++;p+=16;} } assert(n==2);
         n=0; { const char *p=adf.requests; while((p=strstr(p,"<wscn:CancelJobRequest>"))){n++;p+=22;} } assert(n==0);
         assert(strstr(adf.requests,"<InputSource>ADF</InputSource>"));
     }
