@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=33
+PKG_RELEASE:=34
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -29,6 +29,9 @@ if [ -z "${IPKG_INSTROOT}" ] && [ -f /etc/config/uhttpd ]; then
 		uci commit uhttpd
 	fi
 	/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+	# Replacing the APK replaces /usr/sbin/minibox-scand on disk. Ensure procd
+	# actually launches that new binary; otherwise the old process keeps running.
+	/etc/init.d/minibox-scand restart >/dev/null 2>&1 || true
 fi
 exit 0
 endef
