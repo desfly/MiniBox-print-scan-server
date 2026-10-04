@@ -40,20 +40,28 @@ static void feed_chunks(struct mb_pwg_pcl *p,const unsigned char *data,size_t n,
 int main(void){
     unsigned char h[1796],doc[4+1796+32];size_t n;
     struct mb_pwg_pcl p;struct sink s={0};
-    static const unsigned char rowcmd[]={0xb1,0xfa,0x04,0x00,0x00,0x00,0x55,0x00,0x00,0x00};
+    static const unsigned char rowcmd[]={
+        0xb1,0xfa,0x08,0x00,0x00,0x00,
+        0x00,0x20,0x40,0x60,0x80,0xa0,0xc0,0xff
+    };
 
     header(h,8,2,8,8,8,18,1);
     memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
     doc[n++]=1;      /* one encoded line repeated twice */
     doc[n++]=249;    /* 8 literal grayscale color values */
-    doc[n++]=0;doc[n++]=255;doc[n++]=0;doc[n++]=255;
-    doc[n++]=0;doc[n++]=255;doc[n++]=0;doc[n++]=255;
+    doc[n++]=0;doc[n++]=32;doc[n++]=64;doc[n++]=96;
+    doc[n++]=128;doc[n++]=160;doc[n++]=192;doc[n++]=255;
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,7,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
     assert(has(&s,(const unsigned char *)"@PJL ENTER LANGUAGE=PCLXL",25));
     assert(has(&s,(const unsigned char *)") HP-PCL XL;2;1;",16));
-    { static const unsigned char begin_image[]={0xc1,0x08,0x00,0xf8,0x6c,0xc1,0x02,0x00,0xf8,0x6b};
-      assert(has(&s,begin_image,sizeof begin_image)); }
+    { static const unsigned char gray_setup[]={
+        0xc0,0x02,0xf8,0x64, /* ColorDepth=e8Bit */
+        0xc0,0x00,0xf8,0x62, /* ColorMapping=eDirectPixel */
+        0xc1,0x08,0x00,0xf8,0x6c,
+        0xc1,0x02,0x00,0xf8,0x6b
+      };
+      assert(has(&s,gray_setup,sizeof gray_setup)); }
     assert(count(&s,rowcmd,sizeof rowcmd)==2);
     { static const unsigned char endjob[]="\x49\x42\033%-12345X@PJL EOJ NAME=\"MiniBox PWG\"\r\n\033%-12345X";
       assert(s.used>=sizeof endjob-1);
@@ -67,7 +75,10 @@ int main(void){
     doc[n++]=3; doc[n++]=0;doc[n++]=0;doc[n++]=0;       /* 4 black */
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,1,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
-    { static const unsigned char rgbrow[]={0xb1,0xfa,0x04,0x00,0x00,0x00,0xf0,0x00,0x00,0x00};
+    { static const unsigned char rgbrow[]={
+        0xb1,0xfa,0x08,0x00,0x00,0x00,
+        0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00
+      };
       assert(has(&s,rgbrow,sizeof rgbrow)); }
     mb_pwg_pcl_reset(&p);
 
