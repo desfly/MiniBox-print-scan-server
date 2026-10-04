@@ -41,24 +41,46 @@ void mb_pwg_pcl_reset(struct mb_pwg_pcl *s){
     free_page(s);
     mb_pwg_pcl_init(s);
 }
+static void le16(unsigned char *p,unsigned v){p[0]=(unsigned char)v;p[1]=(unsigned char)(v>>8);}
+static void le32(unsigned char *p,uint32_t v){p[0]=(unsigned char)v;p[1]=(unsigned char)(v>>8);p[2]=(unsigned char)(v>>16);p[3]=(unsigned char)(v>>24);}
+static int pxl_u8(mb_pwg_write_fn fn,void *ctx,unsigned v,unsigned attr){
+    unsigned char b[4]={0xc0,(unsigned char)v,0xf8,(unsigned char)attr};return out(fn,ctx,b,sizeof b);
+}
+static int pxl_u16(mb_pwg_write_fn fn,void *ctx,unsigned v,unsigned attr){
+    unsigned char b[5]={0xc1,0,0,0xf8,(unsigned char)attr};le16(b+1,v);return out(fn,ctx,b,sizeof b);
+}
+static int pxl_xy16(mb_pwg_write_fn fn,void *ctx,unsigned x,unsigned y,unsigned attr){
+    unsigned char b[7]={0xd1,0,0,0,0,0xf8,(unsigned char)attr};le16(b+1,x);le16(b+3,y);return out(fn,ctx,b,sizeof b);
+}
+static int pxl_op(mb_pwg_write_fn fn,void *ctx,unsigned op){unsigned char b=(unsigned char)op;return out(fn,ctx,&b,1);}
+static unsigned pxl_media(const struct mb_pwg_pcl *s){
+    unsigned w=s->page_width_points,h=s->page_height_points;
+    if((w>=590&&w<=600&&h>=837&&h<=847)||(h>=590&&h<=600&&w>=837&&w<=847))return 2; /* A4 */
+    if((w>=607&&w<=617&&h>=787&&h<=797)||(h>=607&&h<=617&&w>=787&&w<=797))return 0; /* Letter */
+    if((w>=607&&w<=617&&h>=1003&&h<=1013)||(h>=607&&h<=617&&w>=1003&&w<=1013))return 1; /* Legal */
+    return 2;
+}
 static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    static const char pjl[]="\033%-12345X@PJL JOB NAME=\"MiniBox PWG\"\r\n@PJL ENTER LANGUAGE=PCL\r\n\033E";
+    char pjl[192];int n;static const char pxl[]=") HP-PCL XL;2;1;\n";
     if(s->job_started)return 0;
-    if(out(fn,ctx,pjl,sizeof pjl-1))return -1;
+    n=snprintf(pjl,sizeof pjl,"\033%%-12345X@PJL JOB NAME=\"MiniBox PWG\"\r\n@PJL SET RESOLUTION=%u\r\n@PJL SET BITSPERPIXEL=1\r\n@PJL SET GRAYSCALE=BLACKONLY\r\n@PJL ENTER LANGUAGE=PCLXL\r\n",s->xdpi);
+    if(n<0||(size_t)n>=sizeof pjl||out(fn,ctx,pjl,(size_t)n)||out(fn,ctx,pxl,sizeof pxl-1))return -1;
+    if(pxl_xy16(fn,ctx,s->xdpi,s->ydpi,137)||pxl_u8(fn,ctx,0,134)||pxl_u8(fn,ctx,3,143)||pxl_op(fn,ctx,0x41)||
+       pxl_u8(fn,ctx,0,136)||pxl_u8(fn,ctx,1,130)||pxl_op(fn,ctx,0x48))return -1;
     s->job_started=1;return 0;
 }
 static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    if(job_start(s,fn,ctx)||paper_cmd(s,fn,ctx)||
-       out(fn,ctx,"\033&l0O",5)||
-       cmd(fn,ctx,"\033*t%uR",s->xdpi)||
-       cmd(fn,ctx,"\033*r%uS",s->width)||
-       cmd(fn,ctx,"\033*r%uT",s->height)||
-       out(fn,ctx,"\033*b0M\033*r1A",10))return -1;
+    if(job_start(s,fn,ctx)||
+       pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,0,40)||pxl_u8(fn,ctx,pxl_media(s),37)||pxl_op(fn,ctx,0x43)||
+       pxl_u8(fn,ctx,1,3)||pxl_op(fn,ctx,0x6a)||
+       pxl_xy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
+       pxl_u8(fn,ctx,0,100)||pxl_u8(fn,ctx,0,98)||
+       pxl_u16(fn,ctx,s->width,108)||pxl_u16(fn,ctx,s->height,107)||
+       pxl_xy16(fn,ctx,s->width,s->height,103)||pxl_op(fn,ctx,0xb0))return -1;
     return 0;
 }
 static int page_end(mb_pwg_write_fn fn,void *ctx){
-    static const unsigned char end[]={'\033','*','r','B','\f'};
-    return out(fn,ctx,end,sizeof end);
+    return pxl_op(fn,ctx,0xb2)||pxl_op(fn,ctx,0x44)?-1:0;
 }
 static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned unit;
@@ -109,8 +131,10 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned i;
     if(mono_row(s))return -1;
     for(i=0;i<s->repeat_lines;i++){
-        if(cmd(fn,ctx,"\033*b%uW",(unsigned)s->mono_cap)||
-           out(fn,ctx,s->mono,s->mono_cap))return -1;
+        unsigned char emb[5]={0xfa,0,0,0,0};
+        if(pxl_u16(fn,ctx,s->row,109)||pxl_u16(fn,ctx,1,99)||pxl_u8(fn,ctx,0,101)||pxl_op(fn,ctx,0xb1))return -1;
+        le32(emb+1,(uint32_t)s->mono_cap);
+        if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,s->mono,s->mono_cap))return -1;
         if(++s->row>s->height)return -1;
     }
     if(s->row==s->height){
@@ -196,7 +220,7 @@ int mb_pwg_pcl_feed(struct mb_pwg_pcl *s,const unsigned char *data,size_t len,
     return 0;
 }
 int mb_pwg_pcl_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    static const char trailer[]="\033E\033%-12345X";
+    static const unsigned char trailer[]={0x49,0x42,'\033','%','-','1','2','3','4','5','X'};
     if(!s||!fn||s->failed)return -1;
     if(!s->pages||s->phase!=MB_PWG_HEADER||s->header_used!=0)return -2;
     if(out(fn,ctx,trailer,sizeof trailer-1)){s->failed=-3;return -3;}
