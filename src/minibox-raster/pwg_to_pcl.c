@@ -207,11 +207,10 @@ int mb_pwg_pcl_feed(struct mb_pwg_pcl *s,const unsigned char *data,size_t len,
     return 0;
 }
 int mb_pwg_pcl_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    static const unsigned char trailer[]={0x49,0x42,'\033','%','-','1','2','3','4','5','X',
-        '@','P','J','L',' ','E','O','J',' ','N','A','M','E','=','"','M','i','n','i','B','o','x',' ','P','W','G','"','\\r','\\n',
-        '\033','%','-','1','2','3','4','5','X'};
+    static const unsigned char trailer[] = {0x49,0x42};
+    static const char pjl_end[] = "\033%-12345X@PJL EOJ NAME=\"MiniBox PWG\"\r\n\033%-12345X";
     if(!s||!fn||s->failed)return -1;
     if(!s->pages||s->phase!=MB_PWG_HEADER||s->header_used!=0)return -2;
-    if(out(fn,ctx,trailer,sizeof trailer)){s->failed=-3;return -3;}
+    if(out(fn,ctx,trailer,sizeof trailer)||out(fn,ctx,pjl_end,sizeof pjl_end-1)){s->failed=-3;return -3;}
     return 0;
 }
