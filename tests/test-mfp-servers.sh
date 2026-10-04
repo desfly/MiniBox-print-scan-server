@@ -123,8 +123,8 @@ printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
 curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
 cmp /tmp/document.expected /tmp/printed.bin
 # Android-style driverless path: accept image/pwg-raster and convert it to
-# monochrome PCL5 before the USB sink. This is a host-side transport contract,
-# not a claim of physical M1522 acceptance until hardware testing.
+# monochrome PCL XL before the USB sink, matching the M1522's proven PCL6 path.
+# Physical acceptance remains a hardware test after the host-side contract is green.
 python3 - <<'PY'
 from pathlib import Path
 def be32(v): return int(v).to_bytes(4,'big')
@@ -148,10 +148,9 @@ from pathlib import Path
 wire=Path('/tmp/pwg-print.out').read_bytes()
 assert len(wire)>9 and wire[2:4]==b'\x00\x00', wire.hex()
 out=Path('/tmp/printed.bin').read_bytes()
-assert b'@PJL ENTER LANGUAGE=PCL' in out
-assert b'\x1b*t300R' in out
-assert b'\x1b*r8S' in out
-assert out.count(b'\x1b*b1W\xaa')==2, out.hex()
+assert b'@PJL ENTER LANGUAGE=PCLXL' in out
+assert b') HP-PCL XL;2;1;' in out
+assert out.count(b'\xb1\xfa\x01\x00\x00\x00\xaa')==2, out.hex()
 PY
 python3 tests/test-large-print.py >/tmp/large.size
 [ "$(cat /tmp/large.size)" -gt 65536 ]
