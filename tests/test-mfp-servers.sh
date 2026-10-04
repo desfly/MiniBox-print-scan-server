@@ -150,7 +150,7 @@ assert len(wire)>9 and wire[2:4]==b'\x00\x00', wire.hex()
 out=Path('/tmp/printed.bin').read_bytes()
 assert b'@PJL ENTER LANGUAGE=PCLXL' in out
 assert b') HP-PCL XL;2;1;' in out
-assert out.count(b'\xb1\xfa\x04\x00\x00\x00\x55\x00\x00\x00')==2, out.hex()
+assert out.count(b'\xb1\xfa\x08\x00\x00\x00\x00\xff\x00\xff\x00\xff\x00\xff')==2, out.hex()
 PY
 python3 tests/test-large-print.py >/tmp/large.size
 [ "$(cat /tmp/large.size)" -gt 65536 ]
