@@ -40,7 +40,7 @@ static void feed_chunks(struct mb_pwg_pcl *p,const unsigned char *data,size_t n,
 int main(void){
     unsigned char h[1796],doc[4+1796+32];size_t n;
     struct mb_pwg_pcl p;struct sink s={0};
-    static const unsigned char rowcmd[]={0xb1,0xfa,0x01,0x00,0x00,0x00,0xaa};
+    static const unsigned char rowcmd[]={0xb1,0xfa,0x04,0x00,0x00,0x00,0xaa,0x00,0x00,0x00};
 
     header(h,8,2,8,8,8,18,1);
     memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
@@ -67,7 +67,7 @@ int main(void){
     doc[n++]=3; doc[n++]=0;doc[n++]=0;doc[n++]=0;       /* 4 black */
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,1,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
-    { static const unsigned char rgbrow[]={0xb1,0xfa,0x01,0x00,0x00,0x00,0x0f};
+    { static const unsigned char rgbrow[]={0xb1,0xfa,0x04,0x00,0x00,0x00,0x0f,0x00,0x00,0x00};
       assert(has(&s,rgbrow,sizeof rgbrow)); }
     mb_pwg_pcl_reset(&p);
 
@@ -76,8 +76,31 @@ int main(void){
     doc[n++]=0;doc[n++]=0;doc[n++]=0xa5; /* one repeated byte */
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,13,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
-    { static const unsigned char blackrow[]={0xb1,0xfa,0x01,0x00,0x00,0x00,0xa5};
+    { static const unsigned char blackrow[]={0xb1,0xfa,0x04,0x00,0x00,0x00,0xa5,0x00,0x00,0x00};
       assert(has(&s,blackrow,sizeof blackrow)); }
+    mb_pwg_pcl_reset(&p);
+
+    /* M1522/A4 at 300 dpi: 2480 mono pixels = 310 bytes.
+       PCL XL raster rows must be padded to a 4-byte boundary: 312 bytes. */
+    memset(&s,0,sizeof s);header(h,2480,1,1,1,310,3,1);
+    memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
+    doc[n++]=0;          /* one row */
+    doc[n++]=127;doc[n++]=0xa5; /* 128 repeated bytes */
+    doc[n++]=127;doc[n++]=0xa5; /* 128 repeated bytes */
+    doc[n++]=53; doc[n++]=0xa5; /* 54 repeated bytes = 310 */
+    mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,11,&s);
+    assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
+    { static const unsigned char m1522_len[]={0xb1,0xfa,0x38,0x01,0x00,0x00};
+      assert(has(&s,m1522_len,sizeof m1522_len));
+      assert(s.used>=sizeof m1522_len+312);
+      { size_t i;
+        for(i=0;i+sizeof m1522_len<=s.used;i++)if(!memcmp(s.data+i,m1522_len,sizeof m1522_len))break;
+        assert(i+sizeof m1522_len+312<=s.used);
+        assert(s.data[i+sizeof m1522_len+309]==0xa5);
+        assert(s.data[i+sizeof m1522_len+310]==0x00);
+        assert(s.data[i+sizeof m1522_len+311]==0x00);
+      }
+    }
     mb_pwg_pcl_reset(&p);
 
     memset(&s,0,sizeof s);header(h,8,1,8,8,8,18,1);
