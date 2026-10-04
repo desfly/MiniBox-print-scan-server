@@ -55,6 +55,9 @@ int main(void){
     { static const unsigned char begin_image[]={0xc1,0x08,0x00,0xf8,0x6c,0xc1,0x02,0x00,0xf8,0x6b};
       assert(has(&s,begin_image,sizeof begin_image)); }
     assert(count(&s,rowcmd,sizeof rowcmd)==2);
+    { static const unsigned char endjob[]="\x49\x42\033%-12345X@PJL EOJ NAME=\"MiniBox PWG\"\r\n\033%-12345X";
+      assert(s.used>=sizeof endjob-1);
+      assert(!memcmp(s.data+s.used-(sizeof endjob-1),endjob,sizeof endjob-1)); }
     mb_pwg_pcl_reset(&p);
 
     memset(&s,0,sizeof s);header(h,8,1,8,24,24,19,3);
