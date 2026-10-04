@@ -61,7 +61,8 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
        pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,0,40)||pxl_u8(fn,ctx,pxl_media(s),37)||pxl_op(fn,ctx,0x43)||
        pxl_u8(fn,ctx,1,3)||pxl_op(fn,ctx,0x6a)||
        pxl_xy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
-       pxl_u8(fn,ctx,0,100)||pxl_u8(fn,ctx,0,98)||
+       pxl_u8(fn,ctx,(s->color_space==3&&s->bits_per_pixel==1)?0:2,100)|| /* e1Bit/e8Bit */
+       pxl_u8(fn,ctx,0,98)|| /* eDirectPixel */
        pxl_u16(fn,ctx,s->width,108)||pxl_u16(fn,ctx,s->height,107)||
        pxl_xy16(fn,ctx,s->width,s->height,103)||pxl_op(fn,ctx,0xb0))return -1;
     return 0;
@@ -89,7 +90,9 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(s->bits_per_pixel==8&&s->bytes_per_line<s->width)return -1;
     if(s->bits_per_pixel==1&&s->bytes_per_line<(s->width+7u)/8u)return -1;
     s->line=malloc(s->bytes_per_line);
-    s->mono_cap=(s->width+7u)/8u;s->mono=malloc(s->mono_cap);
+    s->mono_cap=(s->color_space==3&&s->bits_per_pixel==1)?
+        (s->width+7u)/8u:s->width;
+    s->mono=malloc(s->mono_cap);
     if(!s->line||!s->mono){free_page(s);return -3;}
     s->line_cap=s->bytes_per_line;s->line_used=0;s->row=0;s->color_value_bytes=unit;
     if(page_start(s,fn,ctx)){free_page(s);return -4;}
@@ -97,24 +100,31 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
 }
 static int mono_row(struct mb_pwg_pcl *s){
     unsigned x;
-    /* PCL XL eGray/e1Bit DirectPixel uses 0=black and 1=white. */
-    memset(s->mono,0xff,s->mono_cap);
     if(s->color_space==3&&s->bits_per_pixel==1){
+        /*
+         * PWG black_1 has 1 bits for black; the M1522 PCL XL
+         * eGray/e1Bit DirectPixel path proven on hardware uses 0 for black.
+         */
         for(x=0;x<s->mono_cap;x++)s->mono[x]=(unsigned char)~s->line[x];
         return 0;
     }
-    for(x=0;x<s->width;x++){
-        int black=0;
-        if(s->color_space==18){
-            black=s->line[x]<128;
-        }else if(s->color_space==19){
-            const unsigned char *p=s->line+x*3u;
-            unsigned y=(77u*p[0]+150u*p[1]+29u*p[2])>>8;
-            black=y<128;
-        }else return -1;
-        if(black)s->mono[x>>3]&=(unsigned char)~(0x80u>>(x&7));
+    if(s->color_space==18){
+        /* PWG sgray_8 maps directly to PCL XL eGray/e8Bit DirectPixel. */
+        memcpy(s->mono,s->line,s->width);
+        return 0;
     }
-    return 0;
+    if(s->color_space==19){
+        /*
+         * PWG srgb_8 is converted to 8-bit gray, not thresholded.
+         * Integer Rec.601 luma weights sum to 256.
+         */
+        for(x=0;x<s->width;x++){
+            const unsigned char *p=s->line+x*3u;
+            s->mono[x]=(unsigned char)((77u*p[0]+150u*p[1]+29u*p[2]+128u)>>8);
+        }
+        return 0;
+    }
+    return -1;
 }
 static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned i;
