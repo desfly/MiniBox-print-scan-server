@@ -14,11 +14,6 @@ static uint32_t be32(const unsigned char *p){
 static int out(mb_pwg_write_fn fn,void *ctx,const void *buf,size_t len){
     return fn&&buf&&(!len||fn(ctx,(const unsigned char *)buf,len)==0)?0:-1;
 }
-static int cmd(mb_pwg_write_fn fn,void *ctx,const char *fmt,unsigned value){
-    char b[64];int n=snprintf(b,sizeof b,fmt,value);
-    if(n<0||(size_t)n>=sizeof b)return -1;
-    return out(fn,ctx,b,(size_t)n);
-}
 static void free_page(struct mb_pwg_pcl *s){
     free(s->line);free(s->mono);s->line=0;s->mono=0;
     s->line_cap=s->mono_cap=0;s->line_used=0;
