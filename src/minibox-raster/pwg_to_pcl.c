@@ -19,14 +19,6 @@ static int cmd(mb_pwg_write_fn fn,void *ctx,const char *fmt,unsigned value){
     if(n<0||(size_t)n>=sizeof b)return -1;
     return out(fn,ctx,b,(size_t)n);
 }
-static int paper_cmd(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    unsigned w=s->page_width_points,h=s->page_height_points;
-    unsigned code=0;
-    if((w>=590&&w<=600&&h>=837&&h<=847)||(h>=590&&h<=600&&w>=837&&w<=847))code=26; /* A4 */
-    else if((w>=607&&w<=617&&h>=787&&h<=797)||(h>=607&&h<=617&&w>=787&&w<=797))code=2; /* Letter */
-    else if((w>=607&&w<=617&&h>=1003&&h<=1013)||(h>=607&&h<=617&&w>=1003&&w<=1013))code=3; /* Legal */
-    return code?cmd(fn,ctx,"\033&l%uA",code):0;
-}
 static void free_page(struct mb_pwg_pcl *s){
     free(s->line);free(s->mono);s->line=0;s->mono=0;
     s->line_cap=s->mono_cap=0;s->line_used=0;
