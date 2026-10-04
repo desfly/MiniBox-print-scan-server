@@ -120,8 +120,14 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     for(i=0;i<s->repeat_lines;i++){
         unsigned char emb[5]={0xfa,0,0,0,0};
         if(pxl_u16(fn,ctx,s->row,109)||pxl_u16(fn,ctx,1,99)||pxl_u8(fn,ctx,0,101)||pxl_op(fn,ctx,0xb1))return -1;
-        le32(emb+1,(uint32_t)s->mono_cap);
-        if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,s->mono,s->mono_cap))return -1;
+        {
+            static const unsigned char pad[3]={0,0,0};
+            size_t padded=(s->mono_cap+3u)&~3u;
+            size_t padding=padded-s->mono_cap;
+            le32(emb+1,(uint32_t)padded);
+            if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,s->mono,s->mono_cap)||
+               (padding&&out(fn,ctx,pad,padding)))return -1;
+        }
         if(++s->row>s->height)return -1;
     }
     if(s->row==s->height){
