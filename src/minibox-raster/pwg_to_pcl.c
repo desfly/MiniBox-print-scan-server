@@ -97,9 +97,11 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
 }
 static int mono_row(struct mb_pwg_pcl *s){
     unsigned x;
-    memset(s->mono,0,s->mono_cap);
+    /* PCL XL eGray/e1Bit DirectPixel uses 0=black and 1=white. */
+    memset(s->mono,0xff,s->mono_cap);
     if(s->color_space==3&&s->bits_per_pixel==1){
-        memcpy(s->mono,s->line,s->mono_cap);return 0;
+        for(x=0;x<s->mono_cap;x++)s->mono[x]=(unsigned char)~s->line[x];
+        return 0;
     }
     for(x=0;x<s->width;x++){
         int black=0;
@@ -110,7 +112,7 @@ static int mono_row(struct mb_pwg_pcl *s){
             unsigned y=(77u*p[0]+150u*p[1]+29u*p[2])>>8;
             black=y<128;
         }else return -1;
-        if(black)s->mono[x>>3]|=(unsigned char)(0x80u>>(x&7));
+        if(black)s->mono[x>>3]&=(unsigned char)~(0x80u>>(x&7));
     }
     return 0;
 }
