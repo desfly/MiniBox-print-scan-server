@@ -256,7 +256,6 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         s->mono_cap=(s->width+7u)/8u;
         s->mono=(unsigned char *)malloc(s->mono_cap);
     }else if(s->color_space==18&&s->bits_per_pixel==8){
-        if(s->width>SIZE_MAX/3u){free_page(s);return -3;}
         s->mono_cap=(size_t)s->width*3u;
         s->mono=(unsigned char *)malloc(s->mono_cap);
     }
