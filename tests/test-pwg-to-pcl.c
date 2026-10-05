@@ -56,8 +56,8 @@ int main(void){
     assert(has(&s,(const unsigned char *)"@PJL ENTER LANGUAGE=PCLXL",25));
     assert(has(&s,(const unsigned char *)") HP-PCL XL;2;1;",16));
     { static const unsigned char gray_setup[]={
-        0xc0,0x02,0xf8,0x64, /* ColorDepth=e8Bit */
-        0xc0,0x00,0xf8,0x62, /* ColorMapping=eDirectPixel */
+        0xc0,0x02,0xf8,0x62, /* ColorDepth(98)=e8Bit */
+        0xc0,0x00,0xf8,0x64, /* ColorMapping(100)=eDirectPixel */
         0xc1,0x08,0x00,0xf8,0x6c,
         0xc1,0x02,0x00,0xf8,0x6b
       };
