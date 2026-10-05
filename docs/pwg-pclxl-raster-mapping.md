@@ -9,7 +9,7 @@ Do not change the converter by intuition: update this table and its tests first.
 |---:|---|---:|---:|---:|---|
 | 3 | black_1 | 1 | 1 | 1 | PCL XL eGray, e1Bit, eDirectPixel |
 | 18 | sgray_8 | 8 | 8 | 1 | PCL XL eGray, e8Bit, eDirectPixel |
-| 19 | srgb_8 | 8 | 24 | 3 | convert sRGB to 8-bit gray, then PCL XL eGray, e8Bit, eDirectPixel |
+| 19 | srgb_8 | 8 | 24 | 3 | PCL XL eRGB, e8Bit, eDirectPixel |
 
 Only chunky PWG raster (`cupsColorOrder == 0`) is accepted.
 
@@ -71,20 +71,18 @@ width
 
 ### srgb_8
 
-Each chunky RGB pixel is converted to one 8-bit gray sample using fixed
-integer Rec.601 luma weights:
+Each chunky RGB pixel is preserved byte-for-byte as three 8-bit components
+and sent as PCL XL eRGB/e8Bit DirectPixel.
 
-```
-gray = (77*R + 150*G + 29*B + 128) >> 8
-```
-
-The resulting 8-bit gray samples are sent as PCL XL eGray/e8Bit DirectPixel.
-They are not thresholded to 1 bit.
+This mapping is taken from the verified HP Universal Printing PCL 6 capture:
+the image path switches ColorSpace to eRGB and uses e8Bit/eDirectPixel before
+BeginImage. MiniBox must not collapse srgb_8 to host-side grayscale, because
+that bypasses the printer's own monochrome rendering/halftone path.
 
 Output bytes per row:
 
 ```
-width
+width * 3
 ```
 
 ## PCL XL ReadImage framing
@@ -107,6 +105,8 @@ Tests must fail if any of the following regressions return:
 
 - sgray_8 is thresholded to one bit
 - srgb_8 is thresholded to one bit
+- srgb_8 is converted to host-side grayscale
+- srgb_8 is not emitted as eRGB/e8Bit/eDirectPixel
 - e8Bit is replaced by e1Bit for continuous-tone data
 - black_1 polarity returns to the pre-hardware-test value
 - 2480-pixel 1-bit rows stop being padded from 310 to 312 bytes
