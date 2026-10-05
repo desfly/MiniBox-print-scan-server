@@ -10,7 +10,7 @@ define Package/minibox-mfp
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=MiniBox MFP Wi-Fi print and scan bridge
-  DEPENDS:=+libusb-1.0 +uhttpd +luci-light +tcpdump
+  DEPENDS:=+libusb-1.0 +libjpeg-turbo +uhttpd +luci-light +tcpdump
 endef
 
 define Package/minibox-mfp/description
@@ -55,11 +55,11 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-printerd/http_body.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/ipp.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/print_job.c \
-		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl.c \
+		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl_v2.c \
 		$(PKG_BUILD_DIR)/minibox-usb/stream.c \
 		$(PKG_BUILD_DIR)/minibox-usb/libusb_m1522.c \
 		$(PKG_BUILD_DIR)/minibox-usb/print_m1522.c \
-		$(PKG_BUILD_DIR)/minibox-usb/m1522_presence.c -lusb-1.0
+		$(PKG_BUILD_DIR)/minibox-usb/m1522_presence.c -lusb-1.0 -ljpeg
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-scand \
 		$(PKG_BUILD_DIR)/minibox-scand/main.c \
 		$(PKG_BUILD_DIR)/minibox-scand/scan_session.c \
