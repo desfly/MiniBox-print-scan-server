@@ -13,7 +13,6 @@
 /* Verified from M1522-PRINT-REAL.pcap / HP Universal Printing PCL 6. */
 #define M1522_RENDER_DPI 600u
 #define M1522_JPEG_QUALITY 95
-#define M1522_JPEG_BLOCK_ROWS 1080u
 
 struct mb_jpeg_error {
     struct jpeg_error_mgr pub;
@@ -140,8 +139,9 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned orientation=s->page_width_points>s->page_height_points?1u:0u;
     unsigned dw=scaled_to_600(s->width,s->xdpi);
     unsigned dh=scaled_to_600(s->height,s->ydpi);
-    unsigned cs=s->color_space==19?2u:1u;
-    unsigned depth=(s->color_space==3&&s->bits_per_pixel==1)?0u:2u;
+    unsigned is_black1=(s->color_space==3&&s->bits_per_pixel==1);
+    unsigned cs=is_black1?1u:2u;
+    unsigned depth=is_black1?0u:2u;
     if(dw>65535u||dh>65535u)return -1;
     if(job_start(s,fn,ctx)||
        pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,orientation,40))return -1;
@@ -169,7 +169,7 @@ static int page_end(mb_pwg_write_fn fn,void *ctx){
 static int jpeg_block_start(struct mb_pwg_pcl *s){
     struct mb_jpeg_block *b;
     unsigned remaining=s->height-s->row;
-    unsigned target=remaining>M1522_JPEG_BLOCK_ROWS?M1522_JPEG_BLOCK_ROWS:remaining;
+    unsigned target=remaining;
     b=(struct mb_jpeg_block *)calloc(1,sizeof *b);
     if(!b||!target){free(b);return -1;}
     b->start_line=s->row;b->rows_target=target;
@@ -183,11 +183,11 @@ static int jpeg_block_start(struct mb_pwg_pcl *s){
     jpeg_mem_dest(&b->cinfo,&b->data,&b->size);
     b->cinfo.image_width=s->width;
     b->cinfo.image_height=target;
-    b->cinfo.input_components=s->color_space==19?3:1;
-    b->cinfo.in_color_space=s->color_space==19?JCS_RGB:JCS_GRAYSCALE;
+    b->cinfo.input_components=3;
+    b->cinfo.in_color_space=JCS_RGB;
     jpeg_set_defaults(&b->cinfo);
     jpeg_set_quality(&b->cinfo,M1522_JPEG_QUALITY,TRUE);
-    if(s->color_space==19&&b->cinfo.num_components==3){
+    {
         int i;
         for(i=0;i<3;i++){
             b->cinfo.comp_info[i].h_samp_factor=1;
@@ -255,8 +255,14 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(s->color_space==3&&s->bits_per_pixel==1){
         s->mono_cap=(s->width+7u)/8u;
         s->mono=(unsigned char *)malloc(s->mono_cap);
+    }else if(s->color_space==18&&s->bits_per_pixel==8){
+        if(s->width>SIZE_MAX/3u){free_page(s);return -3;}
+        s->mono_cap=(size_t)s->width*3u;
+        s->mono=(unsigned char *)malloc(s->mono_cap);
     }
-    if(!s->line||((s->color_space==3&&s->bits_per_pixel==1)&&!s->mono)){
+    if(!s->line||
+       (((s->color_space==3&&s->bits_per_pixel==1)||
+         (s->color_space==18&&s->bits_per_pixel==8))&&!s->mono)){
         free_page(s);return -3;
     }
     s->line_cap=s->bytes_per_line;s->line_used=0;s->row=0;s->color_value_bytes=unit;
@@ -289,6 +295,17 @@ static int emit_black_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
 static int emit_continuous_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned i;
     const unsigned char *row=s->line;
+    if(s->color_space==18&&s->bits_per_pixel==8){
+        unsigned x;
+        if(!s->mono||s->mono_cap<(size_t)s->width*3u)return -1;
+        for(x=0;x<s->width;x++){
+            unsigned char g=s->line[x];
+            s->mono[(size_t)x*3u+0u]=g;
+            s->mono[(size_t)x*3u+1u]=g;
+            s->mono[(size_t)x*3u+2u]=g;
+        }
+        row=s->mono;
+    }
     for(i=0;i<s->repeat_lines;i++){
         struct mb_jpeg_block *b;
         if(!s->image_ctx&&jpeg_block_start(s))return -1;
@@ -345,7 +362,13 @@ static int consume_byte(struct mb_pwg_pcl *s,unsigned char ch,
         if(s->row+s->repeat_lines>s->height)return -1;
         s->line_used=0;s->phase=MB_PWG_CONTROL;return 0;
     case MB_PWG_CONTROL:
-        if(ch==128)return -1;
+        if(ch==128){
+            unsigned char fill=(s->color_space==18||s->color_space==19)?0xffu:0x00u;
+            if(s->line_used>s->bytes_per_line)return -1;
+            memset(s->line+s->line_used,fill,s->bytes_per_line-s->line_used);
+            s->line_used=s->bytes_per_line;
+            return emit_line(s,fn,ctx);
+        }
         s->token_value_used=0;
         if(ch<=127){
             s->token_units=(unsigned)ch+1u;s->phase=MB_PWG_REPEAT_VALUE;
