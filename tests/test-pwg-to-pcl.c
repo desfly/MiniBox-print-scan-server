@@ -55,6 +55,34 @@ int main(void){
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
     assert(has(&s,(const unsigned char *)"@PJL ENTER LANGUAGE=PCLXL",25));
     assert(has(&s,(const unsigned char *)") HP-PCL XL;2;1;",16));
+    { static const unsigned char session_setup[]={
+        0xd1,0x2c,0x01,0x2c,0x01,0xf8,0x89, /* UnitsPerMeasure(137)=300,300 */
+        0xc0,0x00,0xf8,0x86,                 /* Measure(134)=eInch */
+        0xc0,0x03,0xf8,0x8f,                 /* ErrorReport(143)=eBackChAndErrPage */
+        0x41,                                  /* BeginSession */
+        0xc0,0x00,0xf8,0x88,                 /* SourceType(136)=eDefault */
+        0xc0,0x01,0xf8,0x82,                 /* DataOrg(130)=eBinaryLowByteFirst */
+        0x48                                   /* OpenDataSource */
+      };
+      assert(has(&s,session_setup,sizeof session_setup)); }
+    { static const unsigned char page_image_setup[]={
+        0xc0,0x01,0xf8,0x26, /* MediaSource(38)=1 */
+        0xc0,0x00,0xf8,0x34, /* SimplexPageMode(52)=0 */
+        0xc0,0x00,0xf8,0x28, /* Orientation(40)=0 */
+        0xc0,0x02,0xf8,0x25, /* MediaSize(37)=A4 */
+        0x43,                 /* BeginPage */
+        0xc0,0x01,0xf8,0x03, /* ColorSpace(3)=eGray */
+        0x6a,                 /* SetColorSpace */
+        0xd1,0x00,0x00,0x00,0x00,0xf8,0x4c, /* Point(76)=0,0 */
+        0x6b,                 /* SetCursor */
+        0xc0,0x02,0xf8,0x62, /* ColorDepth(98)=e8Bit */
+        0xc0,0x00,0xf8,0x64, /* ColorMapping(100)=eDirectPixel */
+        0xc1,0x08,0x00,0xf8,0x6c, /* SourceWidth(108)=8 */
+        0xc1,0x02,0x00,0xf8,0x6b, /* SourceHeight(107)=2 */
+        0xd1,0x08,0x00,0x02,0x00,0xf8,0x67, /* DestinationSize(103)=8,2 */
+        0xb0                  /* BeginImage */
+      };
+      assert(has(&s,page_image_setup,sizeof page_image_setup)); }
     { static const unsigned char gray_setup[]={
         0xc0,0x02,0xf8,0x62, /* ColorDepth(98)=e8Bit */
         0xc0,0x00,0xf8,0x64, /* ColorMapping(100)=eDirectPixel */
