@@ -61,8 +61,8 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
        pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,0,40)||pxl_u8(fn,ctx,pxl_media(s),37)||pxl_op(fn,ctx,0x43)||
        pxl_u8(fn,ctx,1,3)||pxl_op(fn,ctx,0x6a)||
        pxl_xy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
-       pxl_u8(fn,ctx,(s->color_space==3&&s->bits_per_pixel==1)?0:2,100)|| /* e1Bit/e8Bit */
-       pxl_u8(fn,ctx,0,98)|| /* eDirectPixel */
+       pxl_u8(fn,ctx,(s->color_space==3&&s->bits_per_pixel==1)?0:2,98)|| /* ColorDepth: e1Bit/e8Bit */
+       pxl_u8(fn,ctx,0,100)|| /* ColorMapping: eDirectPixel */
        pxl_u16(fn,ctx,s->width,108)||pxl_u16(fn,ctx,s->height,107)||
        pxl_xy16(fn,ctx,s->width,s->height,103)||pxl_op(fn,ctx,0xb0))return -1;
     return 0;
