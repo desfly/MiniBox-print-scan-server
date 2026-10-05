@@ -154,9 +154,9 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr_more(o,c,&p,0x44,"na_letter_8.5x11in",18))return 0;
     if(attr_more(o,c,&p,0x44,"na_legal_8.5x14in",17))return 0;
     if(attr(o,c,&p,0x44,"media-default","iso_a4_210x297mm",16))return 0;
-    if(attr_resolution(o,c,&p,"printer-resolution-supported",300,300))return 0;
-    if(attr_resolution(o,c,&p,"printer-resolution-default",300,300))return 0;
-    if(attr_resolution(o,c,&p,"pwg-raster-document-resolution-supported",300,300))return 0;
+    if(attr_resolution(o,c,&p,"printer-resolution-supported",600,600))return 0;
+    if(attr_resolution(o,c,&p,"printer-resolution-default",600,600))return 0;
+    if(attr_resolution(o,c,&p,"pwg-raster-document-resolution-supported",600,600))return 0;
     if(attr(o,c,&p,0x44,"pwg-raster-document-type-supported","black_1",7))return 0;
     if(attr_more(o,c,&p,0x44,"sgray_8",7))return 0;
     if(attr_more(o,c,&p,0x44,"srgb_8",6))return 0;
