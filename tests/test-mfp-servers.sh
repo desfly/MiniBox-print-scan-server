@@ -153,7 +153,8 @@ out=Path('/tmp/printed.bin').read_bytes()
 assert b'@PJL ENTER LANGUAGE=PCLXL' in out
 assert b') HP-PCL XL;2;1;' in out
 assert b'\xc0\x02\xf8\x03\x6a' in out, out.hex()  # ColorSpace=eRGB; SetColorSpace
-assert out.count(b'\xb1\xfa\x18\x00\x00\x00'+b'\xff'*12+b'\x00'*12)==2, out.hex()
+assert b'\xc0\x02\xf8\x65\xb1\xfa' in out, out.hex()  # CompressMode=eJPEG; ReadImage
+assert b'\xff\xd8\xff\xe0' in out and b'JFIF' in out, out.hex()
 PY
 python3 tests/test-large-print.py >/tmp/large.size
 [ "$(cat /tmp/large.size)" -gt 65536 ]
