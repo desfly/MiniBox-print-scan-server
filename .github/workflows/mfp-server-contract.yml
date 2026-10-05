@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install host-only protocol test tools
-        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev cups-ipp-utils
+        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev libjpeg-dev cups-ipp-utils
       - name: Compile and exercise IPP/eSCL server transports
         run: sh tests/test-mfp-servers.sh
       - name: Validate print and protocol core
