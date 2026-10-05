@@ -119,7 +119,7 @@ int main(void){
     }
     {
         static const unsigned char gray_image[]={
-            0xc0,0x01,0xf8,0x03,0x6a,           /* eGray */
+            0xc0,0x02,0xf8,0x03,0x6a,           /* sgray lifted to neutral eRGB */
             0xc0,0x00,0xf8,0x64,                /* eDirectPixel */
             0xc0,0x02,0xf8,0x62,                /* e8Bit */
             0xc1,0x08,0x00,0xf8,0x6c,
@@ -129,7 +129,7 @@ int main(void){
         };
         assert(has(&s,gray_image,sizeof gray_image));
     }
-    assert_jpeg_after_readimage(&s,2,0);
+    assert_jpeg_after_readimage(&s,2,1);
     mb_pwg_pcl_reset(&p);
 
     memset(&s,0,sizeof s);header(h,8,2,8,24,24,19,3);
@@ -171,11 +171,19 @@ int main(void){
     }
     mb_pwg_pcl_reset(&p);
 
+    /* PWG/CUPS PackBits control 0x80 means clear-to-end-of-line, not error.
+       For sgray/sRGB the cleared pixels are white (0xff). */
     memset(&s,0,sizeof s);header(h,8,1,8,8,8,18,1);
     memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
     doc[n++]=0;doc[n++]=128;
     mb_pwg_pcl_init(&p);
-    assert(mb_pwg_pcl_feed(&p,doc,n,wr,&s)<0);
+    feed_chunks(&p,doc,n,3,&s);
+    assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
+    {
+        static const unsigned char rgb_space[]={0xc0,0x02,0xf8,0x03,0x6a};
+        assert(has(&s,rgb_space,sizeof rgb_space));
+    }
+    assert_jpeg_after_readimage(&s,1,1);
     mb_pwg_pcl_reset(&p);
 
     puts("PWG Raster -> capture-derived M1522 PCL XL contract OK");
