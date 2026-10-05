@@ -92,7 +92,7 @@ int main(void){
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,7,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
     assert(has(&s,(const unsigned char *)"@PJL SET RESOLUTION=600",23));
-    assert(has(&s,(const unsigned char *)"@PJL SET BITSPERPIXEL=1",25));
+    { static const unsigned char pjl_bpp[]="@PJL SET BITSPERPIXEL=1"; assert(has(&s,pjl_bpp,sizeof pjl_bpp-1)); }
     assert(has(&s,(const unsigned char *)"@PJL ENTER LANGUAGE=PCLXL",25));
     assert(has(&s,(const unsigned char *)") HP-PCL XL;2;1;",16));
     {
