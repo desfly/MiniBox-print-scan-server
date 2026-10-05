@@ -111,3 +111,57 @@ Tests must fail if any of the following regressions return:
 - black_1 polarity returns to the pre-hardware-test value
 - 2480-pixel 1-bit rows stop being padded from 310 to 312 bytes
 - PWG PackBits row-repeat decoding changes without a matching contract test
+
+
+## Verified PCL XL attribute and operator IDs
+
+These numeric IDs are copied from Ghostscript's public PCL XL tables
+(`base/gdevpxat.h`, `base/gdevpxop.h`, `base/gdevpxen.h`) and are the
+only IDs allowed in the MiniBox image path.
+
+| Attribute | ID |
+|---|---:|
+| ColorSpace | 3 |
+| MediaSize | 37 |
+| MediaSource | 38 |
+| Orientation | 40 |
+| SimplexPageMode | 52 |
+| Point | 76 |
+| ColorDepth | 98 |
+| BlockHeight | 99 |
+| ColorMapping | 100 |
+| CompressMode | 101 |
+| DestinationSize | 103 |
+| SourceHeight | 107 |
+| SourceWidth | 108 |
+| StartLine | 109 |
+| DataOrg | 130 |
+| Measure | 134 |
+| SourceType | 136 |
+| UnitsPerMeasure | 137 |
+| ErrorReport | 143 |
+
+| Operator | Hex | Decimal |
+|---|---:|---:|
+| BeginSession | 0x41 | 65 |
+| EndSession | 0x42 | 66 |
+| BeginPage | 0x43 | 67 |
+| EndPage | 0x44 | 68 |
+| OpenDataSource | 0x48 | 72 |
+| CloseDataSource | 0x49 | 73 |
+| SetColorSpace | 0x6a | 106 |
+| SetCursor | 0x6b | 107 |
+| BeginImage | 0xb0 | 176 |
+| ReadImage | 0xb1 | 177 |
+| EndImage | 0xb2 | 178 |
+
+Relevant enum values:
+
+- eInch = 0
+- eBinaryHighByteFirst = 0
+- eBinaryLowByteFirst = 1
+- eDefault data source = 0
+- eNoReporting = 0
+- eBackChannel = 1
+- eErrorPage = 2
+- eBackChAndErrPage = 3
