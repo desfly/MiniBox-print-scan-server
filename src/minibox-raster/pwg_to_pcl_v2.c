@@ -1,7 +1,7 @@
 #include "pwg_to_pcl.h"
+#include <stdio.h>
 #include <jpeglib.h>
 #include <setjmp.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
