@@ -30,6 +30,11 @@ static size_t find_bytes(const struct sink *s,const unsigned char *needle,size_t
 static int has(const struct sink *s,const unsigned char *needle,size_t n){
     return find_bytes(s,needle,n)!=(size_t)-1;
 }
+static int has_buf(const unsigned char *buf,size_t len,const unsigned char *needle,size_t n){
+    size_t i;if(!n||n>len)return 0;
+    for(i=0;i+n<=len;i++)if(!memcmp(buf+i,needle,n))return 1;
+    return 0;
+}
 static void feed_chunks(struct mb_pwg_pcl *p,const unsigned char *data,size_t n,
                         size_t step,struct sink *s){
     size_t off=0;
@@ -62,14 +67,14 @@ static void assert_jpeg_after_readimage(const struct sink *s,unsigned block_heig
                 0xff,0xdb,0x00,0x43,0x00,
                 0x02,0x01,0x01,0x01,0x01,0x01,0x02,0x01,0x01,0x01,0x02,0x02,0x02,0x02,0x02,0x04
             };
-            assert(memmem(s->data+i,n,q95,sizeof q95)!=0);
+            assert(has_buf(s->data+i,n,q95,sizeof q95));
         }
         if(rgb){
             /* Baseline SOF0, 3 components, 1x1 sampling for Y/Cb/Cr: exact UPD mode. */
             static const unsigned char sof_components[]={
                 0x03,0x01,0x11,0x00,0x02,0x11,0x01,0x03,0x11,0x01
             };
-            assert(memmem(s->data+i,n,sof_components,sizeof sof_components)!=0);
+            assert(has_buf(s->data+i,n,sof_components,sizeof sof_components));
         }
         assert(s->data[i+n-2]==0xff&&s->data[i+n-1]==0xd9);
     }
