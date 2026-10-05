@@ -100,7 +100,7 @@ PCL XL path is:
 | PWG type | PCL XL color space | Depth | Mapping | Data path |
 |---|---|---|---|---|
 | black_1 | eGray | e1Bit | eDirectPixel | packed 1-bit |
-| sgray_8 | eGray | e8Bit | eDirectPixel | baseline JPEG |
+| sgray_8 | eRGB | e8Bit | eDirectPixel | neutral RGB JPEG (R=G=B=input) |
 | srgb_8 | eRGB | e8Bit | eDirectPixel | baseline JPEG 4:4:4 |
 
 There is no host-side thresholding or RGB-to-gray conversion for srgb_8.
@@ -124,9 +124,7 @@ image is 1080 lines high.
 
 PCL XL permits ReadImage to cover subsets of the source through StartLine and
 BlockHeight, and Ghostscript's reference driver emits JPEG per image block.
-MiniBox therefore uses capture-sized blocks of up to 1080 scanlines for
-larger PWG pages, preserving bounded memory use while staying inside the
-documented ReadImage model.
+MiniBox uses one JPEG ReadImage block for the complete continuous-tone image, with StartLine=0 and BlockHeight=SourceHeight. The value 1080 is not a protocol constant; it is only the SourceHeight of the captured job.
 
 ## Explicitly prohibited regressions
 
