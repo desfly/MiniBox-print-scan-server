@@ -107,7 +107,7 @@ jobs:
           set -euo pipefail
           ./scripts/feeds update packages
           ./scripts/feeds update luci
-          ./scripts/feeds install -p packages libusb1 avahi
+          ./scripts/feeds install -p packages libusb1 avahi libjpeg-turbo
           ./scripts/feeds install -p luci luci-light
 
           # MiniBox owns /www/index.html by design. Keep the minimal MiniBox
@@ -120,6 +120,7 @@ jobs:
           rm -f "$LUCI_ROOT_INDEX"
 
           test -e package/feeds/packages/avahi
+          test -e package/feeds/packages/libjpeg-turbo
           test -e package/feeds/luci/luci-light
           test ! -e "$LUCI_ROOT_INDEX"
 
