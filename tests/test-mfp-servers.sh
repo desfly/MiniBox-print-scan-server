@@ -122,8 +122,9 @@ printf '\002\000\000\002\000\000\000\002\003\033EHello MiniBox\014\033E' >/tmp/p
 printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
 curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
 cmp /tmp/document.expected /tmp/printed.bin
-# Android-style driverless path: accept image/pwg-raster and convert it to
-# monochrome PCL XL before the USB sink, matching the M1522's proven PCL6 path.
+# Android-style driverless path: accept image/pwg-raster and map it to
+# documented PCL XL raster semantics. srgb_8 stays eRGB/e8Bit DirectPixel so
+# the M1522 performs its own monochrome rendering/halftoning.
 # Physical acceptance remains a hardware test after the host-side contract is green.
 python3 - <<'PY'
 from pathlib import Path
@@ -133,9 +134,10 @@ h[:9]=b'PwgRaster'
 h[276:280]=be32(300); h[280:284]=be32(300)
 h[352:356]=be32(595); h[356:360]=be32(842)
 h[372:376]=be32(8); h[376:380]=be32(2)
-h[384:388]=be32(8); h[388:392]=be32(8); h[392:396]=be32(8)
-h[396:400]=be32(0); h[400:404]=be32(18); h[420:424]=be32(1)
-raster=b'RaS2'+bytes(h)+bytes([1,249,0,255,0,255,0,255,0,255])
+h[384:388]=be32(8); h[388:392]=be32(24); h[392:396]=be32(24)
+h[396:400]=be32(0); h[400:404]=be32(19); h[420:424]=be32(3)
+# one RGB row repeated twice: 4 white pixels followed by 4 black pixels
+raster=b'RaS2'+bytes(h)+bytes([1,3,255,255,255,3,0,0,0])
 key=b'document-format'; value=b'image/pwg-raster'
 ipp=(bytes((2,0,0,2,0,0,0,55,1,0x49))+
      len(key).to_bytes(2,'big')+key+
@@ -150,7 +152,8 @@ assert len(wire)>9 and wire[2:4]==b'\x00\x00', wire.hex()
 out=Path('/tmp/printed.bin').read_bytes()
 assert b'@PJL ENTER LANGUAGE=PCLXL' in out
 assert b') HP-PCL XL;2;1;' in out
-assert out.count(b'\xb1\xfa\x08\x00\x00\x00\x00\xff\x00\xff\x00\xff\x00\xff')==2, out.hex()
+assert b'\xc0\x02\xf8\x03\x6a' in out, out.hex()  # ColorSpace=eRGB; SetColorSpace
+assert out.count(b'\xb1\xfa\x18\x00\x00\x00'+b'\xff'*12+b'\x00'*12)==2, out.hex()
 PY
 python3 tests/test-large-print.py >/tmp/large.size
 [ "$(cat /tmp/large.size)" -gt 65536 ]
