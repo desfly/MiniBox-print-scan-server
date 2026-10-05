@@ -59,7 +59,8 @@ static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
 static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(job_start(s,fn,ctx)||
        pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,0,40)||pxl_u8(fn,ctx,pxl_media(s),37)||pxl_op(fn,ctx,0x43)||
-       pxl_u8(fn,ctx,1,3)||pxl_op(fn,ctx,0x6a)||
+       pxl_u8(fn,ctx,s->color_space==19?2:1,3)|| /* ColorSpace: srgb_8 -> eRGB, mono/sgray -> eGray */
+       pxl_op(fn,ctx,0x6a)||
        pxl_xy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
        pxl_u8(fn,ctx,(s->color_space==3&&s->bits_per_pixel==1)?0:2,98)|| /* ColorDepth: e1Bit/e8Bit */
        pxl_u8(fn,ctx,0,100)|| /* ColorMapping: eDirectPixel */
@@ -90,8 +91,9 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(s->bits_per_pixel==8&&s->bytes_per_line<s->width)return -1;
     if(s->bits_per_pixel==1&&s->bytes_per_line<(s->width+7u)/8u)return -1;
     s->line=malloc(s->bytes_per_line);
-    s->mono_cap=(s->color_space==3&&s->bits_per_pixel==1)?
-        (s->width+7u)/8u:s->width;
+    if(s->color_space==3&&s->bits_per_pixel==1)s->mono_cap=(s->width+7u)/8u;
+    else if(s->color_space==19)s->mono_cap=(size_t)s->width*3u;
+    else s->mono_cap=s->width;
     s->mono=malloc(s->mono_cap);
     if(!s->line||!s->mono){free_page(s);return -3;}
     s->line_cap=s->bytes_per_line;s->line_used=0;s->row=0;s->color_value_bytes=unit;
@@ -115,13 +117,11 @@ static int mono_row(struct mb_pwg_pcl *s){
     }
     if(s->color_space==19){
         /*
-         * PWG srgb_8 is converted to 8-bit gray, not thresholded.
-         * Integer Rec.601 luma weights sum to 256.
+         * PWG srgb_8 maps to PCL XL eRGB/e8Bit DirectPixel.
+         * Preserve all three 8-bit components and let the printer's
+         * documented PCL XL raster pipeline perform monochrome rendering.
          */
-        for(x=0;x<s->width;x++){
-            const unsigned char *p=s->line+x*3u;
-            s->mono[x]=(unsigned char)((77u*p[0]+150u*p[1]+29u*p[2]+128u)>>8);
-        }
+        memcpy(s->mono,s->line,(size_t)s->width*3u);
         return 0;
     }
     return -1;
