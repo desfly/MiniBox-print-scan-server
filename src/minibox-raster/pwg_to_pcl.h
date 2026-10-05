@@ -47,6 +47,7 @@ struct mb_pwg_pcl {
     unsigned pages;
     int failed;
     int job_started;
+    void *image_ctx;
 };
 
 void mb_pwg_pcl_init(struct mb_pwg_pcl *s);
