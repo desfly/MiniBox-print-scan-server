@@ -293,7 +293,7 @@ int mb_wsd_build_get_printer_elements_response(const char *request_message_id,
       "<wprt:ElementData Name=\"wprt:PrinterDescription\" Valid=\"true\">"
       "<wprt:PrinterDescription>"
       "<wprt:ColorSupported>false</wprt:ColorSupported>"
-      "<wprt:DeviceId>MFG:HP;MDL:LaserJet M1522n MFP;CMD:PCL;</wprt:DeviceId>"
+      "<wprt:DeviceId>MFG:HP;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL;CLS:PRINTER;</wprt:DeviceId>"
       "<wprt:MultipleDocumentJobsSupported>false</wprt:MultipleDocumentJobsSupported>"
       "<wprt:PrinterName xml:lang=\"en-US\">M1522n NET</wprt:PrinterName>"
       "<wprt:PrinterInfo xml:lang=\"en-US\">MiniBox network MFP bridge</wprt:PrinterInfo>"
