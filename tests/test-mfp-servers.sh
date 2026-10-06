@@ -87,11 +87,12 @@ for value in (
     b'image/pwg-raster',
     b'pwg-raster-document-resolution-supported',
     b'pwg-raster-document-type-supported',
-    b'sgray_8',
+    b'black_1',
     b'srgb_8',
 ):
     assert value in data, f'missing IPP attribute/value: {value!r}'
 assert b'ipp://' in data and b'.local/ipp/print' in data, 'printer URI not aligned with actual host name'
+assert b'sgray_8' not in data, 'sgray_8 must not be advertised: Windows used it at 300 dpi in the captured IPP path'
 assert data[-1:] == b'\x03', 'IPP response missing end-of-attributes tag'
 PY
 # A PDF is NOT supported by this raw USB bridge. Neither Print-Job nor
