@@ -100,7 +100,7 @@ PCL XL path is:
 | PWG type | PCL XL color space | Depth | Mapping | Data path |
 |---|---|---|---|---|
 | black_1 | eGray | e1Bit | eDirectPixel | packed 1-bit |
-| sgray_8 | eRGB | e8Bit | eDirectPixel | neutral RGB JPEG (R=G=B=input) |
+| sgray_8 | accepted for compatibility, not advertised | e8Bit | — | neutral RGB fallback only |
 | srgb_8 | eRGB | e8Bit | eDirectPixel | baseline JPEG 4:4:4 |
 
 There is no host-side thresholding or RGB-to-gray conversion for srgb_8.
@@ -138,3 +138,11 @@ Do not reintroduce any of these:
 - eNoCompression for continuous-tone srgb_8/sgray_8
 - arbitrary PCL XL attribute numbers or enum values
 - a SetHalftoneMethod operator unless a verified driver stream requires it
+
+
+## Driverless advertisement policy
+
+The verified Windows IPP capture showed that advertising sgray_8 allowed the
+Microsoft IPP Class Driver to send 300-dpi grayscale raster. MiniBox therefore
+does not advertise sgray_8. The advertised PWG raster types are black_1 and
+srgb_8, while the parser still accepts sgray_8 as a compatibility fallback.
