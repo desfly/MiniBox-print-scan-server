@@ -2,12 +2,12 @@
 #define _DEFAULT_SOURCE
 #endif
 #include "wsd_identity.h"
+#include "../minibox-identity/m1522_identity.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -39,31 +39,14 @@ static int preferred_ipv4(char *ifname,size_t ifcap,struct in_addr *addr){
     return rc;
 }
 
-static int interface_mac(const char *ifname,unsigned char mac[6]){
-    int fd,rc=0;struct ifreq ifr;
-    if(!ifname||!mac)return -EINVAL;
-    fd=socket(AF_INET,SOCK_DGRAM,0);if(fd<0)return -errno;
-    memset(&ifr,0,sizeof ifr);
-    if(strlen(ifname)>=sizeof ifr.ifr_name){close(fd);return -EINVAL;}
-    strcpy(ifr.ifr_name,ifname);
-    if(ioctl(fd,SIOCGIFHWADDR,&ifr)<0)rc=-errno;
-    else memcpy(mac,ifr.ifr_hwaddr.sa_data,6);
-    close(fd);return rc;
-}
-
 int mb_wsd_get_identity(struct mb_wsd_identity *out){
-    unsigned char mac[6];char ip[INET_ADDRSTRLEN];int n,i,nonzero=0;
+    char ip[INET_ADDRSTRLEN];int n;
     if(!out)return -EINVAL;
     memset(out,0,sizeof *out);
     if(preferred_ipv4(out->ifname,sizeof out->ifname,&out->ipv4))return -EADDRNOTAVAIL;
-    if(interface_mac(out->ifname,mac))return -ENODEV;
-    for(i=0;i<6;i++)if(mac[i])nonzero=1;
-    if(!nonzero)return -ENODEV;
-    n=snprintf(out->serial,sizeof out->serial,"%02x%02x%02x%02x%02x%02x",
-               mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
-    if(n!=12)return -EINVAL;
-    n=snprintf(out->endpoint,sizeof out->endpoint,
-               "urn:uuid:4d424f58-0000-4000-8000-%s",out->serial);
+    n=snprintf(out->serial,sizeof out->serial,"%s",MINIBOX_MFP_SERIAL);
+    if(n!=(int)strlen(MINIBOX_MFP_SERIAL))return -EINVAL;
+    n=snprintf(out->endpoint,sizeof out->endpoint,"%s",MINIBOX_MFP_URN_UUID);
     if(n<0||(size_t)n>=sizeof out->endpoint)return -EINVAL;
     if(!inet_ntop(AF_INET,&out->ipv4,ip,sizeof ip))return -errno;
     n=snprintf(out->xaddr,sizeof out->xaddr,"http://%s/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery",ip);
