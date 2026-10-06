@@ -95,7 +95,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *format="application/octet-stream";
     const char *pwg="image/pwg-raster";
     const char *printer_uuid="urn:uuid:4d424f58-0000-4000-8000-0cefafcfc53d";
-    const char *device_id="MFG:Hewlett-Packard;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL,POSTSCRIPT;CLS:PRINTER;";
+    const char *device_id="MFG:HP;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL;CLS:PRINTER;";
     if(!o||!r||!uri||c<9)return 0;
     if(!mfp_online){state[3]=5;accepting=0;state_reason="offline";}
     if(!(p=ipp_build_status(o,c,r,0)))return 0;
@@ -143,7 +143,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr_more(o,c,&p,0x44,"print-color-mode",16))return 0;
     if(attr(o,c,&p,0x49,"document-format-supported",format,strlen(format)))return 0;
     if(attr_more(o,c,&p,0x49,pwg,strlen(pwg)))return 0;
-    if(attr(o,c,&p,0x49,"document-format-default",format,strlen(format)))return 0;
+    if(attr(o,c,&p,0x49,"document-format-default",pwg,strlen(pwg)))return 0;
     if(attr(o,c,&p,0x22,"color-supported",&color,1))return 0;
     if(attr(o,c,&p,0x44,"print-color-mode-supported","monochrome",10))return 0;
     if(attr(o,c,&p,0x44,"print-color-mode-default","monochrome",10))return 0;
@@ -158,7 +158,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr_resolution(o,c,&p,"printer-resolution-default",600,600))return 0;
     if(attr_resolution(o,c,&p,"pwg-raster-document-resolution-supported",600,600))return 0;
     if(attr(o,c,&p,0x44,"pwg-raster-document-type-supported","black_1",7))return 0;
-    if(attr_more(o,c,&p,0x44,"srgb_8",6))return 0;
+    if(attr_more(o,c,&p,0x44,"sgray_8",7))return 0;
     /* All print requests are processed synchronously; there is no
      * persistent asynchronous queue in this implementation. */
     {
