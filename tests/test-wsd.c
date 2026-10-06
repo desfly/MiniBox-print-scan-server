@@ -77,7 +77,7 @@ int main(void){
    contains(out,"/GetPrinterElementsResponse");
    contains(out,"<a:RelatesTo>urn:uuid:44444444-2222-3333-4444-555555555555</a:RelatesTo>");
    contains(out,"Name=\"wprt:PrinterDescription\" Valid=\"true\"");
-   contains(out,"MFG:HP;MDL:LaserJet M1522n MFP;CMD:PCL;");
+   contains(out,"MFG:HP;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL;CLS:PRINTER;");
    contains(out,"<wprt:ColorSupported>false</wprt:ColorSupported>");
    contains(out,"<wprt:MultipleDocumentJobsSupported>false</wprt:MultipleDocumentJobsSupported>");
    contains(out,"M1522n NET");
