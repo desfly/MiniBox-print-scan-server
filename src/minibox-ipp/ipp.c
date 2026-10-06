@@ -158,7 +158,6 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr_resolution(o,c,&p,"printer-resolution-default",600,600))return 0;
     if(attr_resolution(o,c,&p,"pwg-raster-document-resolution-supported",600,600))return 0;
     if(attr(o,c,&p,0x44,"pwg-raster-document-type-supported","black_1",7))return 0;
-    if(attr_more(o,c,&p,0x44,"sgray_8",7))return 0;
     if(attr_more(o,c,&p,0x44,"srgb_8",6))return 0;
     /* All print requests are processed synchronously; there is no
      * persistent asynchronous queue in this implementation. */
