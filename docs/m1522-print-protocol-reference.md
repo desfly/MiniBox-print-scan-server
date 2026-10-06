@@ -142,7 +142,16 @@ Do not reintroduce any of these:
 
 ## Driverless advertisement policy
 
-The verified Windows IPP capture showed that advertising sgray_8 allowed the
-Microsoft IPP Class Driver to send 300-dpi grayscale raster. MiniBox therefore
-does not advertise sgray_8. The advertised PWG raster types are black_1 and
-srgb_8, while the parser still accepts sgray_8 as a compatibility fallback.
+The printer is advertised consistently as monochrome across IPP, DNS-SD and
+WSD. Its PWG raster types are black_1 and sgray_8. srgb_8 remains accepted by
+the renderer for compatibility/testing but is not advertised as a printer
+capability. The advertised PWG raster resolution is 600 x 600 dpi.
+
+The human-visible DNS-SD/WSD service name is exactly "M1522n NET". Per-device
+uniqueness is carried by the UUID/endpoint identity and must not be appended to
+the UI name.
+
+IPP advertises both image/pwg-raster and application/octet-stream, with
+image/pwg-raster as the default. DNS-SD pdl mirrors those same formats. IPP and
+WSD expose the same IEEE-1284 identity:
+MFG:HP;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL;CLS:PRINTER;.
