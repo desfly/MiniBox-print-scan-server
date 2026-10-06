@@ -1,4 +1,5 @@
 #include "ipp.h"
+#include "../minibox-identity/m1522_identity.h"
 #include <string.h>
 int ipp_parse_header(const unsigned char*b,size_t n,struct ipp_request*r){if(!b||!r||n<8)return-1;r->major=b[0];r->minor=b[1];r->operation=(uint16_t)(((uint16_t)b[2]<<8)|b[3]);r->request_id=((uint32_t)b[4]<<24)|((uint32_t)b[5]<<16)|((uint32_t)b[6]<<8)|b[7];if(r->major!=1&&r->major!=2)return-2;return 0;}
 int ipp_document_offset(const unsigned char*b,size_t n,size_t*off){size_t p=8;if(!b||!off||n<9)return-1;while(p<n){unsigned char tag=b[p++];if(tag==0x03){*off=p;return 0;}if(tag>=0x01&&tag<=0x05)continue;if(p+2>n)return-2;{size_t nl=((size_t)b[p]<<8)|b[p+1];p+=2;if(nl>n-p||n-p-nl<2)return-2;p+=nl;{size_t vl=((size_t)b[p]<<8)|b[p+1];p+=2;if(vl>n-p)return-2;p+=vl;}}}return-3;}
@@ -94,7 +95,7 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *info="MiniBox network print server";
     const char *format="application/octet-stream";
     const char *pwg="image/pwg-raster";
-    const char *printer_uuid="urn:uuid:4d424f58-0000-4000-8000-0cefafcfc53d";
+    const char *printer_uuid=MINIBOX_MFP_URN_UUID;
     const char *device_id="MFG:HP;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL;CLS:PRINTER;";
     if(!o||!r||!uri||c<9)return 0;
     if(!mfp_online){state[3]=5;accepting=0;state_reason="offline";}
