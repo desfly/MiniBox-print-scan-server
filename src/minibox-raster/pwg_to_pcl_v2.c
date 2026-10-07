@@ -139,9 +139,9 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned orientation=s->page_width_points>s->page_height_points?1u:0u;
     unsigned dw=scaled_to_600(s->width,s->xdpi);
     unsigned dh=scaled_to_600(s->height,s->ydpi);
-    unsigned is_black1=(s->color_space==3&&s->bits_per_pixel==1);
-    unsigned cs=is_black1?1u:2u;
-    unsigned depth=is_black1?0u:2u;
+    unsigned is_1bit=((s->color_space==3||s->color_space==18)&&s->bits_per_pixel==1);
+    unsigned cs=is_1bit?1u:2u;
+    unsigned depth=is_1bit?0u:2u;
     if(dw>65535u||dh>65535u)return -1;
     if(job_start(s,fn,ctx)||
        pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,orientation,40))return -1;
@@ -244,7 +244,8 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
        !s->bytes_per_line||s->bytes_per_line>PWG_MAX_LINE||
        !s->xdpi||s->xdpi!=s->ydpi||(s->xdpi!=300&&s->xdpi!=600)||
        s->color_order!=0)return -1;
-    if(s->color_space==18&&s->bits_per_color==8&&s->bits_per_pixel==8&&s->num_colors==1)unit=1;
+    if(s->color_space==18&&s->bits_per_color==1&&s->bits_per_pixel==1&&s->num_colors==1)unit=1;
+    else if(s->color_space==18&&s->bits_per_color==8&&s->bits_per_pixel==8&&s->num_colors==1)unit=1;
     else if(s->color_space==19&&s->bits_per_color==8&&s->bits_per_pixel==24&&s->num_colors==3)unit=3;
     else if(s->color_space==3&&s->bits_per_color==1&&s->bits_per_pixel==1&&s->num_colors==1)unit=1;
     else return -2;
@@ -274,18 +275,23 @@ static int black_row(struct mb_pwg_pcl *s){
     for(x=0;x<s->mono_cap;x++)s->mono[x]=(unsigned char)~s->line[x];
     return 0;
 }
-static int emit_black_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
+static int emit_1bit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned i;
-    if(black_row(s))return -1;
+    const unsigned char *row=s->line;
+    size_t row_bytes=(s->width+7u)/8u;
+    if(s->color_space==3){
+        if(black_row(s))return -1;
+        row=s->mono;
+    }else if(s->color_space!=18)return -1;
     for(i=0;i<s->repeat_lines;i++){
         unsigned char emb[5]={0xfa,0,0,0,0};
         static const unsigned char pad[3]={0,0,0};
-        size_t padded=(s->mono_cap+3u)&~3u;
-        size_t padding=padded-s->mono_cap;
+        size_t padded=(row_bytes+3u)&~3u;
+        size_t padding=padded-row_bytes;
         if(pxl_u16(fn,ctx,s->row,109)||pxl_u16(fn,ctx,1,99)||
            pxl_u8(fn,ctx,0,101)||pxl_op(fn,ctx,0xb1))return -1;
         le32(emb+1,(uint32_t)padded);
-        if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,s->mono,s->mono_cap)||
+        if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,row,row_bytes)||
            (padding&&out(fn,ctx,pad,padding)))return -1;
         if(++s->row>s->height)return -1;
     }
@@ -316,8 +322,8 @@ static int emit_continuous_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ct
     return 0;
 }
 static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    int rc=(s->color_space==3&&s->bits_per_pixel==1)?
-        emit_black_line(s,fn,ctx):emit_continuous_line(s,fn,ctx);
+    int rc=((s->color_space==3||s->color_space==18)&&s->bits_per_pixel==1)?
+        emit_1bit_line(s,fn,ctx):emit_continuous_line(s,fn,ctx);
     if(rc)return rc;
     if(s->row==s->height){
         if(s->image_ctx&&jpeg_block_finish(s,fn,ctx))return -1;
