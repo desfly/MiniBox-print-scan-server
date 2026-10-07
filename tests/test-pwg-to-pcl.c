@@ -171,6 +171,33 @@ int main(void){
     }
     mb_pwg_pcl_reset(&p);
 
+    /* Windows IPP Class Driver emits 600dpi 1-bit sGray when black_1+sgray_8
+       are advertised.  sGray is luminance: keep its 1=white polarity when
+       mapping to PCL XL eGray/e1Bit (unlike DeviceK/black_1, which is inverted). */
+    memset(&s,0,sizeof s);header(h,8,1,1,1,1,18,1);
+    u32(h+276,600);u32(h+280,600);
+    memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
+    doc[n++]=0;
+    doc[n++]=0;doc[n++]=0xa5;
+    mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,5,&s);
+    assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
+    {
+        static const unsigned char sgray1_image[]={
+            0xc0,0x01,0xf8,0x03,0x6a, /* ColorSpace=eGray */
+            0xc0,0x00,0xf8,0x64,
+            0xc0,0x00,0xf8,0x62       /* ColorDepth=e1Bit */
+        };
+        static const unsigned char onebit_len[]={0xb1,0xfa,0x04,0x00,0x00,0x00};
+        size_t i;
+        assert(has(&s,sgray1_image,sizeof sgray1_image));
+        i=find_bytes(&s,onebit_len,sizeof onebit_len);assert(i!=(size_t)-1);
+        i+=sizeof onebit_len;
+        assert(i+4<=s.used);
+        assert(s.data[i+0]==0xa5); /* no DeviceK polarity inversion */
+        assert(s.data[i+1]==0x00&&s.data[i+2]==0x00&&s.data[i+3]==0x00);
+    }
+    mb_pwg_pcl_reset(&p);
+
     /* PWG/CUPS PackBits control 0x80 means clear-to-end-of-line, not error.
        For sgray/sRGB the cleared pixels are white (0xff). */
     memset(&s,0,sizeof s);header(h,8,1,8,8,8,18,1);
