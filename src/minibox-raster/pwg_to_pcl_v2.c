@@ -240,6 +240,10 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     s->bits_per_color=be32(s->header+384);s->bits_per_pixel=be32(s->header+388);
     s->bytes_per_line=be32(s->header+392);s->color_order=be32(s->header+396);
     s->color_space=be32(s->header+400);s->num_colors=be32(s->header+420);
+    fprintf(stderr,
+            "minibox-pwg: dpi=%ux%u size=%ux%u bpc=%u bpp=%u bpl=%u order=%u cs=%u colors=%u\\n",
+            s->xdpi,s->ydpi,s->width,s->height,s->bits_per_color,s->bits_per_pixel,
+            s->bytes_per_line,s->color_order,s->color_space,s->num_colors);
     if(!s->width||!s->height||s->width>PWG_MAX_WIDTH||s->height>PWG_MAX_HEIGHT||
        !s->bytes_per_line||s->bytes_per_line>PWG_MAX_LINE||
        !s->xdpi||s->xdpi!=s->ydpi||(s->xdpi!=300&&s->xdpi!=600)||
