@@ -34,9 +34,27 @@ static int ps_write(print_session*s,const unsigned char*b,size_t n){return fwrit
 static void ps_close(print_session*s){if(s)(void)fclose(s);}
 #else
 typedef struct m1522_print_session print_session;
-static int ps_open(print_session **s){static print_session x;*s=&x;return m1522_print_open(*s);}
-static int ps_write(print_session*s,const unsigned char*b,size_t n){return m1522_print_write(s,b,n);}
-static void ps_close(print_session*s){m1522_print_close(s);}
+/* Diagnostic mode: creating /tmp/minibox-print-dryrun makes the IPP/PWG path
+ * consume and render the job without sending a single byte to USB.  This is
+ * intentionally runtime-only and survives no reboot. */
+static int runtime_dry_run;
+static int ps_open(print_session **s){
+    static print_session x;
+    if(access("/tmp/minibox-print-dryrun",F_OK)==0){
+        runtime_dry_run=1;*s=0;
+        fprintf(stderr,"minibox-printerd: dry-run enabled; USB output suppressed\n");
+        return 0;
+    }
+    runtime_dry_run=0;*s=&x;return m1522_print_open(*s);
+}
+static int ps_write(print_session*s,const unsigned char*b,size_t n){
+    if(runtime_dry_run){(void)s;(void)b;(void)n;return 0;}
+    return m1522_print_write(s,b,n);
+}
+static void ps_close(print_session*s){
+    if(runtime_dry_run){runtime_dry_run=0;return;}
+    m1522_print_close(s);
+}
 #endif
 static int pwg_write(void *ctx,const unsigned char *buf,size_t len){return ps_write((print_session*)ctx,buf,len);}
 static void ipp_reply(int fd,const struct ipp_request*r,uint16_t status){unsigned char out[256];size_t n=ipp_build_status(out,sizeof out,r,status);if(!n){reply_text(fd,500,"Internal Server Error","IPP response build failed\n");return;}reply_data(fd,200,"OK","application/ipp",out,n);}
