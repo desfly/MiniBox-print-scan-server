@@ -20,8 +20,9 @@ int main(void){
     unsigned char req[512];size_t n;
     n=make(req,"application/octet-stream",0x49,0);
     assert(ipp_check_document_format(req,n)==1);
-    assert(ipp_check_document_format(req,n-1)<0);
     assert(ipp_document_format_kind(req,n)==IPP_DOCUMENT_UNSUPPORTED);
+    n=make(req,"image/pwg-raster",0x49,0);
+    assert(ipp_check_document_format(req,n-1)<0);
     n=make(req,"application/pdf",0x49,0);
     assert(ipp_check_document_format(req,n)==1);
     assert(ipp_document_format_kind(req,n)==IPP_DOCUMENT_UNSUPPORTED);
