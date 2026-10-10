@@ -13,6 +13,10 @@
 /* Verified from M1522-PRINT-REAL.pcap / HP Universal Printing PCL 6. */
 #define M1522_RENDER_DPI 600u
 #define M1522_JPEG_QUALITY 95
+/* The verified HP UPD capture sends a 1080-line JPEG in one ReadImage.
+ * Keep each embedded JPEG no taller than that verified block size instead of
+ * sending an entire 7015-line A4 page as one huge embedded-data object. */
+#define M1522_VERIFIED_JPEG_BLOCK_ROWS 1080u
 
 struct mb_jpeg_error {
     struct jpeg_error_mgr pub;
@@ -169,7 +173,8 @@ static int page_end(mb_pwg_write_fn fn,void *ctx){
 static int jpeg_block_start(struct mb_pwg_pcl *s){
     struct mb_jpeg_block *b;
     unsigned remaining=s->height-s->row;
-    unsigned target=remaining;
+    unsigned target=remaining>M1522_VERIFIED_JPEG_BLOCK_ROWS?
+        M1522_VERIFIED_JPEG_BLOCK_ROWS:remaining;
     b=(struct mb_jpeg_block *)calloc(1,sizeof *b);
     if(!b||!target){free(b);return -1;}
     b->start_line=s->row;b->rows_target=target;
