@@ -45,6 +45,8 @@ struct mb_pwg_pcl {
     unsigned char token_value[16];
     unsigned token_value_used;
     unsigned pages;
+    uint32_t gray_hist[256];
+    uint32_t gray_samples;
     int failed;
     int job_started;
     void *image_ctx;
