@@ -9,7 +9,6 @@ int ipp_document_offset(const unsigned char*b,size_t n,size_t*off){size_t p=8;if
  * and Send-Document may inherit the Create-Job format. */
 int ipp_document_format_kind(const unsigned char *buf,size_t len) {
     static const char key[]="document-format";
-    static const char raw[]="application/octet-stream";
     static const char pwg[]="image/pwg-raster";
     size_t p=8;int seen=0,kind=IPP_DOCUMENT_UNSPECIFIED;
     if(!buf||len<9)return IPP_DOCUMENT_MALFORMED;
@@ -24,8 +23,7 @@ int ipp_document_format_kind(const unsigned char *buf,size_t len) {
             if(seen++||tag!=0x49)return IPP_DOCUMENT_UNSUPPORTED;
             p+=nl;vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
             if(vl>len-p)return IPP_DOCUMENT_MALFORMED;
-            if(vl==sizeof(raw)-1&&!memcmp(buf+p,raw,vl))kind=IPP_DOCUMENT_RAW;
-            else if(vl==sizeof(pwg)-1&&!memcmp(buf+p,pwg,vl))kind=IPP_DOCUMENT_PWG_RASTER;
+            if(vl==sizeof(pwg)-1&&!memcmp(buf+p,pwg,vl))kind=IPP_DOCUMENT_PWG_RASTER;
             else return IPP_DOCUMENT_UNSUPPORTED;
         } else {
             p+=nl;vl=((size_t)buf[p]<<8)|buf[p+1];p+=2;
