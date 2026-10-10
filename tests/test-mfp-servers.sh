@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl_v2.c src/minibox-usb/m1522_presence.c -ljpeg -o /tmp/minibox-printerd
+cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-printerd/print_format.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl_v2.c src/minibox-usb/m1522_presence.c -ljpeg -o /tmp/minibox-printerd
 cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_SCAN_BACKEND src/minibox-scand/main.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c src/minibox-escl/escl.c src/minibox-discoveryd/wsd_identity.c src/minibox-printerd/http_body.c src/minibox-usb/m1522_presence.c -o /tmp/minibox-scand
 USBROOT=$(mktemp -d)
 mkdir -p "$USBROOT/1-1"
@@ -91,6 +91,7 @@ for value in (
 ):
     assert value in data, f'missing IPP attribute/value: {value!r}'
 assert b'ipp://' in data and b'.local/ipp/print' in data, 'printer URI not aligned with actual host name'
+assert b'application/octet-stream' not in data, 'raw octet-stream must not be advertised by the driverless contract'
 assert b'black_1' not in data, 'black_1 must not be advertised: Windows otherwise rasterizes grayscale to 1-bit'
 assert b'srgb_8' not in data, 'srgb_8 must not be advertised by a monochrome printer contract'
 assert data[-1:] == b'\x03', 'IPP response missing end-of-attributes tag'
@@ -119,8 +120,14 @@ for label in ('print','validate'):
     assert len(wire)>9 and wire[2:4]==b'\x04\x0a', (label,wire.hex())
 assert not Path('/tmp/printed.bin').exists(), 'unsupported document was sent to the print sink'
 PY
-printf '\002\000\000\002\000\000\000\002\003\033EHello MiniBox\014\033E' >/tmp/print.req
-printf '\033EHello MiniBox\014\033E' >/tmp/document.expected
+python3 - <<'PY'
+from pathlib import Path
+key=b'document-format'; value=b'application/octet-stream'; doc=b'\x1bEHello MiniBox\x0c\x1bE'
+req=(bytes((2,0,0,2,0,0,0,2,1,0x49))+len(key).to_bytes(2,'big')+key+
+     len(value).to_bytes(2,'big')+value+b'\x03'+doc)
+Path('/tmp/print.req').write_bytes(req)
+Path('/tmp/document.expected').write_bytes(doc)
+PY
 curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
 cmp /tmp/document.expected /tmp/printed.bin
 # Android-style driverless path: accept image/pwg-raster and map it to
