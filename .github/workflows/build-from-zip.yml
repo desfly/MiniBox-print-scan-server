@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - main
+      - work/m1522-print-clean-v3
     paths:
       - 'src/**'
       - 'tests/test-openwrt-source-injection.sh'
