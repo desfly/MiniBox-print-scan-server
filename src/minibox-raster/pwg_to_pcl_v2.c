@@ -309,9 +309,15 @@ static int emit_continuous_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ct
         if(!s->mono||s->mono_cap<(size_t)s->width*3u)return -1;
         for(x=0;x<s->width;x++){
             unsigned char g=s->line[x];
+            uint64_t add=(uint64_t)s->gray_hist[g]+s->repeat_lines;
+            s->gray_hist[g]=(uint32_t)(add>0xffffffffu?0xffffffffu:add);
             s->mono[(size_t)x*3u+0u]=g;
             s->mono[(size_t)x*3u+1u]=g;
             s->mono[(size_t)x*3u+2u]=g;
+        }
+        {
+            uint64_t add=(uint64_t)s->gray_samples+(uint64_t)s->width*s->repeat_lines;
+            s->gray_samples=(uint32_t)(add>0xffffffffu?0xffffffffu:add);
         }
         row=s->mono;
     }
@@ -331,6 +337,19 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(rc)return rc;
     if(s->row==s->height){
         if(s->image_ctx&&jpeg_block_finish(s,fn,ctx))return -1;
+        if(s->color_space==18&&s->bits_per_pixel==8&&s->gray_samples){
+            unsigned v,unique=0,minv=255,maxv=0;
+            uint64_t mid=0,black=s->gray_hist[0],white=s->gray_hist[255];
+            for(v=0;v<256;v++)if(s->gray_hist[v]){
+                if(!unique)minv=v;
+                maxv=v;unique++;
+                if(v>0&&v<255)mid+=s->gray_hist[v];
+            }
+            fprintf(stderr,
+                    "minibox-pwg-gray: samples=%u unique=%u min=%u max=%u black=%lu white=%lu mid=%lu\\n",
+                    s->gray_samples,unique,minv,maxv,
+                    (unsigned long)black,(unsigned long)white,(unsigned long)mid);
+        }
         if(page_end(fn,ctx))return -1;
         free_page(s);s->header_used=0;s->phase=MB_PWG_HEADER;
     }else s->phase=MB_PWG_REPEAT;
