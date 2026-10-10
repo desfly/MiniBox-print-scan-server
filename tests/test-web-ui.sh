@@ -14,8 +14,13 @@ grep -q 'Стан фізичного USB-зв’язку з МФУ' "$root/index
 grep -q 'МФУ HP LaserJet M1522n' "$root/cgi-bin/minibox-status"
 grep -q '03f0' "$root/cgi-bin/minibox-status"
 grep -q '4517' "$root/cgi-bin/minibox-status"
+version=$(sed -n 's/^PKG_VERSION:=//p' package/minibox-mfp/Makefile)
 release=$(sed -n 's/^PKG_RELEASE:=//p' package/minibox-mfp/Makefile)
-test "${release:-0}" -ge 13
+case "$version" in
+  0.3.0) test "${release:-0}" -ge 13 ;;
+  0.4.0) test "${release:-0}" -ge 1 ;;
+  *) echo "unexpected minibox-mfp version: $version" >&2; exit 1 ;;
+esac
 grep -Eq 'DEPENDS:=.*\+uhttpd' package/minibox-mfp/Makefile
 grep -q '$(1)/www/index.html' package/minibox-mfp/Makefile
 grep -q '$(1)/www/cgi-bin/minibox-status' package/minibox-mfp/Makefile
