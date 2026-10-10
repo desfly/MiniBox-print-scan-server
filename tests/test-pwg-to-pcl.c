@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 struct sink { unsigned char data[65536]; size_t used; };
@@ -212,6 +213,52 @@ int main(void){
     }
     assert_jpeg_after_readimage(&s,1,1);
     mb_pwg_pcl_reset(&p);
+
+    /* A full 600-dpi A4 page must not become one giant JPEG embedded-data
+       object.  Use multiple ReadImage blocks, each no taller than the 1080-line
+       block verified in the HP UPD capture, with monotonically advancing
+       StartLine. */
+    {
+        struct mb_pwg_pcl q;
+        struct sink *big=(struct sink *)calloc(1,sizeof *big);
+        unsigned char hh[1796];
+        unsigned char rowdoc[4+1796+8];
+        size_t rn=1800;
+        unsigned starts[3]={0,1080,2160};
+        unsigned heights[3]={1080,1080,1};
+        size_t pos=0;
+        int block;
+        assert(big);
+        header(hh,1,2161,8,24,3,19,3);
+        u32(hh+276,600);u32(hh+280,600);
+        memcpy(rowdoc,"RaS2",4);memcpy(rowdoc+4,hh,1796);
+        /* One white RGB row repeated 2161 times cannot be encoded with one
+           PWG repeat byte, so feed 9 runs: 8x256 + 113 lines. */
+        mb_pwg_pcl_init(&q);
+        assert(mb_pwg_pcl_feed(&q,rowdoc,rn,wr,big)==0);
+        for(block=0;block<8;block++){
+            const unsigned char run[]={255,0,255,255,255};
+            assert(mb_pwg_pcl_feed(&q,run,sizeof run,wr,big)==0);
+        }
+        {
+            const unsigned char run[]={112,0,255,255,255};
+            assert(mb_pwg_pcl_feed(&q,run,sizeof run,wr,big)==0);
+        }
+        assert(mb_pwg_pcl_finish(&q,wr,big)==0);
+        for(block=0;block<3;block++){
+            unsigned char cmd[15]={
+                0xc1,(unsigned char)starts[block],(unsigned char)(starts[block]>>8),0xf8,0x6d,
+                0xc1,(unsigned char)heights[block],(unsigned char)(heights[block]>>8),0xf8,0x63,
+                0xc0,0x02,0xf8,0x65,0xb1
+            };
+            size_t found=(size_t)-1,i;
+            for(i=pos;i+sizeof cmd<=big->used;i++)if(!memcmp(big->data+i,cmd,sizeof cmd)){found=i;break;}
+            assert(found!=(size_t)-1);
+            pos=found+sizeof cmd;
+        }
+        mb_pwg_pcl_reset(&q);
+        free(big);
+    }
 
     puts("PWG Raster -> capture-derived M1522 PCL XL contract OK");
     return 0;
