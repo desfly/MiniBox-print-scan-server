@@ -2,7 +2,7 @@ name: MiniBox network MFP contract
 
 on:
   push:
-    branches: [main, minibox-network-mfp-discovery-v2, minibox-network-mfp-runtime-v2]
+    branches: [main, minibox-network-mfp-discovery-v2, minibox-network-mfp-runtime-v2, work/m1522-print-clean-v3]
   pull_request:
   workflow_dispatch:
 
