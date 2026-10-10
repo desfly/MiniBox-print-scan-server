@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.4.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -53,7 +53,6 @@ define Build/Compile
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-printerd \
 		$(PKG_BUILD_DIR)/minibox-printerd/main.c \
 		$(PKG_BUILD_DIR)/minibox-printerd/http_body.c \
-		$(PKG_BUILD_DIR)/minibox-printerd/print_format.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/ipp.c \
 		$(PKG_BUILD_DIR)/minibox-ipp/print_job.c \
 		$(PKG_BUILD_DIR)/minibox-raster/pwg_to_pcl_v2.c \
