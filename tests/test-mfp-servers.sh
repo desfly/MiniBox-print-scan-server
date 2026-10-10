@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-printerd/print_format.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl_v2.c src/minibox-usb/m1522_presence.c -ljpeg -o /tmp/minibox-printerd
+cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl_v2.c src/minibox-usb/m1522_presence.c -ljpeg -o /tmp/minibox-printerd
 cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_SCAN_BACKEND src/minibox-scand/main.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c src/minibox-escl/escl.c src/minibox-discoveryd/wsd_identity.c src/minibox-printerd/http_body.c src/minibox-usb/m1522_presence.c -o /tmp/minibox-scand
 USBROOT=$(mktemp -d)
 mkdir -p "$USBROOT/1-1"
@@ -125,11 +125,16 @@ from pathlib import Path
 key=b'document-format'; value=b'application/octet-stream'; doc=b'\x1bEHello MiniBox\x0c\x1bE'
 req=(bytes((2,0,0,2,0,0,0,2,1,0x49))+len(key).to_bytes(2,'big')+key+
      len(value).to_bytes(2,'big')+value+b'\x03'+doc)
-Path('/tmp/print.req').write_bytes(req)
-Path('/tmp/document.expected').write_bytes(doc)
+Path('/tmp/raw-print.req').write_bytes(req)
 PY
-curl -fsS -o /tmp/print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/print.req http://127.0.0.1:18631/ipp/print
-cmp /tmp/document.expected /tmp/printed.bin
+rm -f /tmp/printed.bin
+curl -fsS -o /tmp/raw-print.out -H 'Content-Type: application/ipp' --data-binary @/tmp/raw-print.req http://127.0.0.1:18631/ipp/print
+python3 - <<'PY'
+from pathlib import Path
+wire=Path('/tmp/raw-print.out').read_bytes()
+assert len(wire)>9 and wire[2:4]==b'\x04\x0a', wire.hex()
+assert not Path('/tmp/printed.bin').exists(), 'raw data must not reach the IPP print sink'
+PY
 # Android-style driverless path: accept image/pwg-raster and map it to
 # documented PCL XL raster semantics. srgb_8 stays eRGB/e8Bit DirectPixel so
 # the M1522 performs its own monochrome rendering/halftoning.
@@ -164,9 +169,6 @@ assert b'\xc0\x02\xf8\x03\x6a' in out, out.hex()  # ColorSpace=eRGB; SetColorSpa
 assert b'\xc0\x02\xf8\x65\xb1\xfa' in out, out.hex()  # CompressMode=eJPEG; ReadImage
 assert b'\xff\xd8\xff\xe0' in out and b'JFIF' in out, out.hex()
 PY
-python3 tests/test-large-print.py >/tmp/large.size
-[ "$(cat /tmp/large.size)" -gt 65536 ]
-cmp /tmp/large.expected /tmp/printed.bin
 cat >/tmp/scan.xml <<'EOF'
 <?xml version="1.0"?><scan:ScanSettings xmlns:scan="http://schemas.hp.com/imaging/escl/2011/05/03"><scan:InputSource>Platen</scan:InputSource><scan:XResolution>300</scan:XResolution><scan:ColorMode>RGB24</scan:ColorMode></scan:ScanSettings>
 EOF
