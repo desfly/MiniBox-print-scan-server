@@ -4,14 +4,14 @@
 int ipp_parse_header(const unsigned char*b,size_t n,struct ipp_request*r){if(!b||!r||n<8)return-1;r->major=b[0];r->minor=b[1];r->operation=(uint16_t)(((uint16_t)b[2]<<8)|b[3]);r->request_id=((uint32_t)b[4]<<24)|((uint32_t)b[5]<<16)|((uint32_t)b[6]<<8)|b[7];if(r->major!=1&&r->major!=2)return-2;return 0;}
 int ipp_document_offset(const unsigned char*b,size_t n,size_t*off){size_t p=8;if(!b||!off||n<9)return-1;while(p<n){unsigned char tag=b[p++];if(tag==0x03){*off=p;return 0;}if(tag>=0x01&&tag<=0x05)continue;if(p+2>n)return-2;{size_t nl=((size_t)b[p]<<8)|b[p+1];p+=2;if(nl>n-p||n-p-nl<2)return-2;p+=nl;{size_t vl=((size_t)b[p]<<8)|b[p+1];p+=2;if(vl>n-p)return-2;p+=vl;}}}return-3;}
 
-/* Identify the document data that follows the IPP attribute section.
- * Raw PCL remains supported for the proven Windows path. PWG Raster is
- * converted by printerd to bounded monochrome PCL5 before USB. */
+/* Identify only what the client explicitly declared.  Absence of
+ * document-format is not "raw": IPP permits the printer default (PWG here)
+ * and Send-Document may inherit the Create-Job format. */
 int ipp_document_format_kind(const unsigned char *buf,size_t len) {
     static const char key[]="document-format";
     static const char raw[]="application/octet-stream";
     static const char pwg[]="image/pwg-raster";
-    size_t p=8;int seen=0,kind=IPP_DOCUMENT_RAW;
+    size_t p=8;int seen=0,kind=IPP_DOCUMENT_UNSPECIFIED;
     if(!buf||len<9)return IPP_DOCUMENT_MALFORMED;
     while(p<len) {
         unsigned char tag=buf[p++];size_t nl,vl;
@@ -93,7 +93,6 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     const char *printer_name="M1522n NET";
     const char *model="HP LaserJet M1522n";
     const char *info="MiniBox network print server";
-    const char *format="application/octet-stream";
     const char *pwg="image/pwg-raster";
     const char *printer_uuid=MINIBOX_MFP_URN_UUID;
     const char *device_id="MFG:HP;MDL:HP LaserJet M1522n MFP;CMD:PCLXL,PCL;CLS:PRINTER;";
@@ -142,8 +141,10 @@ size_t ipp_build_printer_attributes(unsigned char*o,size_t c,const struct ipp_re
     if(attr_more(o,c,&p,0x44,"printer-resolution",18))return 0;
     if(attr_more(o,c,&p,0x44,"sides",5))return 0;
     if(attr_more(o,c,&p,0x44,"print-color-mode",16))return 0;
-    if(attr(o,c,&p,0x49,"document-format-supported",format,strlen(format)))return 0;
-    if(attr_more(o,c,&p,0x49,pwg,strlen(pwg)))return 0;
+    /* Driverless network contract has one deterministic input format.
+     * Legacy raw printer-language bytes may still be accepted only when
+     * explicitly declared and validated by printerd; they are not advertised. */
+    if(attr(o,c,&p,0x49,"document-format-supported",pwg,strlen(pwg)))return 0;
     if(attr(o,c,&p,0x49,"document-format-default",pwg,strlen(pwg)))return 0;
     if(attr(o,c,&p,0x22,"color-supported",&color,1))return 0;
     if(attr(o,c,&p,0x44,"print-color-mode-supported","monochrome",10))return 0;
