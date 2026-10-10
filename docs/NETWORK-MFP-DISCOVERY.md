@@ -10,7 +10,8 @@ The HP LaserJet M1522n is connected by USB to MiniBox. MiniBox is a Wi-Fi client
 * `_ipp._tcp` for driverless network printing at `/ipp/print`.
 * `_printer._tcp` may be advertised as a compatibility alias, but RAW/9100 is not the installation UX.
 * `_uscan._tcp` for eSCL/AirScan scanner discovery at `/eSCL`.
-* Stable service instance identity must be derived from the MiniBox device identity, not its DHCP address.
+* Stable protocol identity must not depend on the current DHCP address or on which network interface is active.
+* The human-visible service name is exactly `M1522n NET`; uniqueness/correlation is carried by the stable UUID `4d424f58-0000-4000-8000-0cefafcfc53d` shared by IPP, DNS-SD/eSCL and WSD.
 
 ## Client acceptance criteria
 ### Windows

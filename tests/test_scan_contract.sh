@@ -22,13 +22,22 @@ grep -q 'soapht_m1522_io.c' "$m"
 grep -q 'scan_m1522.c' "$m"
 grep -q 'minibox-scan-diag' "$m"
 grep -q 'libusb_bulk_transfer' src/minibox-usb/scan_m1522.c
+grep -q 'm1522_presence' package/minibox-mfp/Makefile
+grep -q 'minibox_m1522_present' src/minibox-scand/main.c
+grep -q 'Stopped' src/minibox-escl/escl.c
 
 # The verified Windows transcript now locks the real SOAP/HTTP/DIME codec into
-# the production path.  It must stream image records instead of buffering a
-# complete high-resolution page in the AR9330's limited RAM.
+# the production path. The SOAPHT side must complete the captured device
+# transaction before the eSCL HTTP response is committed to the client.
 grep -q 'verified_m1522_codec' "$c"
 grep -q 'Transfer-Encoding: chunked' "$c"
 grep -q 'image/jpeg' "$c"
+grep -q 'Content-Length: %zu' src/minibox-scand/main.c
+grep -q 'ESCL_IMAGE_MAX' src/minibox-scand/main.c
+grep -q 'escl_scanner_capabilities_xml_identity' src/minibox-scand/main.c
+grep -q 'pwg:SerialNumber' src/minibox-escl/escl.c
+grep -q 'scan:UUID' src/minibox-escl/escl.c
+grep -q 'scan:AdminURI' src/minibox-escl/escl.c
 grep -Eq 'minibox_soapht_codec[[:space:]]*=[[:space:]]*&verified_m1522_codec' "$c"
 
 grep -q 'M1522_SOAPHT_CLASS' "$d"

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 
 #define SOAPHT_RAW_BUFFER 4096
 #define SOAPHT_HEADER_MAX 2048
@@ -14,15 +15,17 @@ struct body_reader {
     size_t raw_pos, raw_len;
     size_t content_left, chunk_left;
     int chunked, need_chunk_crlf, done, status;
+    int tolerate_gaps;
 };
 
 struct codec_state {
-    int started, retrieve_started, image_done;
+    int started, retrieve_started, image_done, adf;
     char job_id[32];
     struct body_reader image;
     size_t record_left, record_pad;
     unsigned char record_flags;
     int record_is_image, image_continues;
+    unsigned dime_record_no;
 };
 
 static struct codec_state state;
@@ -38,13 +41,44 @@ static unsigned long read_be32(const unsigned char *p)
 
 static size_t pad4(size_t n) { return (n + 3u) & ~(size_t)3u; }
 
+static void retrieve_retry_delay(void)
+{
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
+    (void)select(0, NULL, NULL, NULL, &tv);
+}
+
 static int raw_fill(struct body_reader *r)
 {
     size_t got = 0;
-    int rc;
+    int rc = 0, idle = 0;
     if (r->raw_pos < r->raw_len) return 0;
-    rc = soapht_read(r->transport, r->raw, sizeof(r->raw), &got);
-    if (rc || !got) return -1;
+    do {
+        got = 0;
+        rc = soapht_read(r->transport, r->raw, sizeof(r->raw), &got);
+        if (!rc && got) break;
+        /* RetrieveImage tolerates both transient transport errors and empty
+         * windows. Control responses only tolerate successful zero-byte
+         * windows: a real transport error must still fail immediately. */
+        if (!r->tolerate_gaps || (r->tolerate_gaps == 2 && rc) ||
+            ++idle >= 30) {
+            fprintf(stderr,
+                    "minibox-scand: stage=soapht-raw-read rc=%d got=%zu idle=%d\n",
+                    rc, got, idle);
+            return -1;
+        }
+        retrieve_retry_delay();
+    } while (1);
+    if (idle) {
+        size_t i, dump = got < 16 ? got : 16;
+        fprintf(stderr,
+                "minibox-scand: stage=soapht-retrieve-body-resume idle=%d got=%zu bytes=",
+                idle, got);
+        for (i = 0; i < dump; ++i)
+            fprintf(stderr, "%02x", r->raw[i]);
+        fprintf(stderr, "\n");
+    }
     r->raw_pos = 0;
     r->raw_len = got;
     return 0;
@@ -109,13 +143,11 @@ static int contains_header(const char *headers, const char *needle)
     return 0;
 }
 
-static int reader_begin(struct body_reader *r, struct soapht_session *transport)
+static int reader_parse_headers(struct body_reader *r)
 {
     char header[SOAPHT_HEADER_MAX], line[128];
     size_t n = 0;
     unsigned char c;
-    memset(r, 0, sizeof(*r));
-    r->transport = transport;
     while (n + 1 < sizeof(header)) {
         if (raw_byte(r, &c)) return -1;
         header[n++] = (char)c;
@@ -136,11 +168,25 @@ static int reader_begin(struct body_reader *r, struct soapht_session *transport)
     return 0;
 }
 
+static int reader_begin(struct body_reader *r, struct soapht_session *transport)
+{
+    memset(r, 0, sizeof(*r));
+    r->transport = transport;
+    return reader_parse_headers(r);
+}
+
 static int consume_chunk_crlf(struct body_reader *r)
 {
     unsigned char a, b;
     if (raw_byte(r, &a) || raw_byte(r, &b)) return -1;
-    return (a == '\r' && b == '\n') ? 0 : -1;
+    if (a != '\r' || b != '\n') {
+        size_t pending = r->raw_len - r->raw_pos;
+        fprintf(stderr,
+                "minibox-scand: stage=soapht-chunk-crlf rc=-2 a=0x%02x b=0x%02x raw_pending=%zu\\n",
+                (unsigned)a, (unsigned)b, pending);
+        return -1;
+    }
+    return 0;
 }
 
 static int body_read(struct body_reader *r, unsigned char *out,
@@ -211,7 +257,7 @@ static int send_request(struct soapht_session *transport, const char *xml)
     int hn = snprintf(header, sizeof(header),
         "POST / HTTP/1.1\r\n"
         "Host: http:0\r\n"
-        "User-Agent: gSOAP/2.7\r\n"
+        "User-Agent: gSOAP/2.8\r\n"
         "Content-Type: application/soap+xml; charset=utf-8\r\n"
         "Transfer-Encoding: chunked\r\n"
         "Connection: close\r\n\r\n");
@@ -231,17 +277,43 @@ static int control_request(struct soapht_session *transport, const char *xml,
     struct body_reader r;
     unsigned char *body;
     size_t len = 0, got;
-    if (send_request(transport, xml) || reader_begin(&r, transport)) return -1;
-    if (r.status < 200 || r.status >= 300) return -2;
+    int rc = send_request(transport, xml);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-control-write rc=%d\n", rc);
+        return -1;
+    }
+    rc = reader_begin(&r, transport);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-control-headers rc=%d\n", rc);
+        return -1;
+    }
+    if (r.status < 200 || r.status >= 300) {
+        fprintf(stderr, "minibox-scand: stage=soapht-control-http status=%d\n", r.status);
+        return -2;
+    }
+    /* Captured M1522 GetScannerElements responses can contain a successful
+     * zero-byte USB read between fragments of a chunked control body. Keep
+     * the parsed framing state and wait through that gap, but do not hide
+     * actual transport errors. */
+    r.tolerate_gaps = 2;
     body = malloc(SOAPHT_CONTROL_MAX + 1);
     if (!body) return -3;
     while (!r.done) {
-        if (len == SOAPHT_CONTROL_MAX ||
-            body_read(&r, body + len, SOAPHT_CONTROL_MAX - len, &got)) {
-            free(body); return -4;
+        if (len == SOAPHT_CONTROL_MAX) {
+            fprintf(stderr, "minibox-scand: stage=soapht-control-body rc=-5 status=%d received=%zu limit=%u\n",
+                    r.status, len, (unsigned)SOAPHT_CONTROL_MAX);
+            free(body);
+            return -4;
+        }
+        rc = body_read(&r, body + len, SOAPHT_CONTROL_MAX - len, &got);
+        if (rc || (!got && !r.done)) {
+            fprintf(stderr, "minibox-scand: stage=soapht-control-body rc=%d status=%d received=%zu got=%zu content_left=%zu chunk_left=%zu chunked=%d raw_pending=%zu\n",
+                    rc, r.status, len, got, r.content_left, r.chunk_left,
+                    r.chunked, r.raw_len - r.raw_pos);
+            free(body);
+            return -4;
         }
         len += got;
-        if (!got && !r.done) { free(body); return -4; }
     }
     body[len] = 0;
     if (body_out) *body_out = (char *)body; else free(body);
@@ -258,11 +330,20 @@ static const char get_elements_xml[] =
     "<wscn:GetScannerElements></wscn:GetScannerElements>"
     "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
 
+static unsigned escl300_to_soapht1000(unsigned v)
+{
+    return (v * 10u + 1u) / 3u;
+}
+
 static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
 {
     const char *source = job->source == ESCL_SOURCE_ADF ? "ADF" : "Platen";
     const char *color = job->color ? "RGB24" : "GrayScale8";
-    unsigned dpi = job->dpi >= 75 && job->dpi <= 1200 ? job->dpi : 300;
+    unsigned dpi = (job->dpi == 200 || job->dpi == 300) ? job->dpi : 300;
+    unsigned x = escl300_to_soapht1000(job->x_300);
+    unsigned y = escl300_to_soapht1000(job->y_300);
+    unsigned width = escl300_to_soapht1000(job->width_300);
+    unsigned height = escl300_to_soapht1000(job->height_300);
     int n = snprintf(out, cap,
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
@@ -274,18 +355,19 @@ static int make_create_xml(char *out, size_t cap, const struct escl_job *job)
         "<JobDescription></JobDescription><DocumentParameters><Format>jfif</Format>"
         "<CompressionQualityFactor>0</CompressionQualityFactor><ImagesToTransfer>0</ImagesToTransfer>"
         "<InputSource>%s</InputSource><ContentType>Auto</ContentType><InputSize>"
-        "<InputMediaSize><Width>8500</Width><Height>11690</Height></InputMediaSize>"
+        "<InputMediaSize><Width>%u</Width><Height>%u</Height></InputMediaSize>"
         "<DocumentSizeAutoDetect>false</DocumentSizeAutoDetect></InputSize><Exposure>"
         "<AutoExposure>false</AutoExposure><ExposureSettings><Contrast>0</Contrast>"
         "</ExposureSettings></Exposure><MediaSides><MediaFront><ScanRegion>"
-        "<ScanRegionXOffset>0</ScanRegionXOffset><ScanRegionYOffset>0</ScanRegionYOffset>"
-        "<ScanRegionWidth>8500</ScanRegionWidth><ScanRegionHeight>11690</ScanRegionHeight>"
+        "<ScanRegionXOffset>%u</ScanRegionXOffset><ScanRegionYOffset>%u</ScanRegionYOffset>"
+        "<ScanRegionWidth>%u</ScanRegionWidth><ScanRegionHeight>%u</ScanRegionHeight>"
         "</ScanRegion><ColorProcessing>%s</ColorProcessing><Resolution>"
         "<Width>%u</Width><Height>%u</Height></Resolution></MediaFront></MediaSides>"
         "</DocumentParameters><RetrieveImageTimeout>300</RetrieveImageTimeout>"
-        "<ScanManufacturingParameters><DisableImageProcessing>false</DisableImageProcessing>"
+        "<ScanManufacturingParameters><ImageProcessingRemoval>removeNone</ImageProcessingRemoval>"
         "</ScanManufacturingParameters></ScanTicket></wscn:CreateScanJobRequest>"
-        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", source, color, dpi, dpi);
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>",
+        source, width, height, x, y, width, height, color, dpi, dpi);
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
@@ -304,6 +386,30 @@ static int make_retrieve_xml(char *out, size_t cap, const char *job_id)
     return n > 0 && (size_t)n < cap ? 0 : -1;
 }
 
+static int make_get_job_info_xml(char *out, size_t cap, const char *job_id)
+{
+    int n = snprintf(out, cap,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
+        "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+        "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
+        "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
+        "<wscn:GetJobInfo><jobId>%s</jobId></wscn:GetJobInfo>"
+        "</SOAP-ENV:Body></SOAP-ENV:Envelope>", job_id);
+    return n > 0 && (size_t)n < cap ? 0 : -1;
+}
+
+static const char get_previous_image_pad_info_xml[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+    "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
+    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+    "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
+    "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
+    "<wscn:GetPreviousImagePadInfo></wscn:GetPreviousImagePadInfo>"
+    "</SOAP-ENV:Body></SOAP-ENV:Envelope>";
+
 static int codec_start(struct soapht_session *transport,
                        const struct escl_job *job)
 {
@@ -311,17 +417,43 @@ static int codec_start(struct soapht_session *transport,
     size_t n;
     memset(&state, 0, sizeof(state));
     if (!transport || !job) return -1;
-    if (control_request(transport, get_elements_xml, 0)) return -2;
-    if (make_create_xml(xml, sizeof(xml), job) ||
-        control_request(transport, xml, &response)) return -3;
+    {
+        unsigned i;
+        /*
+         * Match the verified Windows/HPLIP M1522 session exactly: seven
+         * GetScannerElements exchanges precede CreateScanJob.
+         */
+        for (i = 0; i < 7; ++i) {
+            int rc = control_request(transport, get_elements_xml, 0);
+            if (rc) {
+                fprintf(stderr,
+                        "minibox-scand: stage=soapht-get-elements index=%u rc=%d\n",
+                        i + 1, rc);
+                return -2;
+            }
+        }
+    }
+    if (make_create_xml(xml, sizeof(xml), job)) {
+        fprintf(stderr, "minibox-scand: stage=soapht-create-xml rc=-1\n");
+        return -3;
+    }
+    {
+        int rc = control_request(transport, xml, &response);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-create-job rc=%d\n", rc);
+            return -3;
+        }
+    }
     a = strstr(response, "<JobId>");
     b = a ? strstr(a + 7, "</JobId>") : 0;
     if (!a || !b || b == a + 7 || (n = (size_t)(b - (a + 7))) >= sizeof(state.job_id)) {
+        fprintf(stderr, "minibox-scand: stage=soapht-job-id rc=-4\n");
         free(response); return -4;
     }
     memcpy(state.job_id, a + 7, n);
     state.job_id[n] = 0;
     free(response);
+    state.adf = job->source == ESCL_SOURCE_ADF;
     state.started = 1;
     return 0;
 }
@@ -331,11 +463,25 @@ static int next_dime_record(void)
     unsigned char h[12], type[64];
     size_t options_len, id_len, type_len, data_len;
     if (body_exact(&state.image, h, sizeof(h))) return -1;
-    if ((h[0] & 0xf8u) != 0x08u) return -2;
+    if ((h[0] & 0xf8u) != 0x08u) {
+        size_t i;
+        fprintf(stderr, "minibox-scand: stage=soapht-dime-header-invalid bytes=");
+        for (i = 0; i < sizeof(h); ++i)
+            fprintf(stderr, "%02x", h[i]);
+        fprintf(stderr, "\n");
+        return -2;
+    }
     options_len = read_be16(h + 2);
     id_len = read_be16(h + 4);
     type_len = read_be16(h + 6);
     data_len = (size_t)read_be32(h + 8);
+    ++state.dime_record_no;
+    if (state.dime_record_no <= 3 || (h[0] & 0x02u))
+        fprintf(stderr,
+                "minibox-scand: stage=soapht-dime-header record=%u flags=0x%02x options=%zu id=%zu type=%zu data=%zu chunk_left=%zu raw_pending=%zu\n",
+                state.dime_record_no, (unsigned)h[0], options_len, id_len,
+                type_len, data_len, state.image.chunk_left,
+                state.image.raw_len - state.image.raw_pos);
     if (options_len > 4096 || id_len > 4096 || type_len >= sizeof(type)) return -3;
     if (body_skip(&state.image, pad4(options_len)) ||
         body_skip(&state.image, pad4(id_len))) return -4;
@@ -353,11 +499,69 @@ static int next_dime_record(void)
     return 0;
 }
 
+static int retrieve_headers_complete(const unsigned char *buf, size_t len)
+{
+    size_t i;
+    for (i = 3; i < len; ++i)
+        if (buf[i - 3] == '\r' && buf[i - 2] == '\n' &&
+            buf[i - 1] == '\r' && buf[i] == '\n')
+            return 1;
+    return 0;
+}
+
+static int reader_begin_retrieve(struct body_reader *r,
+                                 struct soapht_session *transport)
+{
+    int idle = 0, rc = 0;
+    size_t got = 0;
+    /*
+     * M1522 may pause not only before the first RetrieveImage byte, but
+     * between fragments of the HTTP response headers.  Prime the complete
+     * header here and tolerate up to 30 consecutive no-data transport
+     * windows.  Once CRLFCRLF is buffered, normal parsing/streaming resumes.
+     */
+    memset(r, 0, sizeof(*r));
+    r->transport = transport;
+    r->tolerate_gaps = 1;
+    while (idle < 30) {
+        if (r->raw_len >= SOAPHT_HEADER_MAX || r->raw_len == sizeof(r->raw))
+            return -1;
+        got = 0;
+        rc = soapht_read(transport, r->raw + r->raw_len,
+                         sizeof(r->raw) - r->raw_len, &got);
+        if (!rc && got) {
+            r->raw_len += got;
+            idle = 0;
+            if (retrieve_headers_complete(r->raw, r->raw_len)) {
+                r->raw_pos = 0;
+                if (reader_parse_headers(r)) return -1;
+                /*
+                 * The verified Windows USBPcap shows RetrieveImage is normal
+                 * HTTP/1.1 chunked transfer encoding throughout the DIME
+                 * stream: each 0x800-byte body chunk is followed by
+                 * "\\r\\n800\\r\\n" before the next body chunk.  Keep
+                 * chunk parsing enabled so those framing bytes never reach
+                 * the DIME/JPEG parser.
+                 */
+                return 0;
+            }
+            continue;
+        }
+        ++idle;
+        if (idle < 30) retrieve_retry_delay();
+    }
+    fprintf(stderr,
+            "minibox-scand: stage=soapht-retrieve-ready rc=%d got=%zu idle=%d/30 buffered=%zu\n",
+            rc, got, idle, r->raw_len);
+    return -1;
+}
+
 static int begin_retrieve(struct soapht_session *transport)
 {
     char xml[2048];
     if (make_retrieve_xml(xml, sizeof(xml), state.job_id) ||
-        send_request(transport, xml) || reader_begin(&state.image, transport)) return -1;
+        send_request(transport, xml)) return -1;
+    if (reader_begin_retrieve(&state.image, transport)) return -1;
     if (state.image.status != 200) return -2;
     state.retrieve_started = 1;
     return 0;
@@ -398,17 +602,105 @@ static int codec_read_image(struct soapht_session *transport,
     return 0;
 }
 
+static int finish_image_response(void)
+{
+    unsigned char discard[256];
+    size_t got = 0;
+    int rc;
+    /* Clean Windows capture: final DIME is followed by the normal chunked
+     * terminator. Consume it before the post-image SOAP requests. */
+    while (!state.image.done) {
+        rc = body_read(&state.image, discard, sizeof(discard), &got);
+        if (rc || (!got && !state.image.done)) {
+            fprintf(stderr,
+                    "minibox-scand: stage=soapht-retrieve-finish rc=%d got=%zu chunk_left=%zu raw_pending=%zu\n",
+                    rc, got, state.image.chunk_left,
+                    state.image.raw_len - state.image.raw_pos);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int codec_end_page(struct soapht_session *transport, int *more_pages)
 {
-    (void)transport;
-    if (!more_pages || !state.image_done) return -1;
+    char *response = 0;
+    int rc;
+    if (!transport || !more_pages || !state.image_done) return -1;
+    if (finish_image_response()) return -4;
+    {
+        char xml[1024];
+        if (make_get_job_info_xml(xml, sizeof(xml), state.job_id)) return -5;
+        rc = control_request(transport, xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-get-job-info rc=%d job=%s\n",
+                    rc, state.job_id);
+            return -5;
+        }
+        rc = control_request(transport, get_previous_image_pad_info_xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-get-previous-image-pad-info rc=%d job=%s\n",
+                    rc, state.job_id);
+            return -6;
+        }
+    }
     *more_pages = 0;
+    if (!state.adf) return 0;
+
+    rc = control_request(transport, get_elements_xml, &response);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-adf-status rc=%d\n", rc);
+        return -2;
+    }
+    if (strstr(response, "<PaperInADF>true</PaperInADF>")) *more_pages = 1;
+    else if (!strstr(response, "<PaperInADF>false</PaperInADF>")) {
+        fprintf(stderr, "minibox-scand: stage=soapht-adf-paper rc=-3\n");
+        free(response);
+        return -3;
+    }
+    free(response);
+
+    if (*more_pages) {
+        memset(&state.image, 0, sizeof(state.image));
+        state.retrieve_started = 0;
+        state.image_done = 0;
+        state.record_left = state.record_pad = 0;
+        state.record_flags = 0;
+        state.record_is_image = 0;
+        state.image_continues = 0;
+    }
     return 0;
 }
 
 static int codec_finish(struct soapht_session *transport)
 {
-    (void)transport;
+    char xml[1024];
+    int rc;
+    if (!transport) return -1;
+    /* Successful platen capture ends with GetJobInfo and
+     * GetPreviousImagePadInfo, not CancelJob. */
+    if (state.started && state.job_id[0] && !state.image_done) {
+        int n = snprintf(xml, sizeof(xml),
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\" "
+            "xmlns:SOAP-ENC=\"http://www.w3.org/2003/05/soap-encoding\" "
+            "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+            "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
+            "xmlns:wscn=\"http://tempuri.org/wscn.xsd\"><SOAP-ENV:Body>"
+            "<wscn:CancelJobRequest><JobId>%s</JobId><JobToken></JobToken>"
+            "<DocumentDescription></DocumentDescription></wscn:CancelJobRequest>"
+            "</SOAP-ENV:Body></SOAP-ENV:Envelope>", state.job_id);
+        if (n <= 0 || (size_t)n >= sizeof(xml)) {
+            memset(&state, 0, sizeof(state));
+            return -2;
+        }
+        rc = control_request(transport, xml, 0);
+        if (rc) {
+            fprintf(stderr, "minibox-scand: stage=soapht-cancel-job rc=%d job=%s\n", rc, state.job_id);
+            memset(&state, 0, sizeof(state));
+            return -3;
+        }
+    }
     memset(&state, 0, sizeof(state));
     return 0;
 }

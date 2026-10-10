@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "service.h"
 #include "mdns.h"
+#include "wsd_identity.h"
 #include <dirent.h>
 #include <errno.h>
 #include <signal.h>
@@ -10,7 +11,6 @@
 
 #define MB_SERVICES_DIR "/etc/minibox/services.d"
 #define MB_MAX_SERVICES 8
-#define MB_ANNOUNCE_INTERVAL_SEC 60
 
 static volatile sig_atomic_t stop;
 
@@ -34,6 +34,7 @@ int main(int argc, char **argv) {
     struct dirent *de;
     unsigned count = 0;
     int rc;
+    struct mb_wsd_identity identity;
 
     if (argi < argc && !strcmp(argv[argi], "--once")) {
         once = 1;
@@ -69,22 +70,41 @@ int main(int argc, char **argv) {
     if (gethostname(hostname, sizeof(hostname) - 1) != 0 || !hostname[0]) strcpy(hostname, "minibox");
     hostname[sizeof(hostname) - 1] = 0;
 
+    /*
+     * Keep the human-visible DNS-SD instance name exactly as configured
+     * ("M1522n NET"). Device uniqueness belongs in the stable UUID, not in
+     * the UI label. eSCL/IPP discovery still receives the same UUID and
+     * reachable admin URL so Windows/Android can correlate the services.
+     */
+    rc = mb_wsd_get_identity(&identity);
+    if (!rc) {
+        const char *uuid = !strncmp(identity.endpoint, "urn:uuid:", 9) ?
+                           identity.endpoint + 9 : identity.endpoint;
+        unsigned i;
+        for (i = 0; i < count; ++i) {
+            rc = mb_service_add_escl_identity(&services[i], uuid, hostname);
+            if (rc) {
+                fprintf(stderr, "minibox-discoveryd: eSCL identity failed: %d\n", rc);
+                return 2;
+            }
+        }
+    } else {
+        fprintf(stderr, "minibox-discoveryd: stable device identity unavailable: %d\n", rc);
+    }
+
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    do {
-        unsigned waited;
+    if (once) {
         rc = mb_mdns_publish_once(services, count, hostname);
         if (rc) {
             fprintf(stderr, "minibox-discoveryd: mDNS publish failed: %d\n", rc);
-            if (once) return 4;
-        } else {
-            printf("minibox-discoveryd: published %u service(s) as %s.local\n", count, hostname);
-            fflush(stdout);
+            return 4;
         }
-        if (once) break;
-        for (waited = 0; waited < MB_ANNOUNCE_INTERVAL_SEC && !stop; waited++) sleep(1);
-    } while (!stop);
-
-    return 0;
+        printf("minibox-discoveryd: published %u service(s) as %s.local\n", count, hostname);
+        return 0;
+    }
+    rc = mb_mdns_run(services, count, hostname, &stop);
+    if (rc) fprintf(stderr, "minibox-discoveryd: mDNS listener failed: %d\n", rc);
+    return rc ? 4 : 0;
 }
