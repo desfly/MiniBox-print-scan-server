@@ -13,25 +13,24 @@
 /* Verified from M1522-PRINT-REAL.pcap / HP Universal Printing PCL 6. */
 #define M1522_RENDER_DPI 600u
 #define M1522_JPEG_QUALITY 95
-/* The verified HP UPD capture sends a 1080-line JPEG in one ReadImage.
- * Keep each embedded JPEG no taller than that verified block size instead of
- * sending an entire 7015-line A4 page as one huge embedded-data object. */
-#define M1522_VERIFIED_JPEG_BLOCK_ROWS 1080u
+/* Exact native capture: first HP-UPD JPEG image is 1920x1080.
+ * Never feed the M1522 JPEG path a source image wider/taller than geometry
+ * proven by that capture.  The smaller vertical band keeps RAM bounded on the
+ * 64 MiB MiniBox while remaining inside the verified decoder envelope. */
+#define M1522_VERIFIED_JPEG_MAX_WIDTH 1920u
+#define M1522_VERIFIED_JPEG_MAX_HEIGHT 1080u
+#define M1522_RGB_BAND_ROWS 256u
 
 struct mb_jpeg_error {
     struct jpeg_error_mgr pub;
     jmp_buf jump;
 };
 
-struct mb_jpeg_block {
-    struct jpeg_compress_struct cinfo;
-    struct mb_jpeg_error err;
+struct mb_rgb_band {
     unsigned char *data;
-    unsigned long size;
-    unsigned start_line;
-    unsigned rows_target;
-    unsigned rows_written;
-    int created;
+    size_t stride;
+    unsigned rows;
+    unsigned start_row;
 };
 
 static uint32_t be32(const unsigned char *p){
@@ -83,16 +82,13 @@ static void jpeg_error_exit(j_common_ptr cinfo){
     struct mb_jpeg_error *e=(struct mb_jpeg_error *)cinfo->err;
     longjmp(e->jump,1);
 }
-static void jpeg_block_free(struct mb_pwg_pcl *s){
-    struct mb_jpeg_block *b=(struct mb_jpeg_block *)s->image_ctx;
+static void rgb_band_free(struct mb_pwg_pcl *s){
+    struct mb_rgb_band *b=(struct mb_rgb_band *)s->image_ctx;
     if(!b)return;
-    if(b->created)jpeg_destroy_compress(&b->cinfo);
-    free(b->data);
-    free(b);
-    s->image_ctx=0;
+    free(b->data);free(b);s->image_ctx=0;
 }
 static void free_page(struct mb_pwg_pcl *s){
-    jpeg_block_free(s);
+    rgb_band_free(s);
     free(s->line);free(s->mono);s->line=0;s->mono=0;
     s->line_cap=s->mono_cap=0;s->line_used=0;
 }
@@ -158,82 +154,91 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
        pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x78)||
        pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x7c)||
        pxl_u8(fn,ctx,204,44)||pxl_op(fn,ctx,0x7b)||
-       pxl_sxy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
-       pxl_u8(fn,ctx,cs,3)||pxl_op(fn,ctx,0x6a)||
-       pxl_u8(fn,ctx,0,100)||
-       pxl_u8(fn,ctx,depth,98)||
-       pxl_u16(fn,ctx,s->width,108)||pxl_u16(fn,ctx,s->height,107)||
-       pxl_xy16(fn,ctx,dw,dh,103)||pxl_op(fn,ctx,0xb0))return -1;
+       pxl_u8(fn,ctx,cs,3)||pxl_op(fn,ctx,0x6a))return -1;
+    if(is_1bit){
+        if(pxl_sxy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
+           pxl_u8(fn,ctx,0,100)||pxl_u8(fn,ctx,depth,98)||
+           pxl_u16(fn,ctx,s->width,108)||pxl_u16(fn,ctx,s->height,107)||
+           pxl_xy16(fn,ctx,dw,dh,103)||pxl_op(fn,ctx,0xb0))return -1;
+    }
     return 0;
 }
-static int page_end(mb_pwg_write_fn fn,void *ctx){
-    return pxl_op(fn,ctx,0xb2)||pxl_op(fn,ctx,0x44)?-1:0;
+static int page_end(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
+    unsigned is_1bit=((s->color_space==3||s->color_space==18)&&s->bits_per_pixel==1);
+    if(is_1bit&&pxl_op(fn,ctx,0xb2))return -1;
+    return pxl_op(fn,ctx,0x44)?-1:0;
 }
 
-static int jpeg_block_start(struct mb_pwg_pcl *s){
-    struct mb_jpeg_block *b;
-    unsigned remaining=s->height-s->row;
-    unsigned target=remaining>M1522_VERIFIED_JPEG_BLOCK_ROWS?
-        M1522_VERIFIED_JPEG_BLOCK_ROWS:remaining;
-    b=(struct mb_jpeg_block *)calloc(1,sizeof *b);
-    if(!b||!target){free(b);return -1;}
-    b->start_line=s->row;b->rows_target=target;
-    b->cinfo.err=jpeg_std_error(&b->err.pub);
-    b->err.pub.error_exit=jpeg_error_exit;
-    if(setjmp(b->err.jump)){
-        if(b->created)jpeg_destroy_compress(&b->cinfo);
-        free(b->data);free(b);return -1;
-    }
-    jpeg_create_compress(&b->cinfo);b->created=1;
-    jpeg_mem_dest(&b->cinfo,&b->data,&b->size);
-    b->cinfo.image_width=s->width;
-    b->cinfo.image_height=target;
-    b->cinfo.input_components=3;
-    b->cinfo.in_color_space=JCS_RGB;
-    jpeg_set_defaults(&b->cinfo);
-    jpeg_set_quality(&b->cinfo,M1522_JPEG_QUALITY,TRUE);
-    {
-        int i;
-        for(i=0;i<3;i++){
-            b->cinfo.comp_info[i].h_samp_factor=1;
-            b->cinfo.comp_info[i].v_samp_factor=1;
-        }
-    }
-    b->cinfo.optimize_coding=FALSE;
-    b->cinfo.write_JFIF_header=TRUE;
-    b->cinfo.density_unit=0;
-    b->cinfo.X_density=1;b->cinfo.Y_density=1;
-    jpeg_start_compress(&b->cinfo,TRUE);
-    s->image_ctx=b;
-    return 0;
-}
-static int jpeg_block_write_row(struct mb_pwg_pcl *s,const unsigned char *row){
-    struct mb_jpeg_block *b=(struct mb_jpeg_block *)s->image_ctx;
+
+static int jpeg_encode_tile(const unsigned char *base,size_t stride,
+                            unsigned x,unsigned w,unsigned h,
+                            unsigned char **data,unsigned long *size){
+    struct jpeg_compress_struct ci;
+    struct mb_jpeg_error err;
     JSAMPROW scan[1];
-    if(!b||b->rows_written>=b->rows_target)return -1;
-    if(setjmp(b->err.jump))return -1;
-    scan[0]=(JSAMPROW)row;
-    if(jpeg_write_scanlines(&b->cinfo,scan,1)!=1)return -1;
-    b->rows_written++;
-    return 0;
+    unsigned y;
+    int created=0;
+    memset(&ci,0,sizeof ci);memset(&err,0,sizeof err);
+    *data=0;*size=0;
+    ci.err=jpeg_std_error(&err.pub);err.pub.error_exit=jpeg_error_exit;
+    if(setjmp(err.jump)){
+        if(created)jpeg_destroy_compress(&ci);
+        free(*data);*data=0;*size=0;return -1;
+    }
+    jpeg_create_compress(&ci);created=1;
+    jpeg_mem_dest(&ci,data,size);
+    ci.image_width=w;ci.image_height=h;ci.input_components=3;ci.in_color_space=JCS_RGB;
+    jpeg_set_defaults(&ci);jpeg_set_quality(&ci,M1522_JPEG_QUALITY,TRUE);
+    {
+        int i;for(i=0;i<3;i++){ci.comp_info[i].h_samp_factor=1;ci.comp_info[i].v_samp_factor=1;}
+    }
+    ci.optimize_coding=FALSE;ci.write_JFIF_header=TRUE;
+    ci.density_unit=0;ci.X_density=1;ci.Y_density=1;
+    jpeg_start_compress(&ci,TRUE);
+    for(y=0;y<h;y++){
+        scan[0]=(JSAMPROW)(base+(size_t)y*stride+(size_t)x*3u);
+        if(jpeg_write_scanlines(&ci,scan,1)!=1){jpeg_destroy_compress(&ci);free(*data);*data=0;return -1;}
+    }
+    jpeg_finish_compress(&ci);jpeg_destroy_compress(&ci);
+    return (*data&&*size&&*size<=0xffffffffUL)?0:-1;
 }
-static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    struct mb_jpeg_block *b=(struct mb_jpeg_block *)s->image_ctx;
-    unsigned char emb[5]={0xfa,0,0,0,0};
-    if(!b||b->rows_written!=b->rows_target)return -1;
-    if(setjmp(b->err.jump)){jpeg_block_free(s);return -1;}
-    jpeg_finish_compress(&b->cinfo);
-    if(!b->data||!b->size||b->size>0xffffffffUL){jpeg_block_free(s);return -1;}
-    if(pxl_u16(fn,ctx,b->start_line,109)||
-       pxl_u16(fn,ctx,b->rows_target,99)||
+static int emit_rgb_tile(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx,
+                         const struct mb_rgb_band *band,
+                         unsigned x,unsigned w){
+    unsigned char *jpeg=0,emb[5]={0xfa,0,0,0,0};
+    unsigned long jpeg_size=0;
+    unsigned dx=scaled_to_600(x,s->xdpi);
+    unsigned dy=scaled_to_600(band->start_row,s->ydpi);
+    unsigned dw=scaled_to_600(w,s->xdpi);
+    unsigned dh=scaled_to_600(band->rows,s->ydpi);
+    if(!w||!band->rows||w>M1522_VERIFIED_JPEG_MAX_WIDTH||
+       band->rows>M1522_VERIFIED_JPEG_MAX_HEIGHT||
+       dx>32767u||dy>32767u||dw>65535u||dh>65535u)return -1;
+    if(jpeg_encode_tile(band->data,band->stride,x,w,band->rows,&jpeg,&jpeg_size))return -1;
+    if(pxl_sxy16(fn,ctx,(int)dx,(int)dy,76)||pxl_op(fn,ctx,0x6b)||
+       pxl_u8(fn,ctx,0,100)||pxl_u8(fn,ctx,2,98)||
+       pxl_u16(fn,ctx,w,108)||pxl_u16(fn,ctx,band->rows,107)||
+       pxl_xy16(fn,ctx,dw,dh,103)||pxl_op(fn,ctx,0xb0)||
+       pxl_u16(fn,ctx,0,109)||pxl_u16(fn,ctx,band->rows,99)||
        pxl_u8(fn,ctx,2,101)||pxl_op(fn,ctx,0xb1)){
-        jpeg_block_free(s);return -1;
+        free(jpeg);return -1;
     }
-    le32(emb+1,(uint32_t)b->size);
-    if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,b->data,(size_t)b->size)){
-        jpeg_block_free(s);return -1;
+    le32(emb+1,(uint32_t)jpeg_size);
+    if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,jpeg,(size_t)jpeg_size)||
+       pxl_op(fn,ctx,0xb2)){free(jpeg);return -1;}
+    free(jpeg);return 0;
+}
+static int flush_rgb_band(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
+    struct mb_rgb_band *band=(struct mb_rgb_band *)s->image_ctx;
+    unsigned x;
+    if(!band||!band->rows)return 0;
+    for(x=0;x<s->width;){
+        unsigned w=s->width-x;
+        if(w>M1522_VERIFIED_JPEG_MAX_WIDTH)w=M1522_VERIFIED_JPEG_MAX_WIDTH;
+        if(emit_rgb_tile(s,fn,ctx,band,x,w))return -1;
+        x+=w;
     }
-    jpeg_block_free(s);
+    band->start_row+=band->rows;band->rows=0;
     return 0;
 }
 
@@ -269,9 +274,20 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         s->mono_cap=(size_t)s->width*3u;
         s->mono=(unsigned char *)malloc(s->mono_cap);
     }
+    if(s->bits_per_pixel==8||s->bits_per_pixel==24){
+        struct mb_rgb_band *band=(struct mb_rgb_band *)calloc(1,sizeof *band);
+        size_t stride=(size_t)s->width*3u;
+        if(band){
+            band->stride=stride;band->start_row=0;
+            band->data=(unsigned char *)malloc(stride*M1522_RGB_BAND_ROWS);
+            if(!band->data){free(band);band=0;}
+        }
+        s->image_ctx=band;
+    }
     if(!s->line||
        (((s->color_space==3&&s->bits_per_pixel==1)||
-         (s->color_space==18&&s->bits_per_pixel==8))&&!s->mono)){
+         (s->color_space==18&&s->bits_per_pixel==8))&&!s->mono)||
+       ((s->bits_per_pixel==8||s->bits_per_pixel==24)&&!s->image_ctx)){
         free_page(s);return -3;
     }
     s->line_cap=s->bytes_per_line;s->line_used=0;s->row=0;s->color_value_bytes=unit;
@@ -309,6 +325,8 @@ static int emit_1bit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
 static int emit_continuous_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned i;
     const unsigned char *row=s->line;
+    struct mb_rgb_band *band=(struct mb_rgb_band *)s->image_ctx;
+    if(!band||!band->data)return -1;
     if(s->color_space==18&&s->bits_per_pixel==8){
         unsigned x;
         if(!s->mono||s->mono_cap<(size_t)s->width*3u)return -1;
@@ -327,13 +345,12 @@ static int emit_continuous_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ct
         row=s->mono;
     }
     for(i=0;i<s->repeat_lines;i++){
-        struct mb_jpeg_block *b;
-        if(!s->image_ctx&&jpeg_block_start(s))return -1;
-        b=(struct mb_jpeg_block *)s->image_ctx;
-        if(jpeg_block_write_row(s,row))return -1;
+        if(band->rows==M1522_RGB_BAND_ROWS&&flush_rgb_band(s,fn,ctx))return -1;
+        memcpy(band->data+(size_t)band->rows*band->stride,row,band->stride);
+        band->rows++;
         if(++s->row>s->height)return -1;
-        if(b->rows_written==b->rows_target&&jpeg_block_finish(s,fn,ctx))return -1;
     }
+    if((band->rows==M1522_RGB_BAND_ROWS||s->row==s->height)&&flush_rgb_band(s,fn,ctx))return -1;
     return 0;
 }
 static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
@@ -341,7 +358,6 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         emit_1bit_line(s,fn,ctx):emit_continuous_line(s,fn,ctx);
     if(rc)return rc;
     if(s->row==s->height){
-        if(s->image_ctx&&jpeg_block_finish(s,fn,ctx))return -1;
         if(s->color_space==18&&s->bits_per_pixel==8&&s->gray_samples){
             unsigned v,unique=0,minv=255,maxv=0;
             uint64_t mid=0,black=s->gray_hist[0],white=s->gray_hist[255];
@@ -355,7 +371,7 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
                     s->gray_samples,unique,minv,maxv,
                     (unsigned long)black,(unsigned long)white,(unsigned long)mid);
         }
-        if(page_end(fn,ctx))return -1;
+        if(page_end(s,fn,ctx))return -1;
         free_page(s);s->header_used=0;s->phase=MB_PWG_HEADER;
     }else s->phase=MB_PWG_REPEAT;
     return 0;
