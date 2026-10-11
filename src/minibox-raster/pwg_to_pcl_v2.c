@@ -15,11 +15,11 @@
 #define M1522_JPEG_QUALITY 95
 /* Exact native capture: first HP-UPD JPEG image is 1920x1080.
  * Never feed the M1522 JPEG path a source image wider/taller than geometry
- * proven by that capture.  The smaller vertical band keeps RAM bounded on the
- * 64 MiB MiniBox while remaining inside the verified decoder envelope. */
+ * proven by that capture.  Use the capture-proven 1080-row JPEG height for
+ * full bands; edge bands may be shorter only at the page boundary. */
 #define M1522_VERIFIED_JPEG_MAX_WIDTH 1920u
 #define M1522_VERIFIED_JPEG_MAX_HEIGHT 1080u
-#define M1522_RGB_BAND_ROWS 256u
+#define M1522_RGB_BAND_ROWS 1080u
 
 struct mb_jpeg_error {
     struct jpeg_error_mgr pub;
