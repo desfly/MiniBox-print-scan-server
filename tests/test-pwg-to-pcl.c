@@ -80,6 +80,21 @@ static void assert_jpeg_after_readimage(const struct sink *s,unsigned block_heig
         assert(s->data[i+n-2]==0xff&&s->data[i+n-1]==0xd9);
     }
 }
+static void assert_rgb_tile(const struct sink *s,unsigned x,unsigned y,unsigned w,unsigned h){
+    unsigned char cmd[48];size_t n=0;
+#define P(B) cmd[n++]=(unsigned char)(B)
+    P(0xd3);P(x);P(x>>8);P(y);P(y>>8);P(0xf8);P(0x4c);P(0x6b);
+    P(0xc0);P(0x00);P(0xf8);P(0x64);
+    P(0xc0);P(0x02);P(0xf8);P(0x62);
+    P(0xc1);P(w);P(w>>8);P(0xf8);P(0x6c);
+    P(0xc1);P(h);P(h>>8);P(0xf8);P(0x6b);
+    P(0xd1);P(w);P(w>>8);P(h);P(h>>8);P(0xf8);P(0x67);P(0xb0);
+    P(0xc1);P(0);P(0);P(0xf8);P(0x6d);
+    P(0xc1);P(h);P(h>>8);P(0xf8);P(0x63);
+    P(0xc0);P(0x02);P(0xf8);P(0x65);P(0xb1);P(0xfa);
+#undef P
+    assert(has(s,cmd,n));
+}
 int main(void){
     unsigned char h[1796],doc[4+1796+64];size_t n;
     struct mb_pwg_pcl p;struct sink s={0};
@@ -119,16 +134,20 @@ int main(void){
         assert(has(&s,a4,sizeof a4));
     }
     {
-        static const unsigned char gray_image[]={
-            0xc0,0x02,0xf8,0x03,0x6a,           /* sgray lifted to neutral eRGB */
-            0xc0,0x00,0xf8,0x64,                /* eDirectPixel */
-            0xc0,0x02,0xf8,0x62,                /* e8Bit */
+        static const unsigned char rgb_space[]={0xc0,0x02,0xf8,0x03,0x6a};
+        assert(has(&s,rgb_space,sizeof rgb_space));
+    }
+    /* 300 dpi source is positioned/scaled in the 600-unit PCL XL page. */
+    {
+        static const unsigned char tile_begin[]={
+            0xd3,0x00,0x00,0x00,0x00,0xf8,0x4c,0x6b,
+            0xc0,0x00,0xf8,0x64,
+            0xc0,0x02,0xf8,0x62,
             0xc1,0x08,0x00,0xf8,0x6c,
             0xc1,0x02,0x00,0xf8,0x6b,
-            0xd1,0x10,0x00,0x04,0x00,0xf8,0x67, /* 300dpi -> 600-unit destination */
-            0xb0
+            0xd1,0x10,0x00,0x04,0x00,0xf8,0x67,0xb0
         };
-        assert(has(&s,gray_image,sizeof gray_image));
+        assert(has(&s,tile_begin,sizeof tile_begin));
     }
     assert_jpeg_after_readimage(&s,2,1);
     mb_pwg_pcl_reset(&p);
@@ -141,12 +160,8 @@ int main(void){
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,1,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
     {
-        static const unsigned char rgb_image[]={
-            0xc0,0x02,0xf8,0x03,0x6a, /* ColorSpace=eRGB */
-            0xc0,0x00,0xf8,0x64,
-            0xc0,0x02,0xf8,0x62
-        };
-        assert(has(&s,rgb_image,sizeof rgb_image));
+        static const unsigned char rgb_space[]={0xc0,0x02,0xf8,0x03,0x6a};
+        assert(has(&s,rgb_space,sizeof rgb_space));
     }
     assert_jpeg_after_readimage(&s,2,1);
     mb_pwg_pcl_reset(&p);
@@ -214,48 +229,28 @@ int main(void){
     assert_jpeg_after_readimage(&s,1,1);
     mb_pwg_pcl_reset(&p);
 
-    /* A full 600-dpi A4 page must not become one giant JPEG embedded-data
-       object.  Use multiple ReadImage blocks, each no taller than the 1080-line
-       block verified in the HP UPD capture, with monotonically advancing
-       StartLine. */
+    /* Continuous-tone pages are emitted as independent JPEG image tiles.
+       Width never exceeds the 1920 pixels observed in the native HP-UPD
+       stream, and the 256-row band bounds MiniBox RAM. */
     {
         struct mb_pwg_pcl q;
         struct sink *big=(struct sink *)calloc(1,sizeof *big);
-        unsigned char hh[1796];
-        unsigned char rowdoc[4+1796+8];
-        size_t rn=1800;
-        unsigned starts[3]={0,1080,2160};
-        unsigned heights[3]={1080,1080,1};
-        size_t pos=0;
-        int block;
+        unsigned char hh[1796],head[1800];
+        const unsigned char runs[]={255,128,0,128}; /* 256 white rows + 1 white row */
         assert(big);
-        header(hh,1,2161,8,24,3,19,3);
+        header(hh,3841,257,8,24,3841*3,19,3);
         u32(hh+276,600);u32(hh+280,600);
-        memcpy(rowdoc,"RaS2",4);memcpy(rowdoc+4,hh,1796);
-        /* One white RGB row repeated 2161 times cannot be encoded with one
-           PWG repeat byte, so feed 9 runs: 8x256 + 113 lines. */
+        memcpy(head,"RaS2",4);memcpy(head+4,hh,1796);
         mb_pwg_pcl_init(&q);
-        assert(mb_pwg_pcl_feed(&q,rowdoc,rn,wr,big)==0);
-        for(block=0;block<8;block++){
-            const unsigned char run[]={255,0,255,255,255};
-            assert(mb_pwg_pcl_feed(&q,run,sizeof run,wr,big)==0);
-        }
-        {
-            const unsigned char run[]={112,0,255,255,255};
-            assert(mb_pwg_pcl_feed(&q,run,sizeof run,wr,big)==0);
-        }
+        assert(mb_pwg_pcl_feed(&q,head,sizeof head,wr,big)==0);
+        assert(mb_pwg_pcl_feed(&q,runs,sizeof runs,wr,big)==0);
         assert(mb_pwg_pcl_finish(&q,wr,big)==0);
-        for(block=0;block<3;block++){
-            unsigned char cmd[15]={
-                0xc1,(unsigned char)starts[block],(unsigned char)(starts[block]>>8),0xf8,0x6d,
-                0xc1,(unsigned char)heights[block],(unsigned char)(heights[block]>>8),0xf8,0x63,
-                0xc0,0x02,0xf8,0x65,0xb1
-            };
-            size_t found=(size_t)-1,i;
-            for(i=pos;i+sizeof cmd<=big->used;i++)if(!memcmp(big->data+i,cmd,sizeof cmd)){found=i;break;}
-            assert(found!=(size_t)-1);
-            pos=found+sizeof cmd;
-        }
+        assert_rgb_tile(big,0,0,1920,256);
+        assert_rgb_tile(big,1920,0,1920,256);
+        assert_rgb_tile(big,3840,0,1,256);
+        assert_rgb_tile(big,0,256,1920,1);
+        assert_rgb_tile(big,1920,256,1920,1);
+        assert_rgb_tile(big,3840,256,1,1);
         mb_pwg_pcl_reset(&q);
         free(big);
     }
