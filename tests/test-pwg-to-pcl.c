@@ -233,27 +233,30 @@ int main(void){
     mb_pwg_pcl_reset(&p);
 
     /* Continuous-tone pages are emitted as independent JPEG image tiles.
-       Width never exceeds the 1920 pixels observed in the native HP-UPD
-       stream, and the 256-row band bounds MiniBox RAM. */
+       The first full tile uses the exact 1920x1080 geometry observed in the
+       native HP-UPD capture; only page-edge tiles are smaller. */
     {
         struct mb_pwg_pcl q;
         struct sink *big=(struct sink *)calloc(1,sizeof *big);
-        unsigned char hh[1796],head[1800];
-        const unsigned char runs[]={255,128,0,128}; /* 256 white rows + 1 white row */
+        unsigned char hh[1796],head[1800],runs[10];
+        int k;
         assert(big);
-        header(hh,3841,257,8,24,3841*3,19,3);
+        header(hh,3841,1081,8,24,3841*3,19,3);
         u32(hh+276,600);u32(hh+280,600);
         memcpy(head,"RaS2",4);memcpy(head+4,hh,1796);
+        for(k=0;k<4;k++){runs[k*2]=255;runs[k*2+1]=128;} /* 4*256 = 1024 */
+        runs[8]=55;runs[9]=128; /* +56 = 1080 */
         mb_pwg_pcl_init(&q);
         assert(mb_pwg_pcl_feed(&q,head,sizeof head,wr,big)==0);
         assert(mb_pwg_pcl_feed(&q,runs,sizeof runs,wr,big)==0);
+        { const unsigned char tail[]={0,128}; assert(mb_pwg_pcl_feed(&q,tail,sizeof tail,wr,big)==0); }
         assert(mb_pwg_pcl_finish(&q,wr,big)==0);
-        assert_rgb_tile(big,0,0,1920,256);
-        assert_rgb_tile(big,1920,0,1920,256);
-        assert_rgb_tile(big,3840,0,1,256);
-        assert_rgb_tile(big,0,256,1920,1);
-        assert_rgb_tile(big,1920,256,1920,1);
-        assert_rgb_tile(big,3840,256,1,1);
+        assert_rgb_tile(big,0,0,1920,1080);
+        assert_rgb_tile(big,1920,0,1920,1080);
+        assert_rgb_tile(big,3840,0,1,1080);
+        assert_rgb_tile(big,0,1080,1920,1);
+        assert_rgb_tile(big,1920,1080,1920,1);
+        assert_rgb_tile(big,3840,1080,1,1);
         mb_pwg_pcl_reset(&q);
         free(big);
     }
