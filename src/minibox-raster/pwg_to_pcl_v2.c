@@ -13,13 +13,12 @@
 /* Verified from M1522-PRINT-REAL.pcap / HP Universal Printing PCL 6. */
 #define M1522_RENDER_DPI 600u
 #define M1522_JPEG_QUALITY 95
-/* Exact native capture: first HP-UPD JPEG image is 1920x1080.
- * Never feed the M1522 JPEG path a source image wider/taller than geometry
- * proven by that capture.  Use the capture-proven 1080-row JPEG height for
- * full bands; edge bands may be shorter only at the page boundary. */
+/* Exact native capture proves 1920x1080 is accepted by the M1522 decoder.
+ * Keep width inside the captured envelope.  The 256-row staging band is a
+ * renderer memory choice only; it is not treated as a printer protocol rule. */
 #define M1522_VERIFIED_JPEG_MAX_WIDTH 1920u
 #define M1522_VERIFIED_JPEG_MAX_HEIGHT 1080u
-#define M1522_RGB_BAND_ROWS 1080u
+#define M1522_RGB_BAND_ROWS 256u
 
 struct mb_jpeg_error {
     struct jpeg_error_mgr pub;
