@@ -198,14 +198,17 @@ int main(void){
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,5,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
     {
-        static const unsigned char sgray1_image[]={
-            0xc0,0x01,0xf8,0x03,0x6a, /* ColorSpace=eGray */
+        static const unsigned char sgray1_space[]={
+            0xc0,0x01,0xf8,0x03,0x6a /* ColorSpace=eGray */
+        };
+        static const unsigned char sgray1_format[]={
             0xc0,0x00,0xf8,0x64,
             0xc0,0x00,0xf8,0x62       /* ColorDepth=e1Bit */
         };
         static const unsigned char onebit_len[]={0xb1,0xfa,0x04,0x00,0x00,0x00};
         size_t i;
-        assert(has(&s,sgray1_image,sizeof sgray1_image));
+        assert(has(&s,sgray1_space,sizeof sgray1_space));
+        assert(has(&s,sgray1_format,sizeof sgray1_format));
         i=find_bytes(&s,onebit_len,sizeof onebit_len);assert(i!=(size_t)-1);
         i+=sizeof onebit_len;
         assert(i+4<=s.used);
