@@ -38,21 +38,30 @@ typedef struct m1522_print_session print_session;
  * consume and render the job without sending a single byte to USB.  This is
  * intentionally runtime-only and survives no reboot. */
 static int runtime_dry_run;
+static FILE *runtime_dry_fp;
 static int ps_open(print_session **s){
     static print_session x;
     if(access("/tmp/minibox-print-dryrun",F_OK)==0){
         runtime_dry_run=1;*s=0;
-        fprintf(stderr,"minibox-printerd: dry-run enabled; USB output suppressed\n");
+        runtime_dry_fp=fopen("/tmp/minibox-pclxl-dryrun.bin","wb");
+        if(!runtime_dry_fp){runtime_dry_run=0;return -93;}
+        fprintf(stderr,"minibox-printerd: dry-run enabled; USB output suppressed; PCL XL -> /tmp/minibox-pclxl-dryrun.bin\n");
         return 0;
     }
-    runtime_dry_run=0;*s=&x;return m1522_print_open(*s);
+    runtime_dry_run=0;runtime_dry_fp=0;*s=&x;return m1522_print_open(*s);
 }
 static int ps_write(print_session*s,const unsigned char*b,size_t n){
-    if(runtime_dry_run){(void)s;(void)b;(void)n;return 0;}
+    if(runtime_dry_run){
+        (void)s;
+        return runtime_dry_fp&&fwrite(b,1,n,runtime_dry_fp)==n?0:-94;
+    }
     return m1522_print_write(s,b,n);
 }
 static void ps_close(print_session*s){
-    if(runtime_dry_run){runtime_dry_run=0;return;}
+    if(runtime_dry_run){
+        if(runtime_dry_fp){(void)fflush(runtime_dry_fp);(void)fclose(runtime_dry_fp);}
+        runtime_dry_fp=0;runtime_dry_run=0;return;
+    }
     m1522_print_close(s);
 }
 #endif
