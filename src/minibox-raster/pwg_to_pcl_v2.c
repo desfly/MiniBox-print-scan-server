@@ -125,11 +125,6 @@ static int pxl_sxy16(mb_pwg_write_fn fn,void *ctx,int x,int y,unsigned attr){
     le16(b+1,(unsigned)(uint16_t)x);le16(b+3,(unsigned)(uint16_t)y);
     return out(fn,ctx,b,sizeof b);
 }
-static int pxl_real_xy_1(mb_pwg_write_fn fn,void *ctx,unsigned attr){
-    static const unsigned char one_xy[9]={0xd5,0x00,0x00,0x80,0x3f,0x00,0x00,0x80,0x3f};
-    unsigned char a[2]={0xf8,(unsigned char)attr};
-    return out(fn,ctx,one_xy,sizeof one_xy)||out(fn,ctx,a,sizeof a)?-1:0;
-}
 static int pxl_u8_array(mb_pwg_write_fn fn,void *ctx,const char *v,unsigned attr){
     size_t n=strlen(v);
     unsigned char pfx[3]={0xc8,0xc0,0};
