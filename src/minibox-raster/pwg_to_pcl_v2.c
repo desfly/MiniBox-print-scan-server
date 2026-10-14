@@ -148,13 +148,23 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(is_a4(s)){
         if(pxl_u8_array(fn,ctx,"A4",37))return -1;
     }else if(pxl_u8(fn,ctx,pxl_media_enum(s),37))return -1;
+    /* Mirror the HP UPD PCL XL page-state sequence captured in
+     * M1522-PRINT-REAL.pcap.  The capture used non-zero PageOrigin/Cursor
+     * because that particular job placed a 1920x1080 image inside the page.
+     * A PWG raster page is already the full rendered page, so keep the exact
+     * operator order but use the page-relative origin/cursor (0,0). */
     if(pxl_op(fn,ctx,0x43)||
        pxl_real_xy_1(fn,ctx,43)||pxl_op(fn,ctx,0x77)||
        pxl_u8(fn,ctx,1,3)||pxl_op(fn,ctx,0x6a)||
        pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x78)||
        pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x7c)||
        pxl_u8(fn,ctx,204,44)||pxl_op(fn,ctx,0x7b)||
+       pxl_sxy16(fn,ctx,0,0,42)||pxl_op(fn,ctx,0x75)||
+       pxl_op(fn,ctx,0x61)||pxl_op(fn,ctx,0x69)||
        pxl_sxy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
+       pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x78)||
+       pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x7c)||
+       pxl_u8(fn,ctx,204,44)||pxl_op(fn,ctx,0x7b)||
        pxl_u8(fn,ctx,cs,3)||pxl_op(fn,ctx,0x6a)||
        pxl_u8(fn,ctx,0,100)||
        pxl_u8(fn,ctx,depth,98)||
