@@ -94,7 +94,16 @@ int main(void){
     assert(has(&s,(const unsigned char *)"@PJL SET RESOLUTION=600",23));
     { static const unsigned char pjl_bpp[]="@PJL SET BITSPERPIXEL=1"; assert(has(&s,pjl_bpp,sizeof pjl_bpp-1)); }
     assert(has(&s,(const unsigned char *)"@PJL ENTER LANGUAGE=PCLXL",25));
-    assert(has(&s,(const unsigned char *)") HP-PCL XL;2;1;",16));
+    {
+        static const unsigned char capture_binding[]=
+            ") HP-PCL XL;2;1;Comment Copyright(c) 1999 Microsoft Corporation\n";
+        size_t binding=find_bytes(&s,capture_binding,sizeof capture_binding-1);
+        assert(binding!=(size_t)-1);
+        /* The first PCL XL binary token follows the exact HP UPD binding/comment
+         * with no invented control bytes in between. */
+        assert(binding+sizeof capture_binding-1<s.used);
+        assert(s.data[binding+sizeof capture_binding-1]==0xd1);
+    }
     {
         static const unsigned char session_setup[]={
             0xd1,0x58,0x02,0x58,0x02,0xf8,0x89, /* UnitsPerMeasure=600,600 */
