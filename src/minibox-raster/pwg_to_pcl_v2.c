@@ -14,6 +14,73 @@
 #define M1522_RENDER_DPI 600u
 #define M1522_JPEG_QUALITY 95
 
+/* Capture-locked PCL XL vocabulary.
+ * Values are the ones present in M1522-PRINT-REAL.pcap and cross-checked
+ * against the public PCL XL tables.  Keep them named here so the renderer
+ * cannot silently drift through anonymous magic numbers. */
+enum m1522_pxl_attr {
+    PXL_A_COLOR_SPACE=3,
+    PXL_A_MEDIA_SIZE=37,
+    PXL_A_MEDIA_SOURCE=38,
+    PXL_A_ORIENTATION=40,
+    PXL_A_PAGE_ORIGIN=42,
+    PXL_A_PAGE_SCALE=43,
+    PXL_A_ROP3=44,
+    PXL_A_TX_MODE=45,
+    PXL_A_SIMPLEX_PAGE_MODE=52,
+    PXL_A_POINT=76,
+    PXL_A_COLOR_DEPTH=98,
+    PXL_A_BLOCK_HEIGHT=99,
+    PXL_A_COLOR_MAPPING=100,
+    PXL_A_COMPRESS_MODE=101,
+    PXL_A_DESTINATION_SIZE=103,
+    PXL_A_SOURCE_HEIGHT=107,
+    PXL_A_SOURCE_WIDTH=108,
+    PXL_A_START_LINE=109,
+    PXL_A_DATA_ORG=130,
+    PXL_A_MEASURE=134,
+    PXL_A_SOURCE_TYPE=136,
+    PXL_A_UNITS_PER_MEASURE=137,
+    PXL_A_ERROR_REPORT=143
+};
+enum m1522_pxl_op {
+    PXL_O_BEGIN_SESSION=0x41,
+    PXL_O_END_SESSION=0x42,
+    PXL_O_BEGIN_PAGE=0x43,
+    PXL_O_END_PAGE=0x44,
+    PXL_O_OPEN_DATA_SOURCE=0x48,
+    PXL_O_CLOSE_DATA_SOURCE=0x49,
+    PXL_O_PUSH_GS=0x61,
+    PXL_O_SET_CLIP_TO_PAGE=0x69,
+    PXL_O_SET_COLOR_SPACE=0x6a,
+    PXL_O_SET_CURSOR=0x6b,
+    PXL_O_SET_PAGE_ORIGIN=0x75,
+    PXL_O_SET_PAGE_SCALE=0x77,
+    PXL_O_SET_PATTERN_TX_MODE=0x78,
+    PXL_O_SET_ROP=0x7b,
+    PXL_O_SET_SOURCE_TX_MODE=0x7c,
+    PXL_O_BEGIN_IMAGE=0xb0,
+    PXL_O_READ_IMAGE=0xb1,
+    PXL_O_END_IMAGE=0xb2
+};
+enum m1522_pxl_value {
+    PXL_V_INCH=0,
+    PXL_V_BACKCHANNEL_AND_ERROR_PAGE=3,
+    PXL_V_DEFAULT_SOURCE=0,
+    PXL_V_BINARY_LOW_BYTE_FIRST=1,
+    PXL_V_AUTO_SELECT=1,
+    PXL_V_SIMPLEX=0,
+    PXL_V_GRAY=1,
+    PXL_V_RGB=2,
+    PXL_V_OPAQUE=0,
+    PXL_V_ROP_COPY=204,
+    PXL_V_DIRECT_PIXEL=0,
+    PXL_V_1BIT=0,
+    PXL_V_8BIT=2,
+    PXL_V_NO_COMPRESSION=0,
+    PXL_V_JPEG_COMPRESSION=2
+};
+
 struct mb_jpeg_error {
     struct jpeg_error_mgr pub;
     jmp_buf jump;
@@ -118,21 +185,30 @@ static unsigned scaled_to_600(unsigned pixels,unsigned dpi){
     return (unsigned)(n/dpi);
 }
 static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    char pjl[256];int n;static const char pxl[]=") HP-PCL XL;2;1;\n";
+    char pjl[256];int n;
+    /* Exact PCL XL binding/comment bytes visible in the HP UPD USB capture.
+     * PJL accounting strings before ENTER LANGUAGE are job metadata and are
+     * intentionally not copied. */
+    static const char pxl[]=
+        ") HP-PCL XL;2;1;Comment Copyright(c) 1999 Microsoft Corporation\n";
     if(s->job_started)return 0;
     n=snprintf(pjl,sizeof pjl,
         "\033%%-12345X"
-        "@PJL JOB NAME=\"MiniBox PWG\"\r\n"
-        "@PJL SET PLANESINUSE=1\r\n"
-        "@PJL SET GRAYSCALE=BLACKONLY\r\n"
-        "@PJL SET ECONOMODE=OFF\r\n"
-        "@PJL SET RESOLUTION=600\r\n"
-        "@PJL SET BITSPERPIXEL=1\r\n"
-        "@PJL ENTER LANGUAGE=PCLXL\r\n");
+        "@PJL JOB NAME=\"MiniBox PWG\"\n"
+        "@PJL SET PLANESINUSE=1\n"
+        "@PJL SET GRAYSCALE=BLACKONLY\n"
+        "@PJL SET ECONOMODE=OFF\n"
+        "@PJL SET RESOLUTION=600\n"
+        "@PJL SET BITSPERPIXEL=1\n"
+        "@PJL ENTER LANGUAGE=PCLXL\n");
     if(n<0||(size_t)n>=sizeof pjl||out(fn,ctx,pjl,(size_t)n)||out(fn,ctx,pxl,sizeof pxl-1))return -1;
-    if(pxl_xy16(fn,ctx,M1522_RENDER_DPI,M1522_RENDER_DPI,137)||
-       pxl_u8(fn,ctx,0,134)||pxl_u8(fn,ctx,3,143)||pxl_op(fn,ctx,0x41)||
-       pxl_u8(fn,ctx,0,136)||pxl_u8(fn,ctx,1,130)||pxl_op(fn,ctx,0x48))return -1;
+    if(pxl_xy16(fn,ctx,M1522_RENDER_DPI,M1522_RENDER_DPI,PXL_A_UNITS_PER_MEASURE)||
+       pxl_u8(fn,ctx,PXL_V_INCH,PXL_A_MEASURE)||
+       pxl_u8(fn,ctx,PXL_V_BACKCHANNEL_AND_ERROR_PAGE,PXL_A_ERROR_REPORT)||
+       pxl_op(fn,ctx,PXL_O_BEGIN_SESSION)||
+       pxl_u8(fn,ctx,PXL_V_DEFAULT_SOURCE,PXL_A_SOURCE_TYPE)||
+       pxl_u8(fn,ctx,PXL_V_BINARY_LOW_BYTE_FIRST,PXL_A_DATA_ORG)||
+       pxl_op(fn,ctx,PXL_O_OPEN_DATA_SOURCE))return -1;
     s->job_started=1;return 0;
 }
 static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
@@ -140,40 +216,40 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned dw=scaled_to_600(s->width,s->xdpi);
     unsigned dh=scaled_to_600(s->height,s->ydpi);
     unsigned is_1bit=((s->color_space==3||s->color_space==18)&&s->bits_per_pixel==1);
-    unsigned cs=is_1bit?1u:2u;
-    unsigned depth=is_1bit?0u:2u;
+    unsigned cs=is_1bit?PXL_V_GRAY:PXL_V_RGB;
+    unsigned depth=is_1bit?PXL_V_1BIT:PXL_V_8BIT;
     if(dw>65535u||dh>65535u)return -1;
     if(job_start(s,fn,ctx)||
-       pxl_u8(fn,ctx,1,38)||pxl_u8(fn,ctx,0,52)||pxl_u8(fn,ctx,orientation,40))return -1;
+       pxl_u8(fn,ctx,PXL_V_AUTO_SELECT,PXL_A_MEDIA_SOURCE)||pxl_u8(fn,ctx,PXL_V_SIMPLEX,PXL_A_SIMPLEX_PAGE_MODE)||pxl_u8(fn,ctx,orientation,PXL_A_ORIENTATION))return -1;
     if(is_a4(s)){
-        if(pxl_u8_array(fn,ctx,"A4",37))return -1;
-    }else if(pxl_u8(fn,ctx,pxl_media_enum(s),37))return -1;
+        if(pxl_u8_array(fn,ctx,"A4",PXL_A_MEDIA_SIZE))return -1;
+    }else if(pxl_u8(fn,ctx,pxl_media_enum(s),PXL_A_MEDIA_SIZE))return -1;
     /* Mirror the HP UPD PCL XL page-state sequence captured in
      * M1522-PRINT-REAL.pcap.  The capture used non-zero PageOrigin/Cursor
      * because that particular job placed a 1920x1080 image inside the page.
      * A PWG raster page is already the full rendered page, so keep the exact
      * operator order but use the page-relative origin/cursor (0,0). */
-    if(pxl_op(fn,ctx,0x43)||
-       pxl_real_xy_1(fn,ctx,43)||pxl_op(fn,ctx,0x77)||
-       pxl_u8(fn,ctx,1,3)||pxl_op(fn,ctx,0x6a)||
-       pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x78)||
-       pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x7c)||
-       pxl_u8(fn,ctx,204,44)||pxl_op(fn,ctx,0x7b)||
-       pxl_sxy16(fn,ctx,0,0,42)||pxl_op(fn,ctx,0x75)||
-       pxl_op(fn,ctx,0x61)||pxl_op(fn,ctx,0x69)||
-       pxl_sxy16(fn,ctx,0,0,76)||pxl_op(fn,ctx,0x6b)||
-       pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x78)||
-       pxl_u8(fn,ctx,0,45)||pxl_op(fn,ctx,0x7c)||
-       pxl_u8(fn,ctx,204,44)||pxl_op(fn,ctx,0x7b)||
-       pxl_u8(fn,ctx,cs,3)||pxl_op(fn,ctx,0x6a)||
-       pxl_u8(fn,ctx,0,100)||
-       pxl_u8(fn,ctx,depth,98)||
-       pxl_u16(fn,ctx,s->width,108)||pxl_u16(fn,ctx,s->height,107)||
-       pxl_xy16(fn,ctx,dw,dh,103)||pxl_op(fn,ctx,0xb0))return -1;
+    if(pxl_op(fn,ctx,PXL_O_BEGIN_PAGE)||
+       pxl_real_xy_1(fn,ctx,PXL_A_PAGE_SCALE)||pxl_op(fn,ctx,PXL_O_SET_PAGE_SCALE)||
+       pxl_u8(fn,ctx,PXL_V_GRAY,PXL_A_COLOR_SPACE)||pxl_op(fn,ctx,PXL_O_SET_COLOR_SPACE)||
+       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_PATTERN_TX_MODE)||
+       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_SOURCE_TX_MODE)||
+       pxl_u8(fn,ctx,PXL_V_ROP_COPY,PXL_A_ROP3)||pxl_op(fn,ctx,PXL_O_SET_ROP)||
+       pxl_sxy16(fn,ctx,0,0,PXL_A_PAGE_ORIGIN)||pxl_op(fn,ctx,PXL_O_SET_PAGE_ORIGIN)||
+       pxl_op(fn,ctx,PXL_O_PUSH_GS)||pxl_op(fn,ctx,PXL_O_SET_CLIP_TO_PAGE)||
+       pxl_sxy16(fn,ctx,0,0,PXL_A_POINT)||pxl_op(fn,ctx,PXL_O_SET_CURSOR)||
+       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_PATTERN_TX_MODE)||
+       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_SOURCE_TX_MODE)||
+       pxl_u8(fn,ctx,PXL_V_ROP_COPY,PXL_A_ROP3)||pxl_op(fn,ctx,PXL_O_SET_ROP)||
+       pxl_u8(fn,ctx,cs,PXL_A_COLOR_SPACE)||pxl_op(fn,ctx,PXL_O_SET_COLOR_SPACE)||
+       pxl_u8(fn,ctx,PXL_V_DIRECT_PIXEL,PXL_A_COLOR_MAPPING)||
+       pxl_u8(fn,ctx,depth,PXL_A_COLOR_DEPTH)||
+       pxl_u16(fn,ctx,s->width,PXL_A_SOURCE_WIDTH)||pxl_u16(fn,ctx,s->height,PXL_A_SOURCE_HEIGHT)||
+       pxl_xy16(fn,ctx,dw,dh,PXL_A_DESTINATION_SIZE)||pxl_op(fn,ctx,PXL_O_BEGIN_IMAGE))return -1;
     return 0;
 }
 static int page_end(mb_pwg_write_fn fn,void *ctx){
-    return pxl_op(fn,ctx,0xb2)||pxl_op(fn,ctx,0x44)?-1:0;
+    return pxl_op(fn,ctx,PXL_O_END_IMAGE)||pxl_op(fn,ctx,PXL_O_END_PAGE)?-1:0;
 }
 
 static int jpeg_block_start(struct mb_pwg_pcl *s){
@@ -229,9 +305,9 @@ static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(setjmp(b->err.jump)){jpeg_block_free(s);return -1;}
     jpeg_finish_compress(&b->cinfo);
     if(!b->data||!b->size||b->size>0xffffffffUL){jpeg_block_free(s);return -1;}
-    if(pxl_u16(fn,ctx,b->start_line,109)||
-       pxl_u16(fn,ctx,b->rows_target,99)||
-       pxl_u8(fn,ctx,2,101)||pxl_op(fn,ctx,0xb1)){
+    if(pxl_u16(fn,ctx,b->start_line,PXL_A_START_LINE)||
+       pxl_u16(fn,ctx,b->rows_target,PXL_A_BLOCK_HEIGHT)||
+       pxl_u8(fn,ctx,PXL_V_JPEG_COMPRESSION,PXL_A_COMPRESS_MODE)||pxl_op(fn,ctx,PXL_O_READ_IMAGE)){
         jpeg_block_free(s);return -1;
     }
     le32(emb+1,(uint32_t)b->size);
@@ -302,8 +378,8 @@ static int emit_1bit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         static const unsigned char pad[3]={0,0,0};
         size_t padded=(row_bytes+3u)&~3u;
         size_t padding=padded-row_bytes;
-        if(pxl_u16(fn,ctx,s->row,109)||pxl_u16(fn,ctx,1,99)||
-           pxl_u8(fn,ctx,0,101)||pxl_op(fn,ctx,0xb1))return -1;
+        if(pxl_u16(fn,ctx,s->row,PXL_A_START_LINE)||pxl_u16(fn,ctx,1,PXL_A_BLOCK_HEIGHT)||
+           pxl_u8(fn,ctx,PXL_V_NO_COMPRESSION,PXL_A_COMPRESS_MODE)||pxl_op(fn,ctx,PXL_O_READ_IMAGE))return -1;
         le32(emb+1,(uint32_t)padded);
         if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,row,row_bytes)||
            (padding&&out(fn,ctx,pad,padding)))return -1;
@@ -448,7 +524,7 @@ int mb_pwg_pcl_feed(struct mb_pwg_pcl *s,const unsigned char *data,size_t len,
     return 0;
 }
 int mb_pwg_pcl_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    static const unsigned char trailer[]={0x49,0x42};
+    static const unsigned char trailer[]={PXL_O_CLOSE_DATA_SOURCE,PXL_O_END_SESSION};
     static const char pjl_end[]="\033%-12345X@PJL EOJ NAME=\"MiniBox PWG\"\r\n\033%-12345X";
     if(!s||!fn||s->failed)return -1;
     if(!s->pages||s->phase!=MB_PWG_HEADER||s->header_used!=0)return -2;
