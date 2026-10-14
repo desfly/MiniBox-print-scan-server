@@ -7,9 +7,9 @@ Do not change the converter by intuition: update this table and its tests first.
 
 | PWG cupsColorSpace | PWG type exposed by IPP | bits/color | bits/pixel | colors | MiniBox output |
 |---:|---|---:|---:|---:|---|
-| 3 | black_1 | 1 | 1 | 1 | PCL XL eGray, e1Bit, eDirectPixel |
-| 18 | sgray_8 | 8 | 8 | 1 | PCL XL eGray, e8Bit, eDirectPixel |
-| 19 | srgb_8 | 8 | 24 | 3 | PCL XL eRGB, e8Bit, eDirectPixel |
+| 3 | black_1 (compatibility only) | 1 | 1 | 1 | PCL XL eGray, e1Bit, eDirectPixel |
+| 18 | sgray_8 (advertised) | 8 | 8 | 1 | neutral RGB, then PCL XL eRGB/e8Bit/eDirectPixel JPEG |
+| 19 | srgb_8 (compatibility only) | 8 | 24 | 3 | PCL XL eRGB, e8Bit, eDirectPixel JPEG |
 
 Only chunky PWG raster (`cupsColorOrder == 0`) is accepted.
 
@@ -53,20 +53,23 @@ ceil(width / 8)
 
 ### sgray_8
 
-Each PWG gray sample is preserved as one PCL XL eGray/e8Bit sample.
+Each PWG gray sample is preserved without thresholding. To follow the verified
+HP UPD image path, MiniBox expands it to neutral RGB (R=G=B=gray) and emits
+PCL XL eRGB/e8Bit/eDirectPixel with baseline JPEG quality 95, 4:4:4.
 
 ```
-0x00 = black
+0x00 -> 00 00 00
 ...
-0xff = white
+0xff -> ff ff ff
 ```
 
-There is no 128 threshold and no software 1-bit halftoning.
+There is no 128 threshold and no software 1-bit halftoning. Tonal levels stay
+continuous so the M1522 performs the final monochrome rendering.
 
-Output bytes per row:
+Output source bytes per row before JPEG:
 
 ```
-width
+width * 3
 ```
 
 ### srgb_8
@@ -87,17 +90,18 @@ width * 3
 
 ## PCL XL ReadImage framing
 
-For each emitted row MiniBox currently uses:
+Continuous-tone sgray_8/srgb_8 uses one capture-derived JPEG ReadImage block
+for the current source image/page:
 
-- StartLine = physical row index
-- BlockHeight = 1
-- CompressMode = eNoCompression
+- StartLine = 0
+- BlockHeight = SourceHeight
+- CompressMode = eJPEGCompression
 - ReadImage
-- embedded data length = row payload rounded up to a 4-byte boundary
-- zero-valued alignment bytes after the useful row payload
+- embedded data = baseline JFIF JPEG, quality 95, 4:4:4
 
-The 4-byte row alignment follows the behavior used by Ghostscript's PCL XL
-writer and is already proven on the physical M1522.
+The 1-bit compatibility path remains uncompressed. Its row payload is padded
+to a 4-byte boundary; for the 2480-pixel M1522 row this is 310 useful bytes
+plus 2 zero padding bytes = 312 bytes.
 
 ## Regression rules
 
