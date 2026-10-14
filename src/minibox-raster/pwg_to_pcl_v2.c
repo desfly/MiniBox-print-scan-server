@@ -201,14 +201,20 @@ static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         "@PJL SET RESOLUTION=600\n"
         "@PJL SET BITSPERPIXEL=1\n"
         "@PJL ENTER LANGUAGE=PCLXL\n");
-    if(n<0||(size_t)n>=sizeof pjl||out(fn,ctx,pjl,(size_t)n)||out(fn,ctx,pxl,sizeof pxl-1))return -1;
-    if(pxl_xy16(fn,ctx,M1522_RENDER_DPI,M1522_RENDER_DPI,PXL_A_UNITS_PER_MEASURE)||
-       pxl_u8(fn,ctx,PXL_V_INCH,PXL_A_MEASURE)||
-       pxl_u8(fn,ctx,PXL_V_BACKCHANNEL_AND_ERROR_PAGE,PXL_A_ERROR_REPORT)||
-       pxl_op(fn,ctx,PXL_O_BEGIN_SESSION)||
-       pxl_u8(fn,ctx,PXL_V_DEFAULT_SOURCE,PXL_A_SOURCE_TYPE)||
-       pxl_u8(fn,ctx,PXL_V_BINARY_LOW_BYTE_FIRST,PXL_A_DATA_ORG)||
-       pxl_op(fn,ctx,PXL_O_OPEN_DATA_SOURCE))return -1;
+    static const unsigned char capture_session[]={
+        /* M1522-PRINT-REAL.pcap, immediately after the HP-PCL XL binding. */
+        0xd1,0x58,0x02,0x58,0x02,0xf8,0x89, /* UnitsPerMeasure=600,600 */
+        0xc0,0x00,0xf8,0x86,                 /* Measure=eInch */
+        0xc0,0x03,0xf8,0x8f,                 /* ErrorReport=eBackChAndErrPage */
+        0x41,                                /* BeginSession */
+        0xc0,0x00,0xf8,0x88,                 /* SourceType=eDefault */
+        0xc0,0x01,0xf8,0x82,                 /* DataOrg=eBinaryLowByteFirst */
+        0x48                                 /* OpenDataSource */
+    };
+    if(n<0||(size_t)n>=sizeof pjl||
+       out(fn,ctx,pjl,(size_t)n)||
+       out(fn,ctx,pxl,sizeof pxl-1)||
+       out(fn,ctx,capture_session,sizeof capture_session))return -1;
     s->job_started=1;return 0;
 }
 static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
@@ -224,28 +230,43 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(is_a4(s)){
         if(pxl_u8_array(fn,ctx,"A4",PXL_A_MEDIA_SIZE))return -1;
     }else if(pxl_u8(fn,ctx,pxl_media_enum(s),PXL_A_MEDIA_SIZE))return -1;
-    /* Mirror the HP UPD PCL XL page-state sequence captured in
-     * M1522-PRINT-REAL.pcap.  The capture used non-zero PageOrigin/Cursor
-     * because that particular job placed a 1920x1080 image inside the page.
-     * A PWG raster page is already the full rendered page, so keep the exact
-     * operator order but use the page-relative origin/cursor (0,0). */
-    if(pxl_op(fn,ctx,PXL_O_BEGIN_PAGE)||
-       pxl_real_xy_1(fn,ctx,PXL_A_PAGE_SCALE)||pxl_op(fn,ctx,PXL_O_SET_PAGE_SCALE)||
-       pxl_u8(fn,ctx,PXL_V_GRAY,PXL_A_COLOR_SPACE)||pxl_op(fn,ctx,PXL_O_SET_COLOR_SPACE)||
-       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_PATTERN_TX_MODE)||
-       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_SOURCE_TX_MODE)||
-       pxl_u8(fn,ctx,PXL_V_ROP_COPY,PXL_A_ROP3)||pxl_op(fn,ctx,PXL_O_SET_ROP)||
-       pxl_sxy16(fn,ctx,0,0,PXL_A_PAGE_ORIGIN)||pxl_op(fn,ctx,PXL_O_SET_PAGE_ORIGIN)||
-       pxl_op(fn,ctx,PXL_O_PUSH_GS)||pxl_op(fn,ctx,PXL_O_SET_CLIP_TO_PAGE)||
-       pxl_sxy16(fn,ctx,0,0,PXL_A_POINT)||pxl_op(fn,ctx,PXL_O_SET_CURSOR)||
-       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_PATTERN_TX_MODE)||
-       pxl_u8(fn,ctx,PXL_V_OPAQUE,PXL_A_TX_MODE)||pxl_op(fn,ctx,PXL_O_SET_SOURCE_TX_MODE)||
-       pxl_u8(fn,ctx,PXL_V_ROP_COPY,PXL_A_ROP3)||pxl_op(fn,ctx,PXL_O_SET_ROP)||
-       pxl_u8(fn,ctx,cs,PXL_A_COLOR_SPACE)||pxl_op(fn,ctx,PXL_O_SET_COLOR_SPACE)||
-       pxl_u8(fn,ctx,PXL_V_DIRECT_PIXEL,PXL_A_COLOR_MAPPING)||
-       pxl_u8(fn,ctx,depth,PXL_A_COLOR_DEPTH)||
-       pxl_u16(fn,ctx,s->width,PXL_A_SOURCE_WIDTH)||pxl_u16(fn,ctx,s->height,PXL_A_SOURCE_HEIGHT)||
-       pxl_xy16(fn,ctx,dw,dh,PXL_A_DESTINATION_SIZE)||pxl_op(fn,ctx,PXL_O_BEGIN_IMAGE))return -1;
+    /* The invariant page-state bytes below are copied from the real HP UPD
+     * USB stream instead of being reconstructed operator-by-operator.
+     * Only PageOrigin/Cursor and the image geometry/color are variable.
+     *
+     * Capture values were PageOrigin=(100,100), Cursor=(179,564) for a
+     * positioned 1920x1080 image.  PWG input is a complete rendered page, so
+     * those two placement coordinates are deliberately normalized to (0,0). */
+    {
+        static const unsigned char capture_state_before_origin[]={
+            0xd5,0x00,0x00,0x80,0x3f,0x00,0x00,0x80,0x3f,0xf8,0x2b,0x77,
+            0xc0,0x01,0xf8,0x03,0x6a,
+            0xc0,0x00,0xf8,0x2d,0x78,
+            0xc0,0x00,0xf8,0x2d,0x7c,
+            0xc0,0xcc,0xf8,0x2c,0x7b
+        };
+        static const unsigned char capture_state_after_origin[]={
+            0x61,0x69
+        };
+        static const unsigned char capture_state_after_cursor[]={
+            0xc0,0x00,0xf8,0x2d,0x78,
+            0xc0,0x00,0xf8,0x2d,0x7c,
+            0xc0,0xcc,0xf8,0x2c,0x7b
+        };
+        if(pxl_op(fn,ctx,PXL_O_BEGIN_PAGE)||
+           out(fn,ctx,capture_state_before_origin,sizeof capture_state_before_origin)||
+           pxl_sxy16(fn,ctx,0,0,PXL_A_PAGE_ORIGIN)||pxl_op(fn,ctx,PXL_O_SET_PAGE_ORIGIN)||
+           out(fn,ctx,capture_state_after_origin,sizeof capture_state_after_origin)||
+           pxl_sxy16(fn,ctx,0,0,PXL_A_POINT)||pxl_op(fn,ctx,PXL_O_SET_CURSOR)||
+           out(fn,ctx,capture_state_after_cursor,sizeof capture_state_after_cursor)||
+           pxl_u8(fn,ctx,cs,PXL_A_COLOR_SPACE)||pxl_op(fn,ctx,PXL_O_SET_COLOR_SPACE)||
+           pxl_u8(fn,ctx,PXL_V_DIRECT_PIXEL,PXL_A_COLOR_MAPPING)||
+           pxl_u8(fn,ctx,depth,PXL_A_COLOR_DEPTH)||
+           pxl_u16(fn,ctx,s->width,PXL_A_SOURCE_WIDTH)||
+           pxl_u16(fn,ctx,s->height,PXL_A_SOURCE_HEIGHT)||
+           pxl_xy16(fn,ctx,dw,dh,PXL_A_DESTINATION_SIZE)||
+           pxl_op(fn,ctx,PXL_O_BEGIN_IMAGE))return -1;
+    }
     return 0;
 }
 static int page_end(mb_pwg_write_fn fn,void *ctx){
