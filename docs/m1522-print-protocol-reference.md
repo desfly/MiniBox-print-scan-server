@@ -99,9 +99,9 @@ PCL XL path is:
 
 | PWG type | PCL XL color space | Depth | Mapping | Data path |
 |---|---|---|---|---|
-| black_1 | eGray | e1Bit | eDirectPixel | packed 1-bit |
-| sgray_8 | accepted for compatibility, not advertised | e8Bit | — | neutral RGB fallback only |
-| srgb_8 | eRGB | e8Bit | eDirectPixel | baseline JPEG 4:4:4 |
+| black_1 | eGray | e1Bit | eDirectPixel | compatibility input only; packed 1-bit |
+| sgray_8 | eRGB | e8Bit | eDirectPixel | each gray sample copied to R=G=B, baseline JPEG 4:4:4 |
+| srgb_8 | eRGB | e8Bit | eDirectPixel | compatibility input only; baseline JPEG 4:4:4 |
 
 There is no host-side thresholding or RGB-to-gray conversion for srgb_8.
 
@@ -116,6 +116,28 @@ PCL XL DestinationSize is computed from the PWG physical size:
 
 This preserves the requested physical page/image size while rendering in the
 same 600-unit coordinate system as the HP driver.
+
+## Verified page graphics-state order
+
+The HP UPD capture uses this order after BeginPage:
+
+1. PageScale = 1,1 / SetPageScale
+2. ColorSpace = eGray / SetColorSpace
+3. PatternTxMode = opaque / SetPatternTxMode
+4. SourceTxMode = opaque / SetSourceTxMode
+5. ROP3 = 204 / SetROP
+6. PageOrigin / SetPageOrigin
+7. PushGS
+8. SetClipToPage
+9. Cursor / SetCursor
+10. repeat PatternTxMode, SourceTxMode and ROP3
+11. ColorSpace = eRGB / SetColorSpace
+12. ColorMapping = eDirectPixel, ColorDepth = e8Bit, source/destination geometry, BeginImage
+
+The captured FastStone job used PageOrigin=(100,100) and Cursor=(179,564)
+because its 1920x1080 image was placed inside the A4 page. MiniBox receives a
+fully rendered PWG page, so it preserves the **operator order** but uses
+PageOrigin=(0,0) and Cursor=(0,0); those capture coordinates are not constants.
 
 ## JPEG ReadImage block handling
 
@@ -143,9 +165,12 @@ Do not reintroduce any of these:
 ## Driverless advertisement policy
 
 The printer is advertised consistently as monochrome across IPP, DNS-SD and
-WSD. Its PWG raster types are black_1 and sgray_8. srgb_8 remains accepted by
-the renderer for compatibility/testing but is not advertised as a printer
-capability. The advertised PWG raster resolution is 600 x 600 dpi.
+WSD. Its advertised PWG raster type is **sgray_8 only** at 600 x 600 dpi.
+This is deliberate and capture-driven: when black_1 was advertised alongside
+sgray_8, Windows IPP Class Driver selected a 1-bit sGray source raster and
+destroyed continuous-tone information before MiniBox could hand it to the
+printer. black_1 and srgb_8 remain decoder compatibility inputs but are not
+advertised as normal capabilities.
 
 The human-visible DNS-SD/WSD service name is exactly "M1522n NET". Per-device
 uniqueness is carried by the UUID/endpoint identity and must not be appended to
