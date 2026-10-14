@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=minibox-mfp
 PKG_VERSION:=0.3.0
-PKG_RELEASE:=43
+PKG_RELEASE:=44
 
 include $(INCLUDE_DIR)/package.mk
 
