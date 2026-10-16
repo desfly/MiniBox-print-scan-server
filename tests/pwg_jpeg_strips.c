@@ -32,7 +32,7 @@ static uint32_t get32(const unsigned char *p) {
 static int check(unsigned height) {
     unsigned char h[1796]={0};
     const unsigned char magic[]={'R','a','S','2'};
-    const unsigned char row[]={0,128}; /* one white line, end-of-row fill */
+    const unsigned char row[]={128}; /* PWG end-of-row fill: white for sGray8 */
     struct mb_pwg_pcl s;
     struct buffer b={0};
     unsigned covered=0,blocks=0;
