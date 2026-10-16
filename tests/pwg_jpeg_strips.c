@@ -4,6 +4,7 @@
  * /tmp/pwg-strips
  */
 #include "pwg_to_pcl.h"
+#include <jpeglib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,6 +69,36 @@ static int check(unsigned height) {
            lines>height-covered || length<4 || length>b.n-jpeg)goto done;
         if(b.p[jpeg]!=0xff || b.p[jpeg+1]!=0xd8 ||
            b.p[jpeg+length-2]!=0xff || b.p[jpeg+length-1]!=0xd9)goto done;
+        /* Decode each independent JPEG strip; validate its dimensions and
+         * pixels rather than trusting marker bytes or framing alone. */
+        {
+            struct jpeg_decompress_struct d;
+            struct jpeg_error_mgr err;
+            unsigned char decoded[32*3];
+            int valid=1;
+            memset(&d,0,sizeof d);
+            d.err=jpeg_std_error(&err);
+            jpeg_create_decompress(&d);
+            jpeg_mem_src(&d,b.p+jpeg,length);
+            if(jpeg_read_header(&d,TRUE)!=JPEG_HEADER_OK ||
+               d.image_width!=32 || d.image_height!=lines) {
+                jpeg_destroy_decompress(&d);
+                goto done;
+            }
+            d.out_color_space=JCS_RGB;
+            jpeg_start_decompress(&d);
+            if(d.output_width!=32 || d.output_height!=lines ||
+               d.output_components!=3) valid=0;
+            while(valid && d.output_scanline<d.output_height) {
+                JSAMPROW scan=decoded;
+                if(jpeg_read_scanlines(&d,&scan,1)!=1){valid=0;break;}
+                for(size_t k=0;k<sizeof decoded;k++)
+                    if(decoded[k]!=255){valid=0;break;}
+            }
+            if(valid) jpeg_finish_decompress(&d);
+            jpeg_destroy_decompress(&d);
+            if(!valid)goto done;
+        }
         covered+=lines;blocks++;pos=jpeg+length;
     }
     ok=(blocks==(height+127)/128);
