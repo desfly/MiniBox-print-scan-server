@@ -1,0 +1,17 @@
+#!/bin/sh
+# Persist the canonical Windows WSD metadata endpoint without touching network/Wi-Fi.
+stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
+
+if [ -f /etc/config/uhttpd ]; then
+	if ! uci -q get uhttpd.main.alias 2>/dev/null | grep -Fqx "$stable_alias"; then
+		uci add_list uhttpd.main.alias="$stable_alias"
+		uci commit uhttpd
+	fi
+fi
+
+# WSD discovery must survive a reboot/sysupgrade.
+if [ -x /etc/init.d/minibox-wsdd ]; then
+	/etc/init.d/minibox-wsdd enable
+fi
+
+exit 0

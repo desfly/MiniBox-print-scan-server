@@ -1,0 +1,30 @@
+# MiniBox Wi-Fi first-boot / factory-reset provisioning contract
+
+Status: **required for a future full firmware image; NOT implemented or hardware-verified in r13–r15**.
+
+> **Deferred priority (2026-09-25):** do not implement this provisioning feature until printing, physical scanning, and automatic Windows/Android discovery are all solved and physically verified.
+This is a functional specification, not an assertion that a green APK/build implements it.
+
+## User-visible behavior
+
+1. After a true first boot or restoring **factory settings**, MiniBox starts its **own Wi-Fi access point (AP)** for provisioning. A phone or Windows computer can connect without any existing home router or Internet access. AP SSID, setup IP/URL, and a per-device WPA2/WPA3 credential (or another secure onboarding method) must be documented and available to the owner. Do not ship one universal publicly known AP password or an unauthenticated network-configuration CGI.
+2. The built-in web UI has a clearly visible **«Wi-Fi / Налаштування мережі»** tab: show current mode, connection, SSID, IPv4 and interface; **scan available Wi-Fi networks**, choose SSID (also permit manual hidden SSID), choose appropriate WPA2/WPA3 security, enter the password, and submit the configuration. Do not echo or log the password; authenticate administrative state changes and protect against CSRF and command injection.
+3. Try STA/client association and DHCP; do not permanently disable the provisioning AP until the chosen network is truly connected **and the user has a confirmed recovery path**. A wrong password, unreachable network, DHCP failure, power loss, or failed join must return to a usable setup AP with the failure reason and allow another attempt. A single-radio AR9330 may not support reliable concurrent AP+STA on all channels: implement a bounded STA trial with AP fallback (or tested concurrent AP+STA only where supported); keep Ethernet maintenance access where available.
+4. After a successful STA connection, MiniBox receives a **dynamic Wi-Fi IPv4 from the user's router (DHCP)**. **That Wi-Fi address is the network address of the whole MFP bridge**, for the integrated web UI on :80, the IPP printer on :631 (/ipp/print) and the eSCL scanner on :8080 (/eSCL). Services must bind to reachable local interfaces, avoid hard-coded `192.168.55.250`, and publish the actual live STA address; Ethernet maintenance IP is not the primary MFP address. The USB HP LaserJet M1522n remains attached to the MiniBox; it does not independently receive a Wi-Fi address.
+5. Automatically advertise IPP and eSCL with a **stable DNS-SD device/service identity** and updated A/SRV/TXT records after obtaining/changing DHCP lease or reconnecting, so clients can rediscover the new address without entering an IP manually. Do not conflate a visible mDNS announcement with successful Windows/Android onboarding: verify Windows printer and scanner Add-device flows and the actual Android print/scan application workflow independently. Windows WSD support and Android driverless document formats still need their own implementation/validation.
+6. The **Wi-Fi tab remains available after provisioning**, permitting network rescan, new credentials, signal/address/status display and an explicit transition back into provisioning mode without factory reset. Apply settings with a timed confirmation/rollback mechanism, so a failed change never strands the user.
+7. A **factory reset must work from firmware defaults, not only an APK stored in the writable overlay**. Bake the AP-mode wireless/network/firewall/DHCP defaults, uhttpd, local setup UI and recovery initialization into the full flash image and test OpenWrt's actual reset/firstboot path. Preserve board radio calibration (ART), bootloader, and firmware integrity during reset/update. Never trigger reset automatically as part of package upgrade.
+
+## Implementation work packages (not yet completed)
+
+- Identify the real MiniBox board Wi-Fi radio/configuration, available hostapd/wpad AP+STA capabilities and package space in 16 MB flash / 64 MB RAM. Determine the factory AP SSID/password provisioning method and a conflict-free local setup subnet. Validate on hardware before marking supported.
+- Bake a recovery-safe AP-default OpenWrt config plus DHCP, firewall, webserver and a first-boot state machine into the **full firmware build**; the r13–r15 APK-only updates cannot supply factory defaults after overlay erasure.
+- Implement an authenticated, narrow Wi-Fi configuration backend (UCI/netifd/ubus, not shell interpolation) and web tab for scan/select/password/status; protect secrets and ensure explicit error/rollback paths.
+- Confirm STA DHCP success before switching primary MFP identity/advertisements to the newly obtained address; monitor Wi-Fi disconnection and recover provisioning AP if necessary.
+- Add deterministic tests for state transitions and config persistence/rollback; artifact-level checks of baked AP+UI+DHCP; then hardware acceptance tests for first boot, factory reset, correct/wrong password, disappearing Wi-Fi, DHCP address change, recovery AP, Windows/Android discovery, and physical scan/print.
+
+## Actual hardware evidence (2026-09-24)
+
+On the existing configured r13 MiniBox, `phy0-sta0` has `192.168.55.250/24` and Ethernet `br-lan` has `192.168.55.251/24`. The existing address selector already matches `phy0-sta0` via `sta`; the earlier assumption that the live MiniBox must have advertised Ethernet solely due to missing `wwan` matching is **not supported by this evidence**. The r15 interface-name change is not proof of resolving the current Windows/Android autodiscovery failure. Existing Windows manual PCL6 IPP printing works; physical scanner JPEG and automatic printer/scanner installation remain unverified/failed.
+
+**Safety:** do not replace the currently working r13 network configuration or perform factory reset/full flash merely to test this specification. First complete and inspect the firmware-level recovery implementation, and keep a proven access/recovery route.

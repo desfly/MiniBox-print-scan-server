@@ -1,4 +1,5 @@
 #include "scan_backend.h"
+#include <stdio.h>
 #include "../minibox-scan/soapht_codec.h"
 #include "../minibox-scan/soapht_m1522_io.h"
 #include "../minibox-usb/scan_m1522.h"
@@ -13,9 +14,19 @@ static struct m1522_backend_ctx ctx;
 static int backend_open(void *v, const struct escl_job *job)
 {
     struct m1522_backend_ctx *c = v;
-    if (!c || !job || !minibox_soapht_codec) return -1;
-    if (soapht_open(&c->transport, &minibox_m1522_soapht_io, &c->usb)) return -2;
-    if (minibox_soapht_codec->start(&c->transport, job)) {
+    int rc;
+    if (!c || !job || !minibox_soapht_codec) {
+        fprintf(stderr, "minibox-scand: stage=soapht-precondition rc=-1\n");
+        return -1;
+    }
+    rc = soapht_open(&c->transport, &minibox_m1522_soapht_io, &c->usb);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-open rc=%d\n", rc);
+        return -2;
+    }
+    rc = minibox_soapht_codec->start(&c->transport, job);
+    if (rc) {
+        fprintf(stderr, "minibox-scand: stage=soapht-start rc=%d\n", rc);
         soapht_close(&c->transport);
         return -3;
     }

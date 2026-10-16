@@ -1,0 +1,10 @@
+{
+  "admin/minibox": {
+    "title": "MiniBox print + scan",
+    "order": 5,
+    "action": {
+      "type": "view",
+      "path": "minibox/home"
+    }
+  }
+}

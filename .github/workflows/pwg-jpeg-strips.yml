@@ -1,0 +1,25 @@
+name: PWG JPEG strip regression
+
+on:
+  push:
+    branches:
+      - work/m1522-protocol-correct
+    paths:
+      - 'src/minibox-raster/pwg_to_pcl_v2.c'
+      - 'src/minibox-raster/pwg_to_pcl.h'
+      - 'tests/pwg_jpeg_strips.c'
+      - '.github/workflows/pwg-jpeg-strips.yml'
+  workflow_dispatch:
+
+jobs:
+  jpeg-strips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install JPEG development headers
+        run: sudo apt-get update && sudo apt-get install -y libjpeg-dev
+      - name: Compile regression
+        run: cc -std=c11 -Wall -Wextra -I src/minibox-raster tests/pwg_jpeg_strips.c src/minibox-raster/pwg_to_pcl_v2.c -ljpeg -o /tmp/pwg-strips
+      - name: Test JPEG strip boundaries
+        run: /tmp/pwg-strips
