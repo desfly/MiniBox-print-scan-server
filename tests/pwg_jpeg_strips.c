@@ -50,6 +50,26 @@ static int check(unsigned height) {
     for(unsigned y=0;y<height;y++)
         if(mb_pwg_pcl_feed(&s,row,sizeof row,write_bytes,&b))goto done;
     if(mb_pwg_pcl_finish(&s,write_bytes,&b))goto done;
+    /* USBPcap M1522-PRINT-REAL(2).pcap: HP UPD uses LF (0a), not CRLF,
+     * at the PJL -> PCL XL handoff. Lock down the binary session prefix. */
+    {
+        static const unsigned char binding[]=
+            "@PJL ENTER LANGUAGE=PCLXL\\n"
+            ") HP-PCL XL;2;1;Comment Copyright(c) 1999 Microsoft Corporation\\n";
+        static const unsigned char session[]={
+            0xd1,0x58,0x02,0x58,0x02,0xf8,0x89,
+            0xc0,0x00,0xf8,0x86,0xc0,0x03,0xf8,0x8f,0x41,
+            0xc0,0x00,0xf8,0x88,0xc0,0x01,0xf8,0x82,0x48
+        };
+        size_t j;
+        for(j=0;j+sizeof(binding)-1+sizeof(session)<=b.n;j++)
+            if(!memcmp(b.p+j,binding,sizeof(binding)-1)&&
+               !memcmp(b.p+j+sizeof(binding)-1,session,sizeof(session)))break;
+        if(j+sizeof(binding)-1+sizeof(session)>b.n){
+            fprintf(stderr,"FAIL: HP capture PJL/PCL XL session prefix mismatch\\n");
+            goto done;
+        }
+    }
     while(covered<height) {
         size_t i;
         /* c1,start16,f8,6d,c1,height16,f8,63,c0,02,f8,65,b1,fa,len32 */
