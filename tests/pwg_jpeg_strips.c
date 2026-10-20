@@ -162,7 +162,7 @@ done:
     return ok?0:1;
 }
 int main(void) {
-    const unsigned heights[]={1,127,128,129,255,256,257};
+    const unsigned heights[]={1,127,128,129,255,256,257,1080,3508,4960};
     for(size_t i=0;i<sizeof heights/sizeof heights[0];i++)
         if(check(heights[i]))return 1;
     puts("PASS: single full-height JPEG ReadImage covers every row");
