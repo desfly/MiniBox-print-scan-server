@@ -4,9 +4,9 @@
  * /tmp/pwg-strips
  */
 #include "pwg_to_pcl.h"
-#include <jpeglib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <jpeglib.h>
 #include <stdlib.h>
 #include <string.h>
 struct buffer { unsigned char *p; size_t n, cap; };
