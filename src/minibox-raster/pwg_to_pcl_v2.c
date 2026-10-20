@@ -271,10 +271,10 @@ static int page_end(mb_pwg_write_fn fn,void *ctx){
 static int jpeg_block_start(struct mb_pwg_pcl *s){
     struct mb_jpeg_block *b;
     unsigned remaining=s->height-s->row;
-    /* Bound the JPEG memory destination on 64 MB MiniBox hardware.
-     * PCL XL ReadImage supports sequential StartLine/BlockHeight strips;
-     * a full 600-dpi page must not be buffered as one giant JPEG. */
-    unsigned target=remaining>128u?128u:remaining;
+    /* Mirror HP UPD's one-ReadImage-per-image layout: the JPEG spans
+     * the complete PWG page, not independently encoded 128-row strips.
+     * This requires buffering the resulting JPEG on the 64 MiB device. */
+    unsigned target=remaining;
     b=(struct mb_jpeg_block *)calloc(1,sizeof *b);
     if(!b||!target){free(b);return -1;}
     b->start_line=s->row;b->rows_target=target;
