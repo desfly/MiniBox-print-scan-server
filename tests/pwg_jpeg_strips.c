@@ -69,6 +69,22 @@ static int check(unsigned height) {
             fprintf(stderr,"FAIL: HP capture PJL/PCL XL session prefix mismatch\\n");
             goto done;
         }
+        /* Invariant HP page preamble from M1522-PRINT-REAL USB capture. */
+        {
+            static const unsigned char page_prefix[]={
+                0xc0,0x01,0xf8,0x26,0xc0,0x00,0xf8,0x34,
+                0xc0,0x00,0xf8,0x28,0xc8,0xc0,0x02,'A','4',0xf8,0x25,0x43,
+                0xd5,0x00,0x00,0x80,0x3f,0x00,0x00,0x80,0x3f,0xf8,0x2b,0x77,
+                0xc0,0x01,0xf8,0x03,0x6a,0xc0,0x00,0xf8,0x2d,0x78,
+                0xc0,0x00,0xf8,0x2d,0x7c,0xc0,0xcc,0xf8,0x2c,0x7b
+            };
+            size_t page=j+sizeof(binding)-1+sizeof(session);
+            if(page+sizeof(page_prefix)>b.n ||
+               memcmp(b.p+page,page_prefix,sizeof(page_prefix))){
+                fprintf(stderr,"FAIL: HP USB capture page-state prefix mismatch\\n");
+                goto done;
+            }
+        }
     }
     while(covered<height) {
         size_t i;
