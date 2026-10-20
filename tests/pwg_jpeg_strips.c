@@ -54,8 +54,8 @@ static int check(unsigned height) {
      * at the PJL -> PCL XL handoff. Lock down the binary session prefix. */
     {
         static const unsigned char binding[]=
-            "@PJL ENTER LANGUAGE=PCLXL\\n"
-            ") HP-PCL XL;2;1;Comment Copyright(c) 1999 Microsoft Corporation\\n";
+            "@PJL ENTER LANGUAGE=PCLXL\n"
+            ") HP-PCL XL;2;1;Comment Copyright(c) 1999 Microsoft Corporation\n";
         static const unsigned char session[]={
             0xd1,0x58,0x02,0x58,0x02,0xf8,0x89,
             0xc0,0x00,0xf8,0x86,0xc0,0x03,0xf8,0x8f,0x41,
@@ -66,7 +66,7 @@ static int check(unsigned height) {
             if(!memcmp(b.p+j,binding,sizeof(binding)-1)&&
                !memcmp(b.p+j+sizeof(binding)-1,session,sizeof(session)))break;
         if(j+sizeof(binding)-1+sizeof(session)>b.n){
-            fprintf(stderr,"FAIL: HP capture PJL/PCL XL session prefix mismatch\\n");
+            fprintf(stderr,"FAIL: HP capture PJL/PCL XL session prefix mismatch\n");
             goto done;
         }
         /* Invariant HP page preamble from M1522-PRINT-REAL USB capture. */
@@ -81,7 +81,7 @@ static int check(unsigned height) {
             size_t page=j+sizeof(binding)-1+sizeof(session);
             if(page+sizeof(page_prefix)>b.n ||
                memcmp(b.p+page,page_prefix,sizeof(page_prefix))){
-                fprintf(stderr,"FAIL: HP USB capture page-state prefix mismatch\\n");
+                fprintf(stderr,"FAIL: HP USB capture page-state prefix mismatch\n");
                 goto done;
             }
         }
