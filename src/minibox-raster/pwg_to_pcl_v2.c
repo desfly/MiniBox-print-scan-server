@@ -189,13 +189,13 @@ static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(s->job_started)return 0;
     n=snprintf(pjl,sizeof pjl,
         "\033%%-12345X"
-        "@PJL JOB NAME=\"MiniBox PWG\"\r\n"
-        "@PJL SET PLANESINUSE=1\r\n"
-        "@PJL SET GRAYSCALE=BLACKONLY\r\n"
-        "@PJL SET ECONOMODE=OFF\r\n"
-        "@PJL SET RESOLUTION=600\r\n"
-        "@PJL SET BITSPERPIXEL=1\r\n"
-        "@PJL ENTER LANGUAGE=PCLXL\r\n");
+        "@PJL JOB NAME=\"MiniBox PWG\"\n"
+        "@PJL SET PLANESINUSE=1\n"
+        "@PJL SET GRAYSCALE=BLACKONLY\n"
+        "@PJL SET ECONOMODE=OFF\n"
+        "@PJL SET RESOLUTION=600\n"
+        "@PJL SET BITSPERPIXEL=1\n"
+        "@PJL ENTER LANGUAGE=PCLXL\n");
     static const unsigned char capture_session[]={
         /* M1522-PRINT-REAL.pcap, immediately after the HP-PCL XL binding. */
         0xd1,0x58,0x02,0x58,0x02,0xf8,0x89, /* UnitsPerMeasure=600,600 */
