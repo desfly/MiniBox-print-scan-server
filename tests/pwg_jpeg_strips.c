@@ -1,4 +1,4 @@
-/* Standalone regression for PWG sGray8 -> sequential PCL XL JPEG strips.
+/* Standalone regression for PWG sGray8 -> one full-height HP-style JPEG ReadImage.
  * cc -std=c11 -I src/minibox-raster tests/pwg_jpeg_strips.c \
  *    src/minibox-raster/pwg_to_pcl_v2.c -ljpeg -o /tmp/pwg-strips
  * /tmp/pwg-strips
@@ -101,7 +101,7 @@ static int check(unsigned height) {
         unsigned start=get16(p+1),lines=get16(p+6);
         uint32_t length=get32(p+16);
         size_t jpeg=i+20;
-        if(start!=covered || !lines || lines>128 ||
+        if(start!=covered || !lines || lines!=height || blocks!=0 ||
            lines>height-covered || length<4 || length>b.n-jpeg)goto done;
         if(b.p[jpeg]!=0xff || b.p[jpeg+1]!=0xd8 ||
            b.p[jpeg+length-2]!=0xff || b.p[jpeg+length-1]!=0xd9)goto done;
@@ -154,7 +154,7 @@ static int check(unsigned height) {
             goto done;
         }
     }
-    ok=(blocks==(height+127)/128);
+    ok=(blocks==1 && covered==height);
 done:
     if(!ok)fprintf(stderr,"FAIL height=%u blocks=%u covered=%u bytes=%zu\n",
                    height,blocks,covered,b.n);
@@ -165,6 +165,6 @@ int main(void) {
     const unsigned heights[]={1,127,128,129,255,256,257};
     for(size_t i=0;i<sizeof heights/sizeof heights[0];i++)
         if(check(heights[i]))return 1;
-    puts("PASS: JPEG ReadImage strips cover every row without gaps");
+    puts("PASS: single full-height JPEG ReadImage covers every row");
     return 0;
 }
