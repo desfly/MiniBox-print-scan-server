@@ -137,6 +137,23 @@ static int check(unsigned height) {
         }
         covered+=lines;blocks++;pos=jpeg+length;
     }
+    /* Every emitted JPEG block must be followed by exactly the expected
+     * EndImage, EndPage, CloseDataSource, EndSession and PJL job trailer.
+     * Without this, a green JPEG test could hide invalid trailing PCL XL. */
+    {
+        static const unsigned char trailer[]={
+            0xb2,0x44,0x49,0x42,
+            0x1b,'%','-','1','2','3','4','5','X',
+            '@','P','J','L',' ','E','O','J',' ','N','A','M','E','=','"',
+            'M','i','n','i','B','o','x',' ','P','W','G','"',0x0d,0x0a,
+            0x1b,'%','-','1','2','3','4','5','X'
+        };
+        if(pos>b.n || b.n-pos!=sizeof(trailer) ||
+           memcmp(b.p+pos,trailer,sizeof(trailer))){
+            fprintf(stderr,"FAIL: invalid PCL XL/PJL job trailer\\n");
+            goto done;
+        }
+    }
     ok=(blocks==(height+127)/128);
 done:
     if(!ok)fprintf(stderr,"FAIL height=%u blocks=%u covered=%u bytes=%zu\n",
