@@ -181,52 +181,33 @@ int main(void){
     assert_jpeg_after_readimage(&s,2,1);
     mb_pwg_pcl_reset(&p);
 
-    /* True black_1 remains the documented packed 1-bit path. */
-    memset(&s,0,sizeof s);header(h,2480,1,1,1,310,3,1);
+    /* HP UPD-compatible monochrome: both black_1 and sGray1 are rendered
+     * as RGB8 JPEG with a single full-height ReadImage, never packed 1-bit. */
+    memset(&s,0,sizeof s);header(h,8,1,1,1,1,3,1);
     memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
-    doc[n++]=0;
-    doc[n++]=127;doc[n++]=0xa5;
-    doc[n++]=127;doc[n++]=0xa5;
-    doc[n++]=53;doc[n++]=0xa5;
-    mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,11,&s);
-    assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
-    {
-        static const unsigned char m1522_len[]={0xb1,0xfa,0x38,0x01,0x00,0x00};
-        size_t i=find_bytes(&s,m1522_len,sizeof m1522_len);
-        assert(i!=(size_t)-1);
-        i+=sizeof m1522_len;
-        assert(i+312<=s.used);
-        assert(s.data[i+309]==0x5a);
-        assert(s.data[i+310]==0x00);
-        assert(s.data[i+311]==0x00);
-    }
-    mb_pwg_pcl_reset(&p);
-
-    /* Windows IPP Class Driver emits 600dpi 1-bit sGray when black_1+sgray_8
-       are advertised.  sGray is luminance: keep its 1=white polarity when
-       mapping to PCL XL eGray/e1Bit (unlike DeviceK/black_1, which is inverted). */
-    memset(&s,0,sizeof s);header(h,8,1,1,1,1,18,1);
-    u32(h+276,600);u32(h+280,600);
-    memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
-    doc[n++]=0;
-    doc[n++]=0;doc[n++]=0xa5;
+    doc[n++]=0;doc[n++]=0;doc[n++]=0xa5;
     mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,5,&s);
     assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
     {
-        static const unsigned char sgray1_image[]={
-            0xc0,0x01,0xf8,0x03,0x6a, /* ColorSpace=eGray */
-            0xc0,0x00,0xf8,0x64,
-            0xc0,0x00,0xf8,0x62       /* ColorDepth=e1Bit */
-        };
-        static const unsigned char onebit_len[]={0xb1,0xfa,0x04,0x00,0x00,0x00};
-        size_t i;
-        assert(has(&s,sgray1_image,sizeof sgray1_image));
-        i=find_bytes(&s,onebit_len,sizeof onebit_len);assert(i!=(size_t)-1);
-        i+=sizeof onebit_len;
-        assert(i+4<=s.used);
-        assert(s.data[i+0]==0xa5); /* no DeviceK polarity inversion */
-        assert(s.data[i+1]==0x00&&s.data[i+2]==0x00&&s.data[i+3]==0x00);
+        static const unsigned char rgb8[]={0xc0,0x02,0xf8,0x03,0x6a,
+            0xc0,0x00,0xf8,0x64,0xc0,0x02,0xf8,0x62};
+        assert(has(&s,rgb8,sizeof rgb8));
     }
+    assert_jpeg_after_readimage(&s,1,1);
+    mb_pwg_pcl_reset(&p);
+
+    memset(&s,0,sizeof s);header(h,8,1,1,1,1,18,1);
+    u32(h+276,600);u32(h+280,600);
+    memcpy(doc,"RaS2",4);memcpy(doc+4,h,1796);n=1800;
+    doc[n++]=0;doc[n++]=0;doc[n++]=0xa5;
+    mb_pwg_pcl_init(&p);feed_chunks(&p,doc,n,5,&s);
+    assert(mb_pwg_pcl_finish(&p,wr,&s)==0);
+    {
+        static const unsigned char rgb8[]={0xc0,0x02,0xf8,0x03,0x6a,
+            0xc0,0x00,0xf8,0x64,0xc0,0x02,0xf8,0x62};
+        assert(has(&s,rgb8,sizeof rgb8));
+    }
+    assert_jpeg_after_readimage(&s,1,1);
     mb_pwg_pcl_reset(&p);
 
     /* PWG/CUPS PackBits control 0x80 means clear-to-end-of-line, not error.
