@@ -216,9 +216,9 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned orientation=s->page_width_points>s->page_height_points?1u:0u;
     unsigned dw=scaled_to_600(s->width,s->xdpi);
     unsigned dh=scaled_to_600(s->height,s->ydpi);
-    unsigned is_1bit=((s->color_space==3||s->color_space==18)&&s->bits_per_pixel==1);
-    unsigned cs=is_1bit?PXL_V_GRAY:PXL_V_RGB;
-    unsigned depth=is_1bit?PXL_V_1BIT:PXL_V_8BIT;
+    /* HP UPD emits RGB/8-bit JPEG even for monochrome print jobs. */
+    unsigned cs=PXL_V_RGB;
+    unsigned depth=PXL_V_8BIT;
     if(dw>65535u||dh>65535u)return -1;
     if(job_start(s,fn,ctx)||
        pxl_u8(fn,ctx,PXL_V_AUTO_SELECT,PXL_A_MEDIA_SOURCE)||pxl_u8(fn,ctx,PXL_V_SIMPLEX,PXL_A_SIMPLEX_PAGE_MODE)||pxl_u8(fn,ctx,orientation,PXL_A_ORIENTATION))return -1;
@@ -363,46 +363,40 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(s->bits_per_pixel==1&&s->bytes_per_line<(s->width+7u)/8u)return -1;
     s->line=(unsigned char *)malloc(s->bytes_per_line);
     if(s->color_space==3&&s->bits_per_pixel==1){
-        s->mono_cap=(s->width+7u)/8u;
+        s->mono_cap=(size_t)s->width*3u;
         s->mono=(unsigned char *)malloc(s->mono_cap);
-    }else if(s->color_space==18&&s->bits_per_pixel==8){
+    }else if(s->color_space==18){
         s->mono_cap=(size_t)s->width*3u;
         s->mono=(unsigned char *)malloc(s->mono_cap);
     }
     if(!s->line||
        (((s->color_space==3&&s->bits_per_pixel==1)||
-         (s->color_space==18&&s->bits_per_pixel==8))&&!s->mono)){
+         s->color_space==18)&&!s->mono)){
         free_page(s);return -3;
     }
     s->line_cap=s->bytes_per_line;s->line_used=0;s->row=0;s->color_value_bytes=unit;
     if(page_start(s,fn,ctx)){free_page(s);return -4;}
     s->pages++;return 0;
 }
-static int black_row(struct mb_pwg_pcl *s){
-    unsigned x;
-    if(!(s->color_space==3&&s->bits_per_pixel==1))return -1;
-    for(x=0;x<s->mono_cap;x++)s->mono[x]=(unsigned char)~s->line[x];
-    return 0;
-}
+/* Expand 1-bit PWG monochrome to RGB bytes before the same single JPEG
+ * ReadImage path used by the captured HP UPD PCL XL job. */
 static int emit_1bit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    unsigned i;
-    const unsigned char *row=s->line;
-    size_t row_bytes=(s->width+7u)/8u;
-    if(s->color_space==3){
-        if(black_row(s))return -1;
-        row=s->mono;
-    }else if(s->color_space!=18)return -1;
+    unsigned i,x;
+    if(!s->mono||s->mono_cap<(size_t)s->width*3u)return -1;
+    for(x=0;x<s->width;x++){
+        unsigned bit=(s->line[x>>3]>>(7u-(x&7u)))&1u;
+        unsigned char g=(unsigned char)((s->color_space==3? !bit:bit)?255:0);
+        s->mono[(size_t)x*3u]=g;
+        s->mono[(size_t)x*3u+1u]=g;
+        s->mono[(size_t)x*3u+2u]=g;
+    }
     for(i=0;i<s->repeat_lines;i++){
-        unsigned char emb[5]={0xfa,0,0,0,0};
-        static const unsigned char pad[3]={0,0,0};
-        size_t padded=(row_bytes+3u)&~3u;
-        size_t padding=padded-row_bytes;
-        if(pxl_u16(fn,ctx,s->row,PXL_A_START_LINE)||pxl_u16(fn,ctx,1,PXL_A_BLOCK_HEIGHT)||
-           pxl_u8(fn,ctx,PXL_V_NO_COMPRESSION,PXL_A_COMPRESS_MODE)||pxl_op(fn,ctx,PXL_O_READ_IMAGE))return -1;
-        le32(emb+1,(uint32_t)padded);
-        if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,row,row_bytes)||
-           (padding&&out(fn,ctx,pad,padding)))return -1;
+        struct mb_jpeg_block *b;
+        if(!s->image_ctx&&jpeg_block_start(s))return -1;
+        b=(struct mb_jpeg_block *)s->image_ctx;
+        if(jpeg_block_write_row(s,s->mono))return -1;
         if(++s->row>s->height)return -1;
+        if(b->rows_written==b->rows_target&&jpeg_block_finish(s,fn,ctx))return -1;
     }
     return 0;
 }
