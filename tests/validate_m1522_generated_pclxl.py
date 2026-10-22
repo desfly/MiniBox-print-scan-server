@@ -8,12 +8,14 @@ def check(path):
     head=data.find(b") HP-PCL XL;")
     if head<0: raise ValueError("no binding")
     p=data.index(b"\n",head)+1
-    events=[]; stack=0; active=False; jpegs=[]
+    events=[]; stack=0; active=False; jpegs=[]; ended=False; uel=False
     while p<len(data):
         tag=data[p]; p+=1
         if tag==0x1b:
             if data[p:p+8]!=b"%-12345X": raise ValueError("invalid PJL UEL")
-            if b"@PJL EOJ" not in data[p:]: raise ValueError("missing EOJ")
+            tail=data[p+8:]
+            if tail!=b"@PJL EOJ\\n\\x1b%-12345X": raise ValueError("unexpected PJL trailer or trailing bytes")
+            uel=True
             break
         if tag in FIXED:
             p+=FIXED[tag]
@@ -27,9 +29,11 @@ def check(path):
             size=struct.unpack_from("<I",data,p)[0]; p+=4
             jpeg=data[p:p+size]
             if len(jpeg)!=size or jpeg[:2]!=b"\xff\xd8" or jpeg[-2:]!=b"\xff\xd9": raise ValueError("invalid JPEG framing")
+            if not events or events[-1]!=0xb1: raise ValueError("JPEG must immediately follow ReadImage")
             jpegs.append(size);p+=size
         elif tag in OPS:
             events.append(tag)
+            if tag==0x42: ended=True
             if tag==0x61:stack+=1
             if tag==0x60:stack-=1
             if stack<0:raise ValueError("graphics stack underflow")
@@ -43,6 +47,7 @@ def check(path):
         if p>len(data):raise ValueError("truncated data")
     wanted=[0x41,0x48,0x43,0x46,0x77,0x6a,0x78,0x7c,0x7b,0x75,0x61,0x69,0x6b,0x78,0x7c,0x7b,0x6a,0xb0,0xb1,0xb2,0x60,0x44,0x49,0x42]
     if events!=wanted:raise ValueError("HP operator sequence mismatch: "+str([OPS[e] for e in events]))
+    if not uel or not ended:raise ValueError("missing final PJL UEL / EndSession")
     if stack or active or len(jpegs)!=1:raise ValueError("graphics state / JPEG count mismatch")
     print("PASS: %s: %d operators, 1 JPEG (%d bytes)"%(path,len(events),jpegs[0]))
 if __name__=="__main__":
