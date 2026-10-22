@@ -101,6 +101,22 @@ static int check(unsigned height, unsigned width) {
             if(!memcmp(b.p+k,landscape,sizeof landscape)){found=1;break;}
         if(!found){fprintf(stderr,"FAIL: landscape page setup absent\\n");goto done;}
     }
+    /* PCL XL geometry must describe the generated PWG page, not copy the
+     * photo placement coordinates from the successful HP USB capture. */
+    if(width>height){
+        const unsigned char geometry[]={
+            0xc0,0x02,0xf8,0x03,0x6a, /* RGB */
+            0xc0,0x00,0xf8,0x64,      /* direct pixels */
+            0xc0,0x02,0xf8,0x62,      /* 8 bits/component */
+            0xc1,0x22,0x09,0xf8,0x6c,/* source width 2338 */
+            0xc1,0xa4,0x06,0xf8,0x6b,/* source height 1700 */
+            0xd1,0x22,0x09,0xa4,0x06,0xf8,0x67,0xb0
+        };
+        int found=0;
+        for(size_t k=0;k+sizeof geometry<=b.n;k++)
+            if(!memcmp(b.p+k,geometry,sizeof geometry)){found=1;break;}
+        if(!found){fprintf(stderr,"FAIL: 2338x1700 landscape PCL XL image geometry mismatch\\n");goto done;}
+    }
     while(covered<height) {
         size_t i;
         /* c1,start16,f8,6d,c1,height16,f8,63,c0,02,f8,65,b1,fa,len32 */
