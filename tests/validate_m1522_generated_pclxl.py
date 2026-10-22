@@ -14,7 +14,7 @@ def check(path):
         if tag==0x1b:
             if data[p:p+8]!=b"%-12345X": raise ValueError("invalid PJL UEL")
             tail=data[p+8:]
-            if tail!=b"@PJL EOJ\\n\\x1b%-12345X": raise ValueError("unexpected PJL trailer or trailing bytes")
+            if tail!=b"@PJL EOJ\n\x1b%-12345X": raise ValueError("unexpected PJL trailer or trailing bytes")
             uel=True
             break
         if tag in FIXED:
