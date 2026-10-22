@@ -114,7 +114,7 @@ static int check(unsigned height, unsigned width) {
     }
     /* PCL XL geometry must describe the generated PWG page, not copy the
      * photo placement coordinates from the successful HP USB capture. */
-    if(width>height){
+    if(width==2338 && height==1700){
         const unsigned char geometry[]={
             0xc0,0x02,0xf8,0x03,0x6a, /* RGB */
             0xc0,0x00,0xf8,0x64,      /* direct pixels */
