@@ -72,7 +72,7 @@ static int check(unsigned height, unsigned width) {
         }
         /* Invariant HP page preamble from M1522-PRINT-REAL USB capture. */
         {
-            static const unsigned char page_prefix[]={
+            const unsigned char page_prefix[]={
                 0xc0,0x01,0xf8,0x26,0xc0,0x00,0xf8,0x34,
                 0xc0,(unsigned char)(width>height?1:0),0xf8,0x28,0xc8,0xc0,0x02,'A','4',0xf8,0x25,0x43,
                 /* VendorUnique page setup from successful full HP capture. */
