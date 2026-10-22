@@ -555,7 +555,7 @@ int mb_pwg_pcl_feed(struct mb_pwg_pcl *s,const unsigned char *data,size_t len,
 }
 int mb_pwg_pcl_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     static const unsigned char trailer[]={PXL_O_CLOSE_DATA_SOURCE,PXL_O_END_SESSION};
-    static const char pjl_end[]="\033%-12345X@PJL EOJ NAME=\"MiniBox PWG\"\r\n\033%-12345X";
+    static const char pjl_end[]="\033%-12345X@PJL EOJ\n\033%-12345X";
     if(!s||!fn||s->failed)return -1;
     if(!s->pages||s->phase!=MB_PWG_HEADER||s->header_used!=0)return -2;
     if(out(fn,ctx,trailer,sizeof trailer)||out(fn,ctx,pjl_end,sizeof pjl_end-1)){
