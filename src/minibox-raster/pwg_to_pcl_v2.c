@@ -235,6 +235,15 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
      * positioned 1920x1080 image.  PWG input is a complete rendered page, so
      * those two placement coordinates are deliberately normalized to (0,0). */
     {
+        /* Successful 2026-10-22 HP UPD USB capture includes this vendor
+         * page setup immediately after BeginPage and before PageScale.
+         * It is printer-specific (PCL XL VendorUnique, 0x46). */
+        static const unsigned char capture_vendor_page_setup[]={
+            0xc2,0x04,0x10,0x70,0x68,0xf8,0x91,
+            0xc0,0x01,0xf8,0x93,
+            0xc0,0x01,0xf8,0x94,
+            0xc0,0x01,0xf8,0x95,0x46
+        };
         static const unsigned char capture_state_before_origin[]={
             0xd5,0x00,0x00,0x80,0x3f,0x00,0x00,0x80,0x3f,0xf8,0x2b,0x77,
             0xc0,0x01,0xf8,0x03,0x6a,
@@ -251,6 +260,7 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
             0xc0,0xcc,0xf8,0x2c,0x7b
         };
         if(pxl_op(fn,ctx,PXL_O_BEGIN_PAGE)||
+           out(fn,ctx,capture_vendor_page_setup,sizeof capture_vendor_page_setup)||
            out(fn,ctx,capture_state_before_origin,sizeof capture_state_before_origin)||
            pxl_sxy16(fn,ctx,0,0,PXL_A_PAGE_ORIGIN)||pxl_op(fn,ctx,PXL_O_SET_PAGE_ORIGIN)||
            out(fn,ctx,capture_state_after_origin,sizeof capture_state_after_origin)||
