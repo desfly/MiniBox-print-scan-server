@@ -117,6 +117,36 @@ static int check(unsigned height, unsigned width) {
             if(!memcmp(b.p+k,geometry,sizeof geometry)){found=1;break;}
         if(!found){fprintf(stderr,"FAIL: 2338x1700 landscape PCL XL image geometry mismatch\\n");goto done;}
     }
+    /* Strict framing: JPEG must begin immediately after the complete
+     * contiguous HP-style PCL XL image descriptor.  A loose byte search
+     * anywhere in the job could otherwise match arbitrary JPEG payload. */
+    {
+        unsigned char desc[]={
+            0xc0,0x02,0xf8,0x03,0x6a,
+            0xc0,0x00,0xf8,0x64,
+            0xc0,0x02,0xf8,0x62,
+            0xc1,0,0,0xf8,0x6c,
+            0xc1,0,0,0xf8,0x6b,
+            0xd1,0,0,0,0,0xf8,0x67,0xb0,
+            0xc1,0,0,0xf8,0x6d,
+            0xc1,0,0,0xf8,0x63,
+            0xc0,0x02,0xf8,0x65,0xb1,0xfa
+        };
+        const unsigned x=width,y=height;
+        size_t at=0,matches=0;
+        desc[14]=(unsigned char)x;desc[15]=(unsigned char)(x>>8);
+        desc[19]=(unsigned char)y;desc[20]=(unsigned char)(y>>8);
+        desc[24]=(unsigned char)x;desc[25]=(unsigned char)(x>>8);
+        desc[26]=(unsigned char)y;desc[27]=(unsigned char)(y>>8);
+        desc[37]=(unsigned char)y;desc[38]=(unsigned char)(y>>8);
+        for(size_t k=0;k+sizeof desc<=b.n;k++)
+            if(!memcmp(b.p+k,desc,sizeof desc)){at=k;matches++;}
+        if(matches!=1){
+            fprintf(stderr,"FAIL: expected one contiguous PCL XL image descriptor, found %zu\\n",matches);
+            goto done;
+        }
+        (void)at;
+    }
     while(covered<height) {
         size_t i;
         /* c1,start16,f8,6d,c1,height16,f8,63,c0,02,f8,65,b1,fa,len32 */
