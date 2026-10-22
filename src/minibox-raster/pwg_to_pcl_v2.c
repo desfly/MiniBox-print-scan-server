@@ -24,6 +24,7 @@ enum m1522_pxl_attr {
     PXL_A_MEDIA_SOURCE=38,
     PXL_A_ORIENTATION=40,
     PXL_A_PAGE_ORIGIN=42,
+    PXL_A_PAGE_COPIES=49,
     PXL_A_PAGE_SCALE=43,
     PXL_A_ROP3=44,
     PXL_A_TX_MODE=45,
@@ -50,6 +51,7 @@ enum m1522_pxl_op {
     PXL_O_END_PAGE=0x44,
     PXL_O_OPEN_DATA_SOURCE=0x48,
     PXL_O_CLOSE_DATA_SOURCE=0x49,
+    PXL_O_POP_GS=0x60,
     PXL_O_PUSH_GS=0x61,
     PXL_O_SET_CLIP_TO_PAGE=0x69,
     PXL_O_SET_COLOR_SPACE=0x6a,
@@ -265,7 +267,12 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     return 0;
 }
 static int page_end(mb_pwg_write_fn fn,void *ctx){
-    return pxl_op(fn,ctx,PXL_O_END_IMAGE)||pxl_op(fn,ctx,PXL_O_END_PAGE)?-1:0;
+    /* Captured successful USB job: EndImage, PopGS, PageCopies=1,
+     * EndPage. PushGS was issued after SetPageOrigin. */
+    return pxl_op(fn,ctx,PXL_O_END_IMAGE)||
+           pxl_op(fn,ctx,PXL_O_POP_GS)||
+           pxl_u16(fn,ctx,1,PXL_A_PAGE_COPIES)||
+           pxl_op(fn,ctx,PXL_O_END_PAGE)?-1:0;
 }
 
 static int jpeg_block_start(struct mb_pwg_pcl *s){
