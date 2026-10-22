@@ -41,7 +41,8 @@ static int check(unsigned height, unsigned width) {
     int ok=0;
     mb_pwg_pcl_init(&s);
     put32(h+276,600);put32(h+280,600);
-    put32(h+352,595);put32(h+356,842);
+    put32(h+352,width>height?842:595);
+    put32(h+356,width>height?595:842);
     put32(h+372,width);put32(h+376,height);
     put32(h+384,8);put32(h+388,8);put32(h+392,width);
     put32(h+400,18);put32(h+420,1);
@@ -89,6 +90,16 @@ static int check(unsigned height, unsigned width) {
                 goto done;
             }
         }
+    }
+    if(width>height){
+        static const unsigned char landscape[]={
+            0xc0,0x01,0xf8,0x28, /* HP captured landscape orientation */
+            0xc8,0xc0,0x02,'A','4',0xf8,0x25,0x43
+        };
+        int found=0;
+        for(size_t k=0;k+sizeof landscape<=b.n;k++)
+            if(!memcmp(b.p+k,landscape,sizeof landscape)){found=1;break;}
+        if(!found){fprintf(stderr,"FAIL: landscape page setup absent\\n");goto done;}
     }
     while(covered<height) {
         size_t i;
