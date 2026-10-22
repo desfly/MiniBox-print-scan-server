@@ -51,6 +51,17 @@ static int check(unsigned height, unsigned width) {
     for(unsigned y=0;y<height;y++)
         if(mb_pwg_pcl_feed(&s,row,sizeof row,write_bytes,&b))goto done;
     if(mb_pwg_pcl_finish(&s,write_bytes,&b))goto done;
+    /* Preserve the actual full-width MiniBox output for an independent
+     * parser; do not reconstruct it from expected byte patterns. */
+    if(height==1700 && width==2338){
+        FILE *fp=fopen("/tmp/minibox-generated-pclxl.bin","wb");
+        if(!fp){fprintf(stderr,"FAIL: cannot open PCL XL export\\n");goto done;}
+        size_t count=fwrite(b.p,1,b.n,fp);
+        int close_rc=fclose(fp);
+        if(count!=b.n || close_rc!=0){
+            fprintf(stderr,"FAIL: incomplete PCL XL export\\n");goto done;
+        }
+    }
     /* USBPcap M1522-PRINT-REAL(2).pcap: HP UPD uses LF (0a), not CRLF,
      * at the PJL -> PCL XL handoff. Lock down the binary session prefix. */
     {
