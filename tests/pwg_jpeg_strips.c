@@ -30,7 +30,7 @@ static unsigned get16(const unsigned char *p) {return (unsigned)p[0]|((unsigned)
 static uint32_t get32(const unsigned char *p) {
     return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
 }
-static int check(unsigned height) {
+static int check(unsigned height, unsigned width) {
     unsigned char h[1796]={0};
     const unsigned char magic[]={'R','a','S','2'};
     const unsigned char row[]={0,128}; /* one repeated scanline, then end-of-row white fill */
@@ -42,8 +42,8 @@ static int check(unsigned height) {
     mb_pwg_pcl_init(&s);
     put32(h+276,600);put32(h+280,600);
     put32(h+352,595);put32(h+356,842);
-    put32(h+372,32);put32(h+376,height);
-    put32(h+384,8);put32(h+388,8);put32(h+392,32);
+    put32(h+372,width);put32(h+376,height);
+    put32(h+384,8);put32(h+388,8);put32(h+392,width);
     put32(h+400,18);put32(h+420,1);
     if(mb_pwg_pcl_feed(&s,magic,sizeof magic,write_bytes,&b) ||
        mb_pwg_pcl_feed(&s,h,sizeof h,write_bytes,&b)) goto done;
@@ -114,29 +114,31 @@ static int check(unsigned height) {
         {
             struct jpeg_decompress_struct d;
             struct jpeg_error_mgr err;
-            unsigned char decoded[32*3];
-            int valid=1;
+            unsigned char *decoded=malloc((size_t)width*3u);
+            int valid=decoded!=NULL;
             memset(&d,0,sizeof d);
             d.err=jpeg_std_error(&err);
             jpeg_create_decompress(&d);
             jpeg_mem_src(&d,b.p+jpeg,length);
             if(jpeg_read_header(&d,TRUE)!=JPEG_HEADER_OK ||
-               d.image_width!=32 || d.image_height!=lines) {
+               d.image_width!=width || d.image_height!=lines) {
                 jpeg_destroy_decompress(&d);
+                free(decoded);
                 goto done;
             }
             d.out_color_space=JCS_RGB;
             jpeg_start_decompress(&d);
-            if(d.output_width!=32 || d.output_height!=lines ||
+            if(d.output_width!=width || d.output_height!=lines ||
                d.output_components!=3) valid=0;
             while(valid && d.output_scanline<d.output_height) {
                 JSAMPROW scan=decoded;
                 if(jpeg_read_scanlines(&d,&scan,1)!=1){valid=0;break;}
-                for(size_t k=0;k<sizeof decoded;k++)
+                for(size_t k=0;k<(size_t)width*3u;k++)
                     if(decoded[k]!=255){valid=0;break;}
             }
             if(valid) jpeg_finish_decompress(&d);
             jpeg_destroy_decompress(&d);
+            free(decoded);
             if(!valid)goto done;
         }
         covered+=lines;blocks++;pos=jpeg+length;
@@ -167,7 +169,9 @@ done:
 int main(void) {
     const unsigned heights[]={1,127,128,129,255,256,257,1080,3508,4960};
     for(size_t i=0;i<sizeof heights/sizeof heights[0];i++)
-        if(check(heights[i]))return 1;
-    puts("PASS: single full-height JPEG ReadImage covers every row");
+        if(check(heights[i],32))return 1;
+    /* Full-size landscape source captured in successful HP UPD USB trace. */
+    if(check(1700,2338))return 1;
+    puts("PASS: single full-height JPEG ReadImage, including 2338x1700 landscape");
     return 0;
 }
