@@ -28,7 +28,18 @@ def main():
             f"FAIL: HP capture #003 preamble mismatch at byte {offset}: "
             f"generated=0x{actual[offset]:02x} expected=0x{REFERENCE[offset]:02x}"
         )
-    print(f"PASS: exact {len(REFERENCE)}-byte HP capture #003 PCL XL preamble")
+    # Independent trailer bytes lifted from the successful 003 USB OUT payload:
+    # EndImage, PopGS, PageCopies=1, EndPage, CloseDataSource, EndSession,
+    # UEL, PJL EOJ, UEL. The encoded JPEG size is deliberately not fixed.
+    trailer = bytes.fromhex(
+        "b260c10100f8314449421b252d313233343558"
+        "40504a4c20454f4a0a1b252d313233343558"
+    )
+    if not stream.endswith(trailer):
+        raise SystemExit("FAIL: HP capture #003 exact PCL XL/PJL trailer mismatch")
+    if len(stream) <= start + len(REFERENCE) + len(trailer):
+        raise SystemExit("FAIL: missing encoded image between PCL XL prefix and trailer")
+    print(f"PASS: exact {len(REFERENCE)}-byte HP capture #003 PCL XL preamble and {len(trailer)}-byte trailer")
 
 if __name__ == "__main__":
     main()
