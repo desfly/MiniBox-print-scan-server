@@ -137,7 +137,7 @@ static int check(unsigned height, unsigned width) {
             0xc0,0x02,0xf8,0x62,      /* 8 bits/component */
             0xc1,0x22,0x09,0xf8,0x6c,/* source width 2338 */
             0xc1,0xa4,0x06,0xf8,0x6b,/* source height 1700 */
-            0xd1,0x22,0x09,0xa4,0x06,0xf8,0x67,0xb0
+            0xd1,0xa3,0x17,0x30,0x11,0xf8,0x67,0xb0 /* captured DestSize=6051x4400 */
         };
         int found=0;
         for(size_t k=0;k+sizeof geometry<=b.n;k++)
@@ -163,8 +163,10 @@ static int check(unsigned height, unsigned width) {
         size_t at=0,matches=0;
         desc[14]=(unsigned char)x;desc[15]=(unsigned char)(x>>8);
         desc[19]=(unsigned char)y;desc[20]=(unsigned char)(y>>8);
-        desc[24]=(unsigned char)x;desc[25]=(unsigned char)(x>>8);
-        desc[26]=(unsigned char)y;desc[27]=(unsigned char)(y>>8);
+        const unsigned dw=(width==2338 && height==1700)?6051u:x;
+        const unsigned dh=(width==2338 && height==1700)?4400u:y;
+        desc[24]=(unsigned char)dw;desc[25]=(unsigned char)(dw>>8);
+        desc[26]=(unsigned char)dh;desc[27]=(unsigned char)(dh>>8);
         desc[37]=(unsigned char)y;desc[38]=(unsigned char)(y>>8);
         for(size_t k=0;k+sizeof desc<=b.n;k++)
             if(!memcmp(b.p+k,desc,sizeof desc)){at=k;matches++;}
