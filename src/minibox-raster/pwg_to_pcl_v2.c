@@ -240,9 +240,10 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
      * USB stream instead of being reconstructed operator-by-operator.
      * Only PageOrigin/Cursor and the image geometry/color are variable.
      *
-     * Capture values were PageOrigin=(100,100), Cursor=(179,564) for a
-     * positioned 1920x1080 image.  PWG input is a complete rendered page, so
-     * those two placement coordinates are deliberately normalized to (0,0). */
+     * Capture #003 for 2338x1700 is PageOrigin=(100,100), Cursor=(381,179).
+     * Preserve these verified values for that exact raster geometry only.
+     * The layout transform for other PWG page sizes remains unverified;
+     * do not falsely claim the fallback values are capture-equivalent. */
     {
         /* Successful 2026-10-22 HP UPD USB capture includes this vendor
          * page setup immediately after BeginPage and before PageScale.
@@ -271,9 +272,9 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         if(pxl_op(fn,ctx,PXL_O_BEGIN_PAGE)||
            out(fn,ctx,capture_vendor_page_setup,sizeof capture_vendor_page_setup)||
            out(fn,ctx,capture_state_before_origin,sizeof capture_state_before_origin)||
-           pxl_sxy16(fn,ctx,0,0,PXL_A_PAGE_ORIGIN)||pxl_op(fn,ctx,PXL_O_SET_PAGE_ORIGIN)||
+           pxl_sxy16(fn,ctx,(s->width==2338u&&s->height==1700u)?100:0,(s->width==2338u&&s->height==1700u)?100:0,PXL_A_PAGE_ORIGIN)||pxl_op(fn,ctx,PXL_O_SET_PAGE_ORIGIN)||
            out(fn,ctx,capture_state_after_origin,sizeof capture_state_after_origin)||
-           pxl_sxy16(fn,ctx,0,0,PXL_A_POINT)||pxl_op(fn,ctx,PXL_O_SET_CURSOR)||
+           pxl_sxy16(fn,ctx,(s->width==2338u&&s->height==1700u)?381:0,(s->width==2338u&&s->height==1700u)?179:0,PXL_A_POINT)||pxl_op(fn,ctx,PXL_O_SET_CURSOR)||
            out(fn,ctx,capture_state_after_cursor,sizeof capture_state_after_cursor)||
            pxl_u8(fn,ctx,cs,PXL_A_COLOR_SPACE)||pxl_op(fn,ctx,PXL_O_SET_COLOR_SPACE)||
            pxl_u8(fn,ctx,PXL_V_DIRECT_PIXEL,PXL_A_COLOR_MAPPING)||
