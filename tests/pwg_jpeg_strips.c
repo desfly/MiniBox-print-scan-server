@@ -62,20 +62,30 @@ static int check(unsigned height, unsigned width) {
             fprintf(stderr,"FAIL: incomplete PCL XL export\\n");goto done;
         }
     }
-    /* Complete capture #003 has these PJL settings before PLANESINUSE.
-     * Ensure exact order rather than searching independently by substring. */
+    /* PJL options observed in capture #003 are separated by additional
+     * driver metadata. Verify their relative order in MiniBox's filtered PJL,
+     * without pretending they are adjacent in the reference capture. */
     {
-        static const unsigned char hp_pjl[]=
-            "@PJL SET RET=OFF\n"
-            "@PJL SET SEPARATORPAGE=OFF\n"
-            "@PJL SET EDGETOEDGE=NO\n"
-            "@PJL SET PLANESINUSE=1\n";
-        size_t k;
-        for(k=0;k+sizeof hp_pjl-1<=b.n;k++)
-            if(!memcmp(b.p+k,hp_pjl,sizeof hp_pjl-1))break;
-        if(k+sizeof hp_pjl-1>b.n){
-            fprintf(stderr,"FAIL: HP capture #003 PJL setup/order mismatch\\n");
-            goto done;
+        static const char *const hp_pjl[]={
+            "@PJL SET RET=OFF\n",
+            "@PJL SET PLANESINUSE=1\n",
+            "@PJL SET GRAYSCALE=BLACKONLY\n",
+            "@PJL SET SEPARATORPAGE=OFF\n",
+            "@PJL SET EDGETOEDGE=NO\n",
+            "@PJL SET ECONOMODE=OFF\n",
+            "@PJL SET RESOLUTION=600\n",
+            "@PJL SET BITSPERPIXEL=1\n",
+            "@PJL ENTER LANGUAGE=PCLXL\n"
+        };
+        size_t off=0;
+        for(size_t opt=0;opt<sizeof hp_pjl/sizeof hp_pjl[0];opt++){
+            size_t len=strlen(hp_pjl[opt]);
+            while(off+len<=b.n && memcmp(b.p+off,hp_pjl[opt],len))off++;
+            if(off+len>b.n){
+                fprintf(stderr,"FAIL: HP capture #003 PJL option/order mismatch\\n");
+                goto done;
+            }
+            off+=len;
         }
     }
     /* USBPcap M1522-PRINT-REAL(2).pcap: HP UPD uses LF (0a), not CRLF,
