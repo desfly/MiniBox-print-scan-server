@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -185,4 +186,63 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
 }
 static int headers_complete(const unsigned char*b,size_t n){size_t i;for(i=0;i+3<n;i++)if(b[i]=='\r'&&b[i+1]=='\n'&&b[i+2]=='\r'&&b[i+3]=='\n')return 1;return 0;}
 static void serve(int fd){unsigned char head[HTTP_HEAD_CAP],prefix[IPP_PREFIX_CAP];size_t used=0,initial;struct minibox_http_body hb;int pr;char method[16],path[256];while(!headers_complete(head,used)&&used<sizeof head){ssize_t n=minibox_recv_retry(fd,head+used,sizeof head-used);if(n<=0)return;used+=(size_t)n;}if(!headers_complete(head,used)){reply_text(fd,431,"Request Header Fields Too Large","headers too large\n");return;}if(sscanf((const char*)head,"%15s %255s",method,path)!=2){reply_text(fd,400,"Bad Request","bad request\n");return;}if(!strcmp(method,"GET")&&!strcmp(path,"/health")){reply_text(fd,200,"OK",minibox_m1522_present()?"minibox-printerd ok; mfp=connected\n":"minibox-printerd ok; mfp=disconnected\n");return;}if(strcmp(path,"/ipp/print")){reply_text(fd,404,"Not Found","not found\n");return;}if(strcmp(method,"POST")){reply_text(fd,405,"Method Not Allowed","POST required\n");return;}pr=minibox_http_parse_body(head,used,&hb);if(pr){reply_text(fd,pr==-3?411:400,pr==-3?"Length Required":"Bad Request",pr==-3?"Content-Length or chunked transfer required\n":"invalid HTTP request framing\n");return;}if(hb.chunked){serve_post_chunked(fd,head+hb.header_bytes,hb.buffered_body);return;}if(hb.content_length>MAX_PRINT_JOB){reply_text(fd,413,"Payload Too Large","print job too large\n");return;}initial=hb.buffered_body;if(initial>sizeof prefix)initial=sizeof prefix;if(initial)memcpy(prefix,head+hb.header_bytes,initial);if(hb.content_length<8){reply_text(fd,400,"Bad Request","IPP header too short\n");return;}serve_post(fd,prefix,initial,hb.content_length);}
-int main(int argc,char**argv){int port=argc>1?atoi(argv[1]):631;int s=socket(AF_INET,SOCK_STREAM,0);if(s<0){perror("socket");return 1;}int one=1;setsockopt(s,SOL_SOCKET,SO_REUSEADDR,&one,sizeof one);struct sockaddr_in a;memset(&a,0,sizeof a);a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_ANY);a.sin_port=htons((unsigned short)port);if(bind(s,(struct sockaddr*)&a,sizeof a)||listen(s,8)){perror("bind/listen");close(s);return 1;}signal(SIGINT,on_signal);signal(SIGTERM,on_signal);fprintf(stderr,"minibox-printerd: listening on %d\n",port);while(!stop){int c=accept(s,NULL,NULL);struct timeval tv={CLIENT_TIMEOUT_SEC,0};if(c<0){if(errno==EINTR)continue;perror("accept");break;}(void)setsockopt(c,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof tv);(void)setsockopt(c,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof tv);serve(c);close(c);}close(s);return 0;}
+/* RAW 9100: the existing HP PCL 6 driver renders on Windows.
+ * This endpoint transports its bytes unchanged through the same USB session.
+ * IPP and RAW are serialized in this process to prevent USB interleaving.
+ * No CUPS, usblp, PJL injection, or extra rasterization. */
+static void serve_raw(int fd){
+    unsigned char buf[IO_CHUNK];
+    print_session *ps=0;
+    size_t count=0;
+    int rc=0;
+    if(ps_open(&ps)){fprintf(stderr,"minibox-printerd: raw9100 usb-open-failed\\n");return;}
+    for(;;){
+        ssize_t got=recv(fd,buf,sizeof buf,0);
+        if(got==0)break;
+        if(got<0){if(errno==EINTR)continue;rc=-1;break;}
+        if(count>MAX_PRINT_JOB-(size_t)got){rc=-2;break;}
+        count+=(size_t)got;
+        if(ps_write(ps,buf,(size_t)got)){rc=-3;break;}
+    }
+    ps_close(ps);
+    fprintf(stderr,"minibox-printerd: raw9100 bytes=%zu rc=%d\\n",count,rc);
+}
+static int listen_tcp(int port){
+    int s=socket(AF_INET,SOCK_STREAM,0),one=1;
+    struct sockaddr_in a;
+    if(s<0)return -1;
+    setsockopt(s,SOL_SOCKET,SO_REUSEADDR,&one,sizeof one);
+    memset(&a,0,sizeof a);
+    a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_ANY);
+    a.sin_port=htons((unsigned short)port);
+    if(bind(s,(struct sockaddr*)&a,sizeof a)||listen(s,8)){close(s);return -1;}
+    return s;
+}
+int main(int argc,char**argv){
+    int port=argc>1?atoi(argv[1]):631;
+    int rawport=argc>2?atoi(argv[2]):(port==631?9100:19100);
+    int s=listen_tcp(port),raw;
+    if(s<0){perror("ipp bind/listen");return 1;}
+    raw=listen_tcp(rawport);
+    if(raw<0){perror("raw9100 bind/listen");close(s);return 1;}
+    signal(SIGINT,on_signal);signal(SIGTERM,on_signal);
+    fprintf(stderr,"minibox-printerd: listening IPP=%d RAW=%d\\n",port,rawport);
+    while(!stop){
+        fd_set rd;int c,ready,server;
+        struct timeval tv={1,0};
+        FD_ZERO(&rd);FD_SET(s,&rd);FD_SET(raw,&rd);
+        ready=select((s>raw?s:raw)+1,&rd,NULL,NULL,&tv);
+        if(ready<0){if(errno==EINTR)continue;perror("select");break;}
+        if(!ready)continue;
+        /* Only one USB client at a time, including IPP PWG encoding. */
+        server=FD_ISSET(s,&rd)?s:raw;
+        c=accept(server,NULL,NULL);
+        if(c<0){if(errno==EINTR)continue;perror("accept");break;}
+        struct timeval io_tv={CLIENT_TIMEOUT_SEC,0};
+        (void)setsockopt(c,SOL_SOCKET,SO_RCVTIMEO,&io_tv,sizeof io_tv);
+        (void)setsockopt(c,SOL_SOCKET,SO_SNDTIMEO,&io_tv,sizeof io_tv);
+        if(server==raw)serve_raw(c);else serve(c);
+        close(c);
+    }
+    close(raw);close(s);return 0;
+}
