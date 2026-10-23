@@ -357,7 +357,7 @@ static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         jpeg_block_free(s);return -1;
     }
     fprintf(stderr,
-            "minibox-pwg-hp: JPEG width=%u height=%u bytes=%lu encode_ms=%llu\\n",
+            "minibox-pwg-hp: JPEG width=%u height=%u bytes=%lu encode_ms=%llu\n",
             s->width,b->rows_target,b->size,
             mb_millis()-b->started_ms);
     le32(emb+1,(uint32_t)b->size);
@@ -377,7 +377,7 @@ static int parse_header(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     s->bytes_per_line=be32(s->header+392);s->color_order=be32(s->header+396);
     s->color_space=be32(s->header+400);s->num_colors=be32(s->header+420);
     fprintf(stderr,
-            "minibox-pwg: dpi=%ux%u size=%ux%u bpc=%u bpp=%u bpl=%u order=%u cs=%u colors=%u\\n",
+            "minibox-pwg: dpi=%ux%u size=%ux%u bpc=%u bpp=%u bpl=%u order=%u cs=%u colors=%u\n",
             s->xdpi,s->ydpi,s->width,s->height,s->bits_per_color,s->bits_per_pixel,
             s->bytes_per_line,s->color_order,s->color_space,s->num_colors);
     if(!s->width||!s->height||s->width>PWG_MAX_WIDTH||s->height>PWG_MAX_HEIGHT||
@@ -479,7 +479,7 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     if(s->row==s->height){
         if(s->bits_per_pixel==1)
             fprintf(stderr,
-                    "minibox-pwg-hp: input cs=%u bpp=1 black_pixels=%llu total_pixels=%llu\\n",
+                    "minibox-pwg-hp: input cs=%u bpp=1 black_pixels=%llu total_pixels=%llu\n",
                     s->color_space,
                     (unsigned long long)s->diag_black,
                     (unsigned long long)s->diag_pixels);
@@ -493,7 +493,7 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
                 if(v>0&&v<255)mid+=s->gray_hist[v];
             }
             fprintf(stderr,
-                    "minibox-pwg-gray: samples=%u unique=%u min=%u max=%u black=%lu white=%lu mid=%lu\\n",
+                    "minibox-pwg-gray: samples=%u unique=%u min=%u max=%u black=%lu white=%lu mid=%lu\n",
                     s->gray_samples,unique,minv,maxv,
                     (unsigned long)black,(unsigned long)white,(unsigned long)mid);
         }
