@@ -191,7 +191,7 @@ static unsigned scaled_to_600(unsigned pixels,unsigned dpi){
     return (unsigned)(n/dpi);
 }
 static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
-    char pjl[256];int n;
+    char pjl[512];int n;
     /* Exact PCL XL binding/comment bytes visible in the HP UPD USB capture.
      * PJL accounting strings before ENTER LANGUAGE are job metadata and are
      * intentionally not copied. */
@@ -201,6 +201,9 @@ static int job_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     n=snprintf(pjl,sizeof pjl,
         "\033%%-12345X"
         "@PJL JOB NAME=\"MiniBox PWG\"\n"
+        "@PJL SET RET=OFF\n"
+        "@PJL SET SEPARATORPAGE=OFF\n"
+        "@PJL SET EDGETOEDGE=NO\n"
         "@PJL SET PLANESINUSE=1\n"
         "@PJL SET GRAYSCALE=BLACKONLY\n"
         "@PJL SET ECONOMODE=OFF\n"
