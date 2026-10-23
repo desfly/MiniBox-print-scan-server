@@ -112,6 +112,22 @@ static int check(unsigned height, unsigned width) {
             if(!memcmp(b.p+k,landscape,sizeof landscape)){found=1;break;}
         if(!found){fprintf(stderr,"FAIL: landscape page setup absent\\n");goto done;}
     }
+    /* Ground exact capture #003 coordinates for its matching raster only.
+     * PageOrigin=(100,100), Cursor=(381,179) in the real USB stream. */
+    if(width==2338 && height==1700){
+        static const unsigned char coords[]={
+            0xd3,0x64,0x00,0x64,0x00,0xf8,0x2a,0x75,
+            0x61,0x69,
+            0xd3,0x7d,0x01,0xb3,0x00,0xf8,0x4c,0x6b
+        };
+        int found=0;
+        for(size_t k=0;k+sizeof coords<=b.n;k++)
+            if(!memcmp(b.p+k,coords,sizeof coords)){found=1;break;}
+        if(!found){
+            fprintf(stderr,"FAIL: capture #003 PageOrigin/Cursor bytes mismatch\\n");
+            goto done;
+        }
+    }
     /* PCL XL geometry must describe the generated PWG page, not copy the
      * photo placement coordinates from the successful HP USB capture. */
     if(width==2338 && height==1700){
