@@ -49,4 +49,9 @@ int m1522_open(struct m1522_handle*h){if(!h)return-1;memset(h,0,sizeof *h);h->if
 void m1522_close(struct m1522_handle*h){if(!h)return;if(h->dev){if(h->iface>=0)libusb_release_interface(h->dev,h->iface);libusb_close(h->dev);}if(h->ctx)libusb_exit(h->ctx);memset(h,0,sizeof *h);h->iface=-1;}
 int m1522_bulk_write(struct m1522_handle*h,const unsigned char*b,int n,int t){int done=0;if(!h||!h->dev||!h->bulk_out||!b||n<0)return-1;int r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char*)b,n,&done,t);/* libusb errors are negative. Keep them negative: the streaming layer
  * must never mistake an error for a successfully written byte count. */
+/* A timed-out bulk transfer may still have transferred done bytes.
+ * Report that progress to the bounded stream writer, which advances exactly
+ * by the acknowledged byte count before sending the remaining suffix.
+ * Never retry the original whole buffer and duplicate the accepted prefix. */
+if(done>0)return done;
 return r?r:done;}
