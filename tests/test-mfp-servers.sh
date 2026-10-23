@@ -215,4 +215,19 @@ grep -q 'stage=image-read' /tmp/scand-read-fail.log
 code=$(curl -sS -D /tmp/read-job2.headers -o /tmp/read-job2.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18082/eSCL/ScanJobs)
 [ "$code" = 201 ]
 grep -qi '^Location: /eSCL/ScanJobs/2' /tmp/read-job2.headers
+# RAW TCP test: a Windows HP PCL6 job must reach USB unchanged.
+# The test server uses port 19100 to avoid privileged/default port 9100.
+python3 - <<'PY'
+import socket
+from pathlib import Path
+payload = (b'\\x1b%-12345X@PJL ENTER LANGUAGE=PCLXL\\n'
+           b') HP-PCL XL;2;1;Comment regression\\n'
+           + bytes([0xd1,0x58,0x02,0x58,0x02,0xf8,0x89,0x41,0x42])
+           + b'\\x1b%-12345X@PJL EOJ\\n\\x1b%-12345X')
+with socket.create_connection(('127.0.0.1',19100),timeout=5) as sock:
+    sock.sendall(payload)
+Path('/tmp/expected-raw-pclxl.bin').write_bytes(payload)
+PY
+cmp /tmp/expected-raw-pclxl.bin /tmp/printed.bin
+grep -q 'raw9100 bytes=' /tmp/printerd.log
 echo 'MFP server transport contract OK'
