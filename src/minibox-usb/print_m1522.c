@@ -29,7 +29,7 @@ void m1522_print_close(struct m1522_print_session *s){if(!s)return;if(s->opened)
     fprintf(stderr,"minibox-usb: requested_bytes=%zu bulk_out_bytes=%zu calls=%u first_error=%d complete=%s\n",
             s->requested_bytes,s->usb_bytes,s->usb_calls,s->first_error,
             s->requested_bytes==s->usb_bytes && !s->first_error?"yes":"no");
-    fprintf(stderr,"minibox-usb: submitted_fnv64=%016llx accepted_fnv64=%016llx match=%s\\n",
+    fprintf(stderr,"minibox-usb: submitted_fnv64=%016llx accepted_fnv64=%016llx match=%s\n",
             (unsigned long long)s->submitted_hash,(unsigned long long)s->accepted_hash,
             s->requested_bytes==s->usb_bytes && s->submitted_hash==s->accepted_hash && !s->first_error?"yes":"no");
     m1522_close(&s->usb);
