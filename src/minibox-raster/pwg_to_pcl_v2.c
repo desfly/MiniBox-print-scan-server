@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "pwg_to_pcl.h"
 #include <stdio.h>
 #include <jpeglib.h>
