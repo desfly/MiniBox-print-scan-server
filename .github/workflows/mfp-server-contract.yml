@@ -32,6 +32,10 @@ jobs:
           /tmp/test-stream
       - name: Compile libusb M1522 backend
         run: sh tests/compile-libusb-backend.sh
+      - name: Regress partial libusb timeout without duplicated output
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic -ffunction-sections -fdata-sections tests/test-libusb-timeout-progress.c src/minibox-usb/libusb_m1522.c src/minibox-usb/stream.c -Wl,--gc-sections -lusb-1.0 -o /tmp/test-usb-timeout
+          /tmp/test-usb-timeout
       - name: Validate procd runtime definitions
         run: sh tests/test-procd-runtime.sh
       - name: Validate embedded web UI contract
