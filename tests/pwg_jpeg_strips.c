@@ -62,6 +62,22 @@ static int check(unsigned height, unsigned width) {
             fprintf(stderr,"FAIL: incomplete PCL XL export\\n");goto done;
         }
     }
+    /* Complete capture #003 has these PJL settings before PLANESINUSE.
+     * Ensure exact order rather than searching independently by substring. */
+    {
+        static const unsigned char hp_pjl[]=
+            "@PJL SET RET=OFF\n"
+            "@PJL SET SEPARATORPAGE=OFF\n"
+            "@PJL SET EDGETOEDGE=NO\n"
+            "@PJL SET PLANESINUSE=1\n";
+        size_t k;
+        for(k=0;k+sizeof hp_pjl-1<=b.n;k++)
+            if(!memcmp(b.p+k,hp_pjl,sizeof hp_pjl-1))break;
+        if(k+sizeof hp_pjl-1>b.n){
+            fprintf(stderr,"FAIL: HP capture #003 PJL setup/order mismatch\\n");
+            goto done;
+        }
+    }
     /* USBPcap M1522-PRINT-REAL(2).pcap: HP UPD uses LF (0a), not CRLF,
      * at the PJL -> PCL XL handoff. Lock down the binary session prefix. */
     {
