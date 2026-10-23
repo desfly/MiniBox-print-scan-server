@@ -234,7 +234,84 @@ done:
     mb_pwg_pcl_reset(&s);free(b.p);
     return ok?0:1;
 }
+
+/* Regression: verify actual halftones survive PWG sGray8 -> HP JPEG.
+ * A white-only test misses inversion, contouring and lost gray levels.
+ * This is pixel validation; it never changes the captured HP protocol. */
+static int check_gray_ramp(void) {
+    enum { W=128, H=16 };
+    unsigned char header[1796]={0};
+    const unsigned char magic[]={'R','a','S','2'};
+    unsigned char encoded[2+W];
+    struct mb_pwg_pcl state;
+    struct buffer buf={0};
+    struct jpeg_decompress_struct d;
+    struct jpeg_error_mgr err;
+    size_t start=SIZE_MAX, count=0;
+    int ok=0;
+    mb_pwg_pcl_init(&state);
+    put32(header+276,600);put32(header+280,600);
+    put32(header+352,595);put32(header+356,842);
+    put32(header+372,W);put32(header+376,H);
+    put32(header+384,8);put32(header+388,8);
+    put32(header+392,W);put32(header+400,18);put32(header+420,1);
+    encoded[0]=0;encoded[1]=129; /* one row, 128 literal gray pixels */
+    for(unsigned x=0;x<W;x++)encoded[x+2]=(unsigned char)(x*2);
+    if(mb_pwg_pcl_feed(&state,magic,sizeof magic,write_bytes,&buf) ||
+       mb_pwg_pcl_feed(&state,header,sizeof header,write_bytes,&buf))goto finish;
+    for(unsigned y=0;y<H;y++)
+        if(mb_pwg_pcl_feed(&state,encoded,sizeof encoded,write_bytes,&buf))
+            goto finish;
+    if(mb_pwg_pcl_finish(&state,write_bytes,&buf))goto finish;
+    for(size_t i=0;i+6<buf.n;i++){
+        if(buf.p[i]==0xb1 && buf.p[i+1]==0xfa){
+            uint32_t len=get32(buf.p+i+2);
+            if(len<4 || len>buf.n-i-6)goto finish;
+            if(buf.p[i+6]!=0xff || buf.p[i+7]!=0xd8)goto finish;
+            start=i+6;count=len;break;
+        }
+    }
+    if(start==SIZE_MAX)goto finish;
+    memset(&d,0,sizeof d);
+    d.err=jpeg_std_error(&err);
+    jpeg_create_decompress(&d);
+    jpeg_mem_src(&d,buf.p+start,count);
+    if(jpeg_read_header(&d,TRUE)!=JPEG_HEADER_OK ||
+       d.image_width!=W || d.image_height!=H){
+        jpeg_destroy_decompress(&d);goto finish;
+    }
+    d.out_color_space=JCS_RGB;
+    jpeg_start_decompress(&d);
+    {
+        unsigned char pixels[W*3];
+        JSAMPROW row=pixels;
+        int valid=1;
+        while(d.output_scanline<d.output_height){
+            unsigned y=d.output_scanline;
+            if(jpeg_read_scanlines(&d,&row,1)!=1){valid=0;break;}
+            for(unsigned x=0;x<W;x++){
+                int expected=(int)x*2;
+                for(unsigned c=0;c<3;c++){
+                    int got=pixels[x*3+c];
+                    if(got<expected-4 || got>expected+4){valid=0;break;}
+                }
+                if(!valid)break;
+            }
+            if(!valid){fprintf(stderr,"FAIL: sGray8 halftone loss at decoded row %u\\n",y);break;}
+        }
+        if(valid)jpeg_finish_decompress(&d);
+        ok=valid;
+    }
+    jpeg_destroy_decompress(&d);
+finish:
+    if(!ok)fprintf(stderr,"FAIL: PWG sGray8 -> HP JPEG ramp\\n");
+    mb_pwg_pcl_reset(&state);
+    free(buf.p);
+    return ok?0:1;
+}
+
 int main(void) {
+    if(check_gray_ramp())return 1;
     const unsigned heights[]={1,127,128,129,255,256,257,1080,3508,4960};
     for(size_t i=0;i<sizeof heights/sizeof heights[0];i++)
         if(check(heights[i],32))return 1;
