@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define PWG_HEADER_SIZE 1796u
 #define PWG_MAX_WIDTH 7200u
@@ -97,8 +98,15 @@ struct mb_jpeg_block {
     unsigned rows_target;
     unsigned rows_written;
     int created;
+    unsigned long long started_ms;
 };
 
+/* Diagnostics only: never change HP PCL XL bytes based on these counters. */
+static unsigned long long mb_millis(void){
+    struct timespec ts;
+    if(clock_gettime(CLOCK_MONOTONIC,&ts)!=0)return 0;
+    return (unsigned long long)ts.tv_sec*1000ULL+(unsigned long long)ts.tv_nsec/1000000ULL;
+}
 static uint32_t be32(const unsigned char *p){
     return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3];
 }
@@ -295,6 +303,7 @@ static int jpeg_block_start(struct mb_pwg_pcl *s){
     b=(struct mb_jpeg_block *)calloc(1,sizeof *b);
     if(!b||!target){free(b);return -1;}
     b->start_line=s->row;b->rows_target=target;
+    b->started_ms=mb_millis();
     b->cinfo.err=jpeg_std_error(&b->err.pub);
     b->err.pub.error_exit=jpeg_error_exit;
     if(setjmp(b->err.jump)){
@@ -346,6 +355,10 @@ static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
        pxl_u8(fn,ctx,PXL_V_JPEG_COMPRESSION,PXL_A_COMPRESS_MODE)||pxl_op(fn,ctx,PXL_O_READ_IMAGE)){
         jpeg_block_free(s);return -1;
     }
+    fprintf(stderr,
+            "minibox-pwg-hp: JPEG width=%u height=%u bytes=%lu encode_ms=%llu\\n",
+            s->width,b->rows_target,b->size,
+            mb_millis()-b->started_ms);
     le32(emb+1,(uint32_t)b->size);
     if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,b->data,(size_t)b->size)){
         jpeg_block_free(s);return -1;
@@ -407,6 +420,17 @@ static int emit_1bit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         s->mono[(size_t)x*3u+1u]=g;
         s->mono[(size_t)x*3u+2u]=g;
     }
+    /* Observe actual PWG 1-bit coverage; important for contours-only jobs.
+     * Count once per encoded source row; repeated rows are weighted. */
+    {
+        unsigned black=0;
+        for(x=0;x<s->width;x++){
+            unsigned bit=(s->line[x>>3]>>(7u-(x&7u)))&1u;
+            if(s->color_space==3 ? bit : !bit)black++;
+        }
+        s->diag_black+=(uint64_t)black*s->repeat_lines;
+        s->diag_pixels+=(uint64_t)s->width*s->repeat_lines;
+    }
     for(i=0;i<s->repeat_lines;i++){
         struct mb_jpeg_block *b;
         if(!s->image_ctx&&jpeg_block_start(s))return -1;
@@ -452,6 +476,12 @@ static int emit_line(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         emit_1bit_line(s,fn,ctx):emit_continuous_line(s,fn,ctx);
     if(rc)return rc;
     if(s->row==s->height){
+        if(s->bits_per_pixel==1)
+            fprintf(stderr,
+                    "minibox-pwg-hp: input cs=%u bpp=1 black_pixels=%llu total_pixels=%llu\\n",
+                    s->color_space,
+                    (unsigned long long)s->diag_black,
+                    (unsigned long long)s->diag_pixels);
         if(s->image_ctx&&jpeg_block_finish(s,fn,ctx))return -1;
         if(s->color_space==18&&s->bits_per_pixel==8&&s->gray_samples){
             unsigned v,unique=0,minv=255,maxv=0;
