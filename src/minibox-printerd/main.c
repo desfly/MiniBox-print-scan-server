@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 #include "../minibox-ipp/ipp.h"
 #include "../minibox-raster/pwg_to_pcl.h"
@@ -23,6 +24,12 @@
 #define CLIENT_TIMEOUT_SEC 15
 static volatile sig_atomic_t stop;
 static uint32_t next_print_job=1;
+static unsigned long long mono_ms(void){
+    struct timespec t;
+    if(clock_gettime(CLOCK_MONOTONIC,&t)!=0)return 0;
+    return (unsigned long long)t.tv_sec*1000ULL+
+           (unsigned long long)t.tv_nsec/1000000ULL;
+}
 static void on_signal(int sig){(void)sig;stop=1;}
 static int send_all(int fd,const void*vp,size_t n){const unsigned char*p=vp;while(n){ssize_t w=send(fd,p,n,0);if(w<0){if(errno==EINTR)continue;return-1;}p+=w;n-=(size_t)w;}return 0;}
 static void reply_data(int fd,int code,const char*reason,const char*type,const void*body,size_t n){char h[512];int m=snprintf(h,sizeof h,"HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",code,reason,type,n);if(m>0){(void)send_all(fd,h,(size_t)m);if(n)(void)send_all(fd,body,n);}}
@@ -97,6 +104,7 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
     struct minibox_chunk_reader cr;struct ipp_request r;
     unsigned char prefix[IPP_PREFIX_CAP],io[IO_CHUNK];
     size_t have=0,off=0,total=0;int dr,format;print_session *ps=0;ssize_t n;
+    unsigned long long started_ms=mono_ms(), opened_ms=0;
     minibox_chunk_reader_init(&cr,fd,initial,initial_len);
     while(have<8){
         n=chunk_read_limited(&cr,prefix+have,sizeof prefix-have,&total);
@@ -135,7 +143,12 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
         for(i=0;i<sn;i++)fprintf(stderr,"%02X",(unsigned)prefix[off+i]);
         fprintf(stderr,"\n");
     }
-    if(ps_open(&ps)){ipp_reply(fd,&r,0x0507);return;}
+    if(ps_open(&ps)){
+        fprintf(stderr,"minibox-printerd: stage=usb-open-failed elapsed_ms=%llu\n",
+                mono_ms()-started_ms);
+        ipp_reply(fd,&r,0x0507);return;
+    }
+    opened_ms=mono_ms();
     if(format==IPP_DOCUMENT_PWG_RASTER){
         struct mb_pwg_pcl cv;int prc=0;
         mb_pwg_pcl_init(&cv);
@@ -148,7 +161,9 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
             prc=mb_pwg_pcl_feed(&cv,io,(size_t)n,pwg_write,ps);
         }
         if(!prc)prc=mb_pwg_pcl_finish(&cv,pwg_write,ps);
-        if(prc)fprintf(stderr,"minibox-printerd: stage=pwg-raster-chunked rc=%d\n",prc);
+        fprintf(stderr,
+                "minibox-printerd: stage=pwg-chunked-finish rc=%d pages=%u input_bytes=%zu elapsed_ms=%llu usb_open_ms=%llu\n",
+                prc,cv.pages,total-off,mono_ms()-started_ms,opened_ms-started_ms);
         mb_pwg_pcl_reset(&cv);
         if(prc){ps_close(ps);ipp_reply(fd,&r,0x0400);return;}
     }else{
@@ -164,6 +179,8 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
         }
     }
     ps_close(ps);
+    fprintf(stderr,"minibox-printerd: stage=job-closed input_bytes=%zu elapsed_ms=%llu\n",
+            total-off,mono_ms()-started_ms);
     if(r.operation==IPP_OP_SEND_DOCUMENT){if(!active_job_id){ipp_reply(fd,&r,0x0406);return;}active_job_state=9;ipp_job_reply(fd,&r,active_job_id,active_job_state);}else{uint32_t id=alloc_job_id();ipp_job_reply(fd,&r,id,9);}
 }
 static int headers_complete(const unsigned char*b,size_t n){size_t i;for(i=0;i+3<n;i++)if(b[i]=='\r'&&b[i+1]=='\n'&&b[i+2]=='\r'&&b[i+3]=='\n')return 1;return 0;}
