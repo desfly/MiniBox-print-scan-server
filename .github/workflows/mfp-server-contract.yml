@@ -21,6 +21,7 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -I src/minibox-raster tests/pwg_jpeg_strips.c src/minibox-raster/pwg_to_pcl_v2.c -ljpeg -o /tmp/pwg-strips
           /tmp/pwg-strips
           python3 tests/validate_m1522_generated_pclxl.py /tmp/minibox-generated-pclxl.bin
+          python3 tests/check_capture_003_prefix.py /tmp/minibox-generated-pclxl.bin
       - name: Validate M1522 USB identity backend
         run: |
           cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/usb_backend.c tests/test-usb-backend.c -o /tmp/test-usb
