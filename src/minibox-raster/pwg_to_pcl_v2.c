@@ -227,6 +227,11 @@ static int page_start(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned orientation=s->page_width_points>s->page_height_points?1u:0u;
     unsigned dw=scaled_to_600(s->width,s->xdpi);
     unsigned dh=scaled_to_600(s->height,s->ydpi);
+    /* Capture #003, exact 2338x1700 image descriptor: DestinationSize
+     * 0xd1 a3 17 30 11 f8 67 = (6051,4400).  The driver applies
+     * placement scaling distinct from SourceWidth/SourceHeight.  Only
+     * this exact reference geometry has a proven destination size. */
+    if(s->width==2338u && s->height==1700u){dw=6051u;dh=4400u;}
     /* HP UPD emits RGB/8-bit JPEG even for monochrome print jobs. */
     unsigned cs=PXL_V_RGB;
     unsigned depth=PXL_V_8BIT;
