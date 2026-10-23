@@ -195,7 +195,7 @@ static void serve_raw(int fd){
     print_session *ps=0;
     size_t count=0;
     int rc=0;
-    if(ps_open(&ps)){fprintf(stderr,"minibox-printerd: raw9100 usb-open-failed\\n");return;}
+    if(ps_open(&ps)){fprintf(stderr,"minibox-printerd: raw9100 usb-open-failed\n");return;}
     for(;;){
         ssize_t got=recv(fd,buf,sizeof buf,0);
         if(got==0)break;
@@ -205,7 +205,7 @@ static void serve_raw(int fd){
         if(ps_write(ps,buf,(size_t)got)){rc=-3;break;}
     }
     ps_close(ps);
-    fprintf(stderr,"minibox-printerd: raw9100 bytes=%zu rc=%d\\n",count,rc);
+    fprintf(stderr,"minibox-printerd: raw9100 bytes=%zu rc=%d\n",count,rc);
 }
 static int listen_tcp(int port){
     int s=socket(AF_INET,SOCK_STREAM,0),one=1;
@@ -226,7 +226,7 @@ int main(int argc,char**argv){
     raw=listen_tcp(rawport);
     if(raw<0){perror("raw9100 bind/listen");close(s);return 1;}
     signal(SIGINT,on_signal);signal(SIGTERM,on_signal);
-    fprintf(stderr,"minibox-printerd: listening IPP=%d RAW=%d\\n",port,rawport);
+    fprintf(stderr,"minibox-printerd: listening IPP=%d RAW=%d\n",port,rawport);
     while(!stop){
         fd_set rd;int c,ready,server;
         struct timeval tv={1,0};
