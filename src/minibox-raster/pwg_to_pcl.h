@@ -47,6 +47,8 @@ struct mb_pwg_pcl {
     unsigned pages;
     uint32_t gray_hist[256];
     uint32_t gray_samples;
+    uint64_t diag_black;
+    uint64_t diag_pixels;
     int failed;
     int job_started;
     void *image_ctx;
