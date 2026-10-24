@@ -370,8 +370,14 @@ static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
             s->width,b->rows_target,b->size,
             mb_millis()-b->started_ms);
     le32(emb+1,(uint32_t)b->size);
-    if(out(fn,ctx,emb,sizeof emb)||out(fn,ctx,b->data,(size_t)b->size)){
-        jpeg_block_free(s);return -1;
+    {
+        unsigned long long usb_started=mb_millis();
+        int write_rc=out(fn,ctx,emb,sizeof emb);
+        if(!write_rc)write_rc=out(fn,ctx,b->data,(size_t)b->size);
+        fprintf(stderr,
+                "minibox-pwg-hp: JPEG-output bytes=%lu write_ms=%llu rc=%d\n",
+                b->size,mb_millis()-usb_started,write_rc);
+        if(write_rc){jpeg_block_free(s);return -1;}
     }
     jpeg_block_free(s);
     return 0;
