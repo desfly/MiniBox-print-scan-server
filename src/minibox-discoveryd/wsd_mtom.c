@@ -25,7 +25,14 @@ int mb_wsd_mtom_attachment(const unsigned char *buf,size_t len,
         pos=(size_t)(m-buf);
         if(pos && (pos<2||buf[pos-2]!='\r'||buf[pos-1]!='\n')){at=pos+ml;continue;}
         p=m+ml;
-        if((size_t)(buf+len-p)>=2&&p[0]=='-'&&p[1]=='-')return found?0:-2;
+        if((size_t)(buf+len-p)>=2&&p[0]=='-'&&p[1]=='-'){
+            const unsigned char *tail=p+2;
+            /* A closing MIME delimiter must not accept arbitrary trailing
+             * garbage: otherwise malformed framing could hide print bytes. */
+            if((size_t)(buf+len-tail)>=2&&tail[0]=='\r'&&tail[1]=='\n')tail+=2;
+            if(tail!=buf+len)return -3;
+            return found?0:-2;
+        }
         if((size_t)(buf+len-p)<2||p[0]!='\r'||p[1]!='\n')return -3;
         p+=2;remain=(size_t)(buf+len-p);
         hdr_end=locate(p,remain,"\r\n\r\n",4);
