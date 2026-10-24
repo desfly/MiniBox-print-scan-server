@@ -53,6 +53,19 @@ def request(body, chunked=False):
     return response
 
 printer = attr(0x45, "printer-uri", "ipp://127.0.0.1:18631/ipp/print")
+# A Send-Document without Create-Job must not reach the print sink.
+# Cover both HTTP framing paths, and verify the IPP status (not just HTTP 200).
+before = SINK.read_bytes() if SINK.exists() else None
+for chunked in (False, True):
+    orphan = request(
+        ipp(0x0006, 99, printer + attr(0x49, "document-format", "image/pwg-raster"), b"SHOULD-NOT-PRINT"),
+        chunked=chunked,
+    )
+    assert b"200 OK" in orphan, orphan
+    ipp_body = orphan.split(b"\r\n\r\n", 1)[1]
+    assert ipp_body[:4] == b"\x02\x00\x04\x06", ipp_body[:12]
+    assert (SINK.read_bytes() if SINK.exists() else None) == before, "orphan document touched USB sink"
+
 create = request(ipp(0x0005, 101, printer))
 assert b"200 OK" in create, create
 assert b"job-id" in create, create
