@@ -34,5 +34,6 @@ int main(void){
     close(s);close(fd);
     assert(waitpid(pid,&status,0)==pid&&WIFEXITED(status)&&WEXITSTATUS(status)==0);
     assert(mb_wsd_raw_submit(raw,0,9100)!=0);
+    assert(mb_wsd_raw_submit(raw,sizeof raw,0)!=0);
     return 0;
 }
