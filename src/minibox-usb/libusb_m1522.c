@@ -1,6 +1,7 @@
 #include "libusb_m1522.h"
 #include "usb_backend.h"
 #include <string.h>
+#include <stdio.h>
 
 #define USB_CLASS_PRINTER 0x07
 #define USB_SUBCLASS_PRINTER 0x01
@@ -45,6 +46,47 @@ static int endpoints(libusb_device*d,struct m1522_handle*h)
     return best?0:-1;
 }
 
-int m1522_open(struct m1522_handle*h){if(!h)return-1;memset(h,0,sizeof *h);h->iface=-1;if(libusb_init(&h->ctx))return-2;h->dev=libusb_open_device_with_vid_pid(h->ctx,MINIBOX_HP_VID,MINIBOX_M1522_PID);if(!h->dev){m1522_close(h);return-3;}if(endpoints(libusb_get_device(h->dev),h)){m1522_close(h);return-4;}if(libusb_kernel_driver_active(h->dev,h->iface)==1)libusb_detach_kernel_driver(h->dev,h->iface);if(libusb_claim_interface(h->dev,h->iface)){m1522_close(h);return-5;}return 0;}
+int m1522_open(struct m1522_handle*h){
+    int r;
+    if(!h)return -1;
+    memset(h,0,sizeof *h);h->iface=-1;
+    r=libusb_init(&h->ctx);
+    if(r){fprintf(stderr,"minibox-usb: open stage=libusb-init error=%d\n",r);return -2;}
+    h->dev=libusb_open_device_with_vid_pid(h->ctx,MINIBOX_HP_VID,MINIBOX_M1522_PID);
+    if(!h->dev){
+        fprintf(stderr,"minibox-usb: open stage=device-not-present vid=%04x pid=%04x\n",
+                MINIBOX_HP_VID,MINIBOX_M1522_PID);
+        m1522_close(h);return -3;
+    }
+    if(endpoints(libusb_get_device(h->dev),h)){
+        fprintf(stderr,"minibox-usb: open stage=printer-endpoints-missing\n");
+        m1522_close(h);return -4;
+    }
+    r=libusb_kernel_driver_active(h->dev,h->iface);
+    if(r==1){
+        r=libusb_detach_kernel_driver(h->dev,h->iface);
+        if(r){
+            fprintf(stderr,"minibox-usb: open stage=detach-kernel iface=%d error=%d\n",h->iface,r);
+            m1522_close(h);return -6;
+        }
+    }else if(r<0&&r!=LIBUSB_ERROR_NOT_SUPPORTED){
+        fprintf(stderr,"minibox-usb: open stage=kernel-driver-status iface=%d error=%d\n",h->iface,r);
+        m1522_close(h);return -7;
+    }
+    r=libusb_claim_interface(h->dev,h->iface);
+    if(r){
+        fprintf(stderr,"minibox-usb: open stage=claim-interface iface=%d error=%d\n",h->iface,r);
+        m1522_close(h);return -5;
+    }
+    return 0;
+}
 void m1522_close(struct m1522_handle*h){if(!h)return;if(h->dev){if(h->iface>=0)libusb_release_interface(h->dev,h->iface);libusb_close(h->dev);}if(h->ctx)libusb_exit(h->ctx);memset(h,0,sizeof *h);h->iface=-1;}
-int m1522_bulk_write(struct m1522_handle*h,const unsigned char*b,int n,int t){int done=0;if(!h||!h->dev||!h->bulk_out||!b||n<0)return-1;int r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char*)b,n,&done,t);return r?-r:done;}
+int m1522_bulk_write(struct m1522_handle*h,const unsigned char*b,int n,int t){int done=0;if(!h||!h->dev||!h->bulk_out||!b||n<0)return-1;int r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char*)b,n,&done,t);/* libusb errors are negative. Keep them negative: the streaming layer
+ * must never mistake an error for a successfully written byte count. */
+/* A timed-out bulk transfer may still have transferred done bytes.
+ * Report that progress to the bounded stream writer, which advances exactly
+ * by the acknowledged byte count before sending the remaining suffix.
+ * Never retry the original whole buffer and duplicate the accepted prefix. */
+if(r==LIBUSB_ERROR_TIMEOUT && done>0)return done;
+if(r)return r;
+return done;}
