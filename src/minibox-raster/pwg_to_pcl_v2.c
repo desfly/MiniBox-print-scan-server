@@ -100,6 +100,7 @@ struct mb_jpeg_block {
     unsigned rows_written;
     int created;
     unsigned long long started_ms;
+    unsigned long long jpeg_cpu_ms;
 };
 
 /* Diagnostics only: never change HP PCL XL bytes based on these counters. */
@@ -349,7 +350,12 @@ static int jpeg_block_write_row(struct mb_pwg_pcl *s,const unsigned char *row){
     if(!b||b->rows_written>=b->rows_target)return -1;
     if(setjmp(b->err.jump))return -1;
     scan[0]=(JSAMPROW)row;
-    if(jpeg_write_scanlines(&b->cinfo,scan,1)!=1)return -1;
+    {
+        unsigned long long begun=mb_millis();
+        JDIMENSION written=jpeg_write_scanlines(&b->cinfo,scan,1);
+        b->jpeg_cpu_ms+=mb_millis()-begun;
+        if(written!=1)return -1;
+    }
     b->rows_written++;
     return 0;
 }
@@ -358,7 +364,11 @@ static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
     unsigned char emb[5]={0xfa,0,0,0,0};
     if(!b||b->rows_written!=b->rows_target)return -1;
     if(setjmp(b->err.jump)){jpeg_block_free(s);return -1;}
-    jpeg_finish_compress(&b->cinfo);
+    {
+        unsigned long long begun=mb_millis();
+        jpeg_finish_compress(&b->cinfo);
+        b->jpeg_cpu_ms+=mb_millis()-begun;
+    }
     if(!b->data||!b->size||b->size>0xffffffffUL){jpeg_block_free(s);return -1;}
     if(pxl_u16(fn,ctx,b->start_line,PXL_A_START_LINE)||
        pxl_u16(fn,ctx,b->rows_target,PXL_A_BLOCK_HEIGHT)||
@@ -366,9 +376,9 @@ static int jpeg_block_finish(struct mb_pwg_pcl *s,mb_pwg_write_fn fn,void *ctx){
         jpeg_block_free(s);return -1;
     }
     fprintf(stderr,
-            "minibox-pwg-hp: JPEG width=%u height=%u bytes=%lu encode_ms=%llu\n",
+            "minibox-pwg-hp: JPEG width=%u height=%u bytes=%lu encode_ms=%llu jpeg_cpu_ms=%llu\n",
             s->width,b->rows_target,b->size,
-            mb_millis()-b->started_ms);
+            mb_millis()-b->started_ms,b->jpeg_cpu_ms);
     le32(emb+1,(uint32_t)b->size);
     {
         unsigned long long usb_started=mb_millis();
