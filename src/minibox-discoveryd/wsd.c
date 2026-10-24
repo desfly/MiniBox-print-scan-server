@@ -53,6 +53,28 @@ int mb_wsd_extract_action(const char *xml,size_t len,char *out,size_t cap){
     env_len=(size_t)(env_end-env);
     return text_of(env,env_len,"Action",out,cap)?-3:0;
 }
+enum mb_wsd_http_action mb_wsd_http_action_kind(const char *action){
+    static const char *const print_ns="http://schemas.microsoft.com/windows/2006/08/wdp/print/";
+    static const char *const legacy_ns="http://schemas.microsoft.com/windows/2005/05/wdp/print/";
+    const char *suffix=0;
+    size_t n;
+    if(!action)return MB_WSD_HTTP_UNSUPPORTED;
+    if(!*action||
+       !strcmp(action,"http://schemas.xmlsoap.org/ws/2004/09/transfer/Get")||
+       !strcmp(action,"http://schemas.xmlsoap.org/ws/2004/09/mex/GetMetadata"))
+        return MB_WSD_HTTP_METADATA;
+    n=strlen(print_ns);
+    if(!strncmp(action,print_ns,n))suffix=action+n;
+    else {
+        n=strlen(legacy_ns);
+        if(!strncmp(action,legacy_ns,n))suffix=action+n;
+    }
+    if(!suffix)return MB_WSD_HTTP_UNSUPPORTED;
+    if(!strcmp(suffix,"GetPrinterElements"))return MB_WSD_HTTP_GET_PRINTER_ELEMENTS;
+    if(!strcmp(suffix,"CreatePrintJob"))return MB_WSD_HTTP_CREATE_PRINT_JOB;
+    if(!strcmp(suffix,"SendDocument"))return MB_WSD_HTTP_SEND_DOCUMENT;
+    return MB_WSD_HTTP_UNSUPPORTED;
+}
 int mb_wsd_extract_message_id(const char *xml,size_t len,char *out,size_t cap){
     const char *env,*env_end;size_t env_len;
     if(!xml||!out||!cap||!len||len>65535)return -1;
