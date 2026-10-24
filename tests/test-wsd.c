@@ -54,7 +54,7 @@ int main(void){
 
  assert(mb_wsd_parse(header_injection,strlen(header_injection),&r)<0);
  assert(mb_wsd_parse(outside_body,strlen(outside_body),&r)<0);
- assert(mb_wsd_parse(probe,strlen(probe),&r)==0);
+ assert(mb_wsd_parse(scan_probe,strlen(scan_probe),&r)==0);
  assert(mb_wsd_build_match(&r,endpoint,xaddr,response_id,1,1,out,64)<0);
  n=mb_wsd_build_metadata_response(r.message_id,endpoint,xaddr,response_id,
                                   "001122334455","http://192.168.55.250/",
