@@ -111,7 +111,8 @@ int mb_wsd_is_device_probe(const struct mb_wsd_request *r){
     return r&&r->kind==MB_WSD_PROBE&&qname_local_is(r->types,strlen(r->types),"Device");
 }
 int mb_wsd_probe_supported(const struct mb_wsd_request *r){
-    return mb_wsd_is_device_probe(r)||mb_wsd_is_print_probe(r)||mb_wsd_is_scan_probe(r);
+    /* WS-Print job submission is not implemented. Do not answer print-only probes. */
+    return mb_wsd_is_device_probe(r)||mb_wsd_is_scan_probe(r);
 }
 
 static int add(char *out,size_t cap,size_t *p,const char *s){
@@ -155,7 +156,6 @@ static int envelope_start(char *out,size_t cap,size_t *p){
       " xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\""
       " xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\""
       " xmlns:dp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\""
-      " xmlns:p=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\""
       " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\">");
 }
 static int header(char *out,size_t cap,size_t *p,const char *action,
@@ -180,7 +180,7 @@ static int match_body(char *out,size_t cap,size_t *p,const char *container,
             container,item)||
        xml_text(out,cap,p,endpoint)||
        add(out,cap,p,"</a:Address></a:EndpointReference>"
-                     "<d:Types>dp:Device p:PrintDeviceType scn:ScanDeviceType</d:Types>"
+                     "<d:Types>dp:Device scn:ScanDeviceType</d:Types>"
                      "<d:XAddrs>")||
        xml_text(out,cap,p,xaddr)||
        add(out,cap,p,"</d:XAddrs><d:MetadataVersion>1</d:MetadataVersion>")||
@@ -231,7 +231,6 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
       " xmlns:x=\"http://schemas.xmlsoap.org/ws/2004/09/mex\""
       " xmlns:dp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\""
       " xmlns:pnpx=\"http://schemas.microsoft.com/windows/pnpx/2005/10\""
-      " xmlns:p=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\""
       " xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\">"
       "<s:Header>"
       "<a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
@@ -268,14 +267,6 @@ int mb_wsd_build_metadata_response(const char *request_message_id,
        xml_text(out,cap,&p,endpoint)||
        add(out,cap,&p,
       "</dp:ServiceId></dp:Host>"
-      "<dp:Hosted><a:EndpointReference><a:Address>")||
-       xml_text(out,cap,&p,endpoint)||
-       add(out,cap,&p,
-      "#print</a:Address></a:EndpointReference>"
-      "<dp:Types>p:PrintDeviceType</dp:Types><dp:ServiceId>")||
-       xml_text(out,cap,&p,endpoint)||
-       add(out,cap,&p,
-      "#print</dp:ServiceId></dp:Hosted>"
       "<dp:Hosted><a:EndpointReference><a:Address>")||
        xml_text(out,cap,&p,endpoint)||
        add(out,cap,&p,
