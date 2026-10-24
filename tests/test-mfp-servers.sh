@@ -215,6 +215,20 @@ grep -q 'stage=image-read' /tmp/scand-read-fail.log
 code=$(curl -sS -D /tmp/read-job2.headers -o /tmp/read-job2.out -w '%{http_code}' -H 'Content-Type: text/xml' --data-binary @/tmp/scan.xml http://127.0.0.1:18082/eSCL/ScanJobs)
 [ "$code" = 201 ]
 grep -qi '^Location: /eSCL/ScanJobs/2' /tmp/read-job2.headers
+# A discovery/port probe with no print bytes must never open the USB device.
+# The test sink truncates its output on USB open, so retain the existing file
+# and check that an empty TCP session leaves it untouched.
+python3 - <<'PY'
+from pathlib import Path
+import socket
+p=Path('/tmp/printed.bin')
+before=p.read_bytes()
+with socket.create_connection(('127.0.0.1',19100),timeout=5):
+    pass
+import time
+time.sleep(.1)
+assert p.read_bytes()==before, 'Empty RAW probe unexpectedly claimed USB'
+PY
 # RAW TCP test: a Windows HP PCL6 job must reach USB unchanged.
 # The test server uses port 19100 to avoid privileged/default port 9100.
 python3 - <<'PY'
