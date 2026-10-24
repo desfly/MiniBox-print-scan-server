@@ -56,15 +56,21 @@ int main(void){
     /* Metadata must not impersonate successful print-job operations.
      * Until a real WSD print SOAP/MTOM endpoint is implemented and tested,
      * reject unknown actions instead of returning misleading GetResponse. */
-    if(action[0] &&
-       !strstr(action,"/GetPrinterElements") &&
-       strcmp(action,"http://schemas.xmlsoap.org/ws/2004/09/transfer/Get") &&
-       strcmp(action,"http://schemas.xmlsoap.org/ws/2004/09/mex/GetMetadata")){
-        fprintf(stderr,"minibox-wsd-cgi: unsupported WSD action: %s\n",action);
-        error_response("501 Not Implemented","WSD action not implemented\n");return 0;
+    {
+        enum mb_wsd_http_action kind=mb_wsd_http_action_kind(action);
+        if(kind==MB_WSD_HTTP_CREATE_PRINT_JOB || kind==MB_WSD_HTTP_SEND_DOCUMENT){
+            /* Do not acknowledge print jobs until the SOAP/MTOM payload
+             * and USB write are genuinely implemented and verified. */
+            fprintf(stderr,"minibox-wsd-cgi: WS-Print operation not yet available: %s\n",action);
+            error_response("501 Not Implemented","WS-Print operation not yet available\n");return 0;
+        }
+        if(kind==MB_WSD_HTTP_UNSUPPORTED){
+            fprintf(stderr,"minibox-wsd-cgi: unsupported WSD action: %s\n",action);
+            error_response("501 Not Implemented","WSD action not implemented\n");return 0;
+        }
     }
     response_id(reply_id,sizeof reply_id,id.serial);
-    if(strstr(action,"/GetPrinterElements")){
+    if(mb_wsd_http_action_kind(action)==MB_WSD_HTTP_GET_PRINTER_ELEMENTS){
         n=mb_wsd_build_get_printer_elements_response(request_id,reply_id,id.serial,out,sizeof out);
     } else {
         n=mb_wsd_build_metadata_response(request_id,id.endpoint,id.xaddr,reply_id,
