@@ -9,11 +9,18 @@
 static const unsigned char expected[] = "01234567";
 static unsigned char received[sizeof expected - 1];
 static int calls;
+static int mode;
 int libusb_bulk_transfer(libusb_device_handle *dev, unsigned char endpoint,
                          unsigned char *data, int length, int *transferred,
                          unsigned int timeout) {
     (void)dev; (void)timeout;
     assert(endpoint == 0x02);
+    if(mode==1){
+        /* Disconnect is not a timeout: partial progress must NOT mask it. */
+        *transferred=3;
+        calls++;
+        return LIBUSB_ERROR_NO_DEVICE;
+    }
     if (calls == 0) {
         assert(length == 8);
         assert(!memcmp(data, expected, 3));
@@ -41,5 +48,8 @@ int main(void) {
     assert(minibox_stream_write(sink,&h,expected,sizeof expected - 1,8,5000)==0);
     assert(calls==2);
     assert(!memcmp(received,expected,sizeof received));
+    mode=1;calls=0;
+    assert(minibox_stream_write(sink,&h,expected,sizeof expected - 1,8,5000)!=0);
+    assert(calls==1);
     return 0;
 }
