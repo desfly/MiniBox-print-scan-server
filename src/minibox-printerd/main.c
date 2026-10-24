@@ -195,16 +195,20 @@ static void serve_raw(int fd){
     print_session *ps=0;
     size_t count=0;
     int rc=0;
-    if(ps_open(&ps)){fprintf(stderr,"minibox-printerd: raw9100 usb-open-failed\n");return;}
     for(;;){
         ssize_t got=recv(fd,buf,sizeof buf,0);
         if(got==0)break;
         if(got<0){if(errno==EINTR)continue;rc=-1;break;}
         if(count>MAX_PRINT_JOB-(size_t)got){rc=-2;break;}
+        /* Do not claim USB for TCP discovery/probe sessions without data.
+         * Open only after receiving the first actual print payload. */
+        if(!ps){
+            if(ps_open(&ps)){rc=-4;break;}
+        }
         count+=(size_t)got;
         if(ps_write(ps,buf,(size_t)got)){rc=-3;break;}
     }
-    ps_close(ps);
+    if(ps)ps_close(ps);
     fprintf(stderr,"minibox-printerd: raw9100 bytes=%zu rc=%d\n",count,rc);
 }
 static int listen_tcp(int port){
