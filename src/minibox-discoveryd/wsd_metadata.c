@@ -53,6 +53,16 @@ int main(void){
     if(mb_wsd_get_identity(&id)){
         error_response("503 Service Unavailable","MiniBox network identity unavailable\n");return 0;
     }
+    /* Metadata must not impersonate successful print-job operations.
+     * Until a real WSD print SOAP/MTOM endpoint is implemented and tested,
+     * reject unknown actions instead of returning misleading GetResponse. */
+    if(action[0] &&
+       !strstr(action,"/GetPrinterElements") &&
+       strcmp(action,"http://schemas.xmlsoap.org/ws/2004/09/transfer/Get") &&
+       strcmp(action,"http://schemas.xmlsoap.org/ws/2004/09/mex/GetMetadata")){
+        fprintf(stderr,"minibox-wsd-cgi: unsupported WSD action: %s\n",action);
+        error_response("501 Not Implemented","WSD action not implemented\n");return 0;
+    }
     response_id(reply_id,sizeof reply_id,id.serial);
     if(strstr(action,"/GetPrinterElements")){
         n=mb_wsd_build_get_printer_elements_response(request_id,reply_id,id.serial,out,sizeof out);
