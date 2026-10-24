@@ -17,6 +17,14 @@ int mb_wsd_is_device_probe(const struct mb_wsd_request *r);
 int mb_wsd_probe_supported(const struct mb_wsd_request *r);
 int mb_wsd_extract_message_id(const char *xml,size_t len,char *out,size_t cap);
 int mb_wsd_extract_action(const char *xml,size_t len,char *out,size_t cap);
+enum mb_wsd_http_action {
+    MB_WSD_HTTP_UNSUPPORTED=0,
+    MB_WSD_HTTP_METADATA,
+    MB_WSD_HTTP_GET_PRINTER_ELEMENTS,
+    MB_WSD_HTTP_CREATE_PRINT_JOB,
+    MB_WSD_HTTP_SEND_DOCUMENT
+};
+enum mb_wsd_http_action mb_wsd_http_action_kind(const char *action);
 
 /*
  * Build one WS-Discovery ProbeMatches/ResolveMatches response.
