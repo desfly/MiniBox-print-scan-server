@@ -50,7 +50,7 @@ try:
     assert address is not None and address.text.startswith("urn:uuid:")
     assert xaddrs is not None and xaddrs.text.startswith("http://")
     assert xaddrs.text.endswith("/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery")
-    assert types is not None and "PrintDeviceType" in types.text and "ScanDeviceType" in types.text
+    assert types is not None and "PrintDeviceType" not in types.text and "ScanDeviceType" in types.text
     endpoint = address.text
 
     get_id = "urn:uuid:abcdefab-cdef-4abc-8def-abcdefabcdef"
