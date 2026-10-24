@@ -25,7 +25,7 @@ define Package/minibox-mfp/postinst
 if [ -z "${IPKG_INSTROOT}" ]; then
 	if [ -f /etc/config/uhttpd ]; then
 		stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
-		if ! uci -q get uhttpd.main.alias | grep -Fqx "$stable_alias"; then
+		if ! uci -q show uhttpd | grep -Fqx "$stable_alias"; then
 			uci add_list uhttpd.main.alias="$stable_alias"
 			uci commit uhttpd
 		fi
