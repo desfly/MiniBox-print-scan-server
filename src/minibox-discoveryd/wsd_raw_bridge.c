@@ -18,7 +18,10 @@ int mb_wsd_raw_submit(const unsigned char *data,size_t length,unsigned short por
     dst.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
     if(connect(fd,(struct sockaddr *)&dst,sizeof dst)<0){close(fd);return -3;}
     while(pos<length){
-        ssize_t written=send(fd,data+pos,length-pos,0);
+        /* Linux MSG_NOSIGNAL prevents a broken RAW receiver from killing
+         * the WSD CGI process with SIGPIPE. */
+        size_t remain=length-pos;
+        ssize_t written=send(fd,data+pos,remain>65536?65536:remain,MSG_NOSIGNAL);
         if(written<0&&errno==EINTR)continue;
         if(written<=0){close(fd);return -4;}
         pos+=(size_t)written;
