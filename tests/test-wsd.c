@@ -6,6 +6,13 @@
 static void contains(const char *s,const char *needle){assert(strstr(s,needle)!=0);}
 
 int main(void){
+ assert(mb_wsd_http_action_kind("http://schemas.microsoft.com/windows/2006/08/wdp/print/CreatePrintJob")==MB_WSD_HTTP_CREATE_PRINT_JOB);
+ assert(mb_wsd_http_action_kind("http://schemas.microsoft.com/windows/2006/08/wdp/print/SendDocument")==MB_WSD_HTTP_SEND_DOCUMENT);
+ assert(mb_wsd_http_action_kind("http://schemas.microsoft.com/windows/2006/08/wdp/print/GetPrinterElements")==MB_WSD_HTTP_GET_PRINTER_ELEMENTS);
+ assert(mb_wsd_http_action_kind("http://schemas.xmlsoap.org/ws/2004/09/transfer/Get")==MB_WSD_HTTP_METADATA);
+ assert(mb_wsd_http_action_kind("http://schemas.microsoft.com/windows/2006/08/wdp/print/CreatePrintJobFake")==MB_WSD_HTTP_UNSUPPORTED);
+ assert(mb_wsd_http_action_kind("http://attacker.example/SendDocument")==MB_WSD_HTTP_UNSUPPORTED);
+
  const char *probe="<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:p=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\"><s:Header><a:MessageID>urn:uuid:01234567-89ab-cdef-0123-456789abcdef</a:MessageID></s:Header><s:Body><d:Probe><d:Types>x:Other p:PrintDeviceType</d:Types></d:Probe></s:Body></s:Envelope>";
  const char *scan_probe="<s:Envelope><s:Header><a:MessageID>urn:uuid:77777777-2222-3333-4444-555555555555</a:MessageID></s:Header><s:Body><d:Probe><d:Types>scn:ScanDeviceType</d:Types></d:Probe></s:Body></s:Envelope>";
  const char *device_probe="<s:Envelope><s:Header><a:MessageID>urn:uuid:88888888-2222-3333-4444-555555555555</a:MessageID></s:Header><s:Body><d:Probe><d:Types>dp:Device</d:Types></d:Probe></s:Body></s:Envelope>";
