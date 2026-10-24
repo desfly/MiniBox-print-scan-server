@@ -28,9 +28,11 @@ int main(void){
  assert(mb_wsd_extract_message_id(probe,strlen(probe),message_id,sizeof message_id)==0);
  assert(!strcmp(message_id,"urn:uuid:01234567-89ab-cdef-0123-456789abcdef"));
  assert(mb_wsd_parse(probe,strlen(probe),&r)==0);
- assert(r.kind==MB_WSD_PROBE&&mb_wsd_is_print_probe(&r)&&mb_wsd_probe_supported(&r));
+ assert(r.kind==MB_WSD_PROBE&&mb_wsd_is_print_probe(&r)&&!mb_wsd_probe_supported(&r));
+ n=mb_wsd_build_match(&r,endpoint,xaddr,response_id,1,2,out,sizeof out);assert(n==0);
+ assert(mb_wsd_parse(scan_probe,strlen(scan_probe),&r)==0);
  n=mb_wsd_build_match(&r,endpoint,xaddr,response_id,1,2,out,sizeof out);assert(n>0);
- contains(out,"/ProbeMatches");contains(out,"p:PrintDeviceType");contains(out,"scn:ScanDeviceType"); contains(out,"xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\""); assert(strstr(out,"windows/2006/08/wdp/scan")==0);
+ contains(out,"/ProbeMatches");assert(strstr(out,"p:PrintDeviceType")==0);contains(out,"scn:ScanDeviceType"); contains(out,"xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\""); assert(strstr(out,"windows/2006/08/wdp/scan")==0);
  contains(out,r.message_id);contains(out,endpoint);contains(out,xaddr);contains(out,"MetadataVersion>1");
 
  assert(mb_wsd_parse(scan_probe,strlen(scan_probe),&r)==0);
@@ -65,9 +67,8 @@ int main(void){
  contains(out,"http://192.168.55.250/");
  contains(out,endpoint);
  contains(out,"<dp:Types>dp:Device</dp:Types>");
- contains(out,"<dp:Hosted><a:EndpointReference><a:Address>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#print</a:Address>");
- contains(out,"<dp:Types>p:PrintDeviceType</dp:Types>");
- contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#print</dp:ServiceId>");
+ assert(strstr(out,"#print")==0);
+ assert(strstr(out,"p:PrintDeviceType")==0);
  contains(out,"<dp:Hosted><a:EndpointReference><a:Address>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</a:Address>");
  contains(out,"<dp:Types>scn:ScanDeviceType</dp:Types>"); contains(out,"xmlns:scn=\"http://schemas.microsoft.com/windows/2006/01/wdp/scan\""); assert(strstr(out,"windows/2006/08/wdp/scan")==0);
  contains(out,"<dp:ServiceId>urn:uuid:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee#scan</dp:ServiceId>");
