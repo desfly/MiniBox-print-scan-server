@@ -49,8 +49,21 @@ int mb_wsd_mtom_attachment(const unsigned char *buf,size_t len,
         {
             char delim[164];size_t dl;
             snprintf(delim,sizeof delim,"\r\n--%s",boundary);dl=strlen(delim);
-            next=locate(p,(size_t)(buf+len-p),delim,dl);
-            if(!next)return -3;
+            next=p;
+            for(;;){
+                const unsigned char *candidate=locate(next,(size_t)(buf+len-next),delim,dl);
+                const unsigned char *after;
+                if(!candidate)return -3;
+                after=candidate+dl;
+                /* A boundary is valid only when followed by CRLF or "--".
+                 * Similar bytes inside a binary PCL XL payload are data. */
+                if((size_t)(buf+len-after)>=2 &&
+                   ((after[0]=='\r'&&after[1]=='\n')||
+                    (after[0]=='-'&&after[1]=='-'))){
+                    next=candidate;break;
+                }
+                next=candidate+dl;
+            }
             if(found)return -4;
             *out=p;*out_len=(size_t)(next-p);found=1;
             at=(size_t)(next-buf)+2;
