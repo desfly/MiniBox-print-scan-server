@@ -3,7 +3,7 @@
 stable_alias='/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery=/cgi-bin/minibox-wsd'
 
 if [ -f /etc/config/uhttpd ]; then
-	if ! uci -q show uhttpd 2>/dev/null | grep -Fqx "$stable_alias"; then
+	if ! uci -q show uhttpd 2>/dev/null | grep -Fq "=${stable_alias}"; then
 		uci add_list uhttpd.main.alias="$stable_alias"
 		uci commit uhttpd
 	fi
