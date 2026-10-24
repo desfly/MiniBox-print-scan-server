@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+cc -std=c99 -Wall -Wextra -Werror -pedantic tests/test-wsd-mtom.c src/minibox-discoveryd/wsd_mtom.c -o /tmp/test-wsd-mtom
+/tmp/test-wsd-mtom
 cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_PRINT_SINK src/minibox-printerd/main.c src/minibox-printerd/http_body.c src/minibox-ipp/ipp.c src/minibox-raster/pwg_to_pcl_v2.c src/minibox-usb/m1522_presence.c -ljpeg -o /tmp/minibox-printerd
 cc -std=c99 -Wall -Wextra -Werror -pedantic -DMINIBOX_TEST_SCAN_BACKEND src/minibox-scand/main.c src/minibox-scand/scan_session.c src/minibox-scand/scan_backend.c src/minibox-escl/escl.c src/minibox-discoveryd/wsd_identity.c src/minibox-printerd/http_body.c src/minibox-usb/m1522_presence.c -o /tmp/minibox-scand
 USBROOT=$(mktemp -d)
