@@ -203,22 +203,33 @@ static void serve_raw(int fd){
     unsigned char buf[IO_CHUNK];
     print_session *ps=0;
     size_t count=0;
+    unsigned long long began=mono_ms(), usb_opened=0;
     int rc=0;
     for(;;){
         ssize_t got=recv(fd,buf,sizeof buf,0);
         if(got==0)break;
-        if(got<0){if(errno==EINTR)continue;rc=-1;break;}
+        if(got<0){
+            if(errno==EINTR)continue;
+            rc=-1;
+            fprintf(stderr,"minibox-printerd: raw9100 tcp-read-error errno=%d bytes=%zu elapsed_ms=%llu\n",
+                    errno,count,mono_ms()-began);
+            break;
+        }
         if(count>MAX_PRINT_JOB-(size_t)got){rc=-2;break;}
-        /* Do not claim USB for TCP discovery/probe sessions without data.
-         * Open only after receiving the first actual print payload. */
+        /* RAW is byte-for-byte HP PCL6 passthrough. Open USB only after
+         * data arrives; never interpret or re-encode the payload. */
         if(!ps){
             if(ps_open(&ps)){rc=-4;break;}
+            usb_opened=mono_ms();
         }
         count+=(size_t)got;
         if(ps_write(ps,buf,(size_t)got)){rc=-3;break;}
     }
     if(ps)ps_close(ps);
-    fprintf(stderr,"minibox-printerd: raw9100 bytes=%zu rc=%d\n",count,rc);
+    fprintf(stderr,"minibox-printerd: raw9100 bytes=%zu rc=%d elapsed_ms=%llu usb_phase_ms=%llu\n",
+            count,rc,mono_ms()-began,usb_opened?mono_ms()-usb_opened:0ULL);
+    /* Failure is logged, not silently requeued: the TCP sender decides
+     * whether to retry. Do not replay partially accepted PCL XL bytes. */
 }
 static int listen_tcp(int port){
     int s=socket(AF_INET,SOCK_STREAM,0),one=1;
