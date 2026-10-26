@@ -240,7 +240,10 @@ int main(int argc,char**argv){
         if(!ready)continue;
         /* Only one USB client at a time, including IPP PWG encoding. */
         server=FD_ISSET(s,&rd)?s:raw;
-        c=accept(server,NULL,NULL);
+        struct sockaddr_in peer; socklen_t peer_len=sizeof peer;
+        memset(&peer,0,sizeof peer);
+        c=accept(server,(struct sockaddr *)&peer,&peer_len);
+        if(c>=0)fprintf(stderr,"minibox-printerd: client peer=%s:%u protocol=%s accepted_ms=%llu\n",inet_ntoa(peer.sin_addr),(unsigned)ntohs(peer.sin_port),server==raw?"RAW9100":"IPP",mono_ms());
         if(c<0){if(errno==EINTR)continue;perror("accept");break;}
         struct timeval io_tv={CLIENT_TIMEOUT_SEC,0};
         (void)setsockopt(c,SOL_SOCKET,SO_RCVTIMEO,&io_tv,sizeof io_tv);
