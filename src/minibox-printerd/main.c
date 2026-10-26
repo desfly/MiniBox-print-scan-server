@@ -64,7 +64,14 @@ static void ps_close(print_session*s){
     m1522_print_close(s);
 }
 #endif
-static int pwg_write(void *ctx,const unsigned char *buf,size_t len){return ps_write((print_session*)ctx,buf,len);}
+/* Requests are serialized by the event loop. Record USB sink failure separately
+ * from malformed PWG input so IPP reports a server/device error accurately. */
+static int pwg_sink_failed;
+static int pwg_write(void *ctx,const unsigned char *buf,size_t len){
+    int rc=ps_write((print_session*)ctx,buf,len);
+    if(rc)pwg_sink_failed=1;
+    return rc;
+}
 static void ipp_reply(int fd,const struct ipp_request*r,uint16_t status){unsigned char out[256];size_t n=ipp_build_status(out,sizeof out,r,status);if(!n){reply_text(fd,500,"Internal Server Error","IPP response build failed\n");return;}reply_data(fd,200,"OK","application/ipp",out,n);}
 static void ipp_attributes_reply(int fd,const struct ipp_request*r){unsigned char out[2048];char host[64]="minibox",uri[128];size_t n;if(gethostname(host,sizeof host-1)!=0||!host[0])strcpy(host,"minibox");host[sizeof host-1]=0;if(snprintf(uri,sizeof uri,"ipp://%s.local/ipp/print",host)>=(int)sizeof uri){ipp_reply(fd,r,0x0500);return;}n=ipp_build_printer_attributes(out,sizeof out,r,uri,minibox_m1522_present());if(!n){ipp_reply(fd,r,0x0500);return;}reply_data(fd,200,"OK","application/ipp",out,n);}
 static void ipp_job_reply(int fd,const struct ipp_request*r,uint32_t id,uint32_t state){
@@ -93,7 +100,7 @@ if(have>off){
     for(i=0;i<sn;i++)fprintf(stderr,"%02X",(unsigned)body[off+i]);
     fprintf(stderr,"\n");
 }
-if(ps_open(&ps)){ipp_reply(fd,&r,0x0507);return;}consumed=have;remain=total-consumed;if(format==IPP_DOCUMENT_PWG_RASTER){struct mb_pwg_pcl cv;int prc=0;mb_pwg_pcl_init(&cv);if(have>off)prc=mb_pwg_pcl_feed(&cv,body+off,have-off,pwg_write,ps);while(!prc&&remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){mb_pwg_pcl_reset(&cv);ps_close(ps);reply_text(fd,400,"Bad Request","truncated PWG Raster document\n");return;}prc=mb_pwg_pcl_feed(&cv,io,(size_t)n,pwg_write,ps);remain-=(size_t)n;}if(!prc)prc=mb_pwg_pcl_finish(&cv,pwg_write,ps);if(prc)fprintf(stderr,"minibox-printerd: stage=pwg-raster rc=%d\n",prc);mb_pwg_pcl_reset(&cv);if(prc){ps_close(ps);ipp_reply(fd,&r,0x0400);return;}}else{if(have>off&&ps_write(ps,body+off,have-off)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}while(remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){ps_close(ps);reply_text(fd,400,"Bad Request","truncated print document\n");return;}if(ps_write(ps,io,(size_t)n)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}remain-=(size_t)n;}}ps_close(ps);if(r.operation==IPP_OP_SEND_DOCUMENT){if(!active_job_id){ipp_reply(fd,&r,0x0406);return;}active_job_state=9;ipp_job_reply(fd,&r,active_job_id,active_job_state);}else{uint32_t id=alloc_job_id();active_job_id=id;active_job_state=9;ipp_job_reply(fd,&r,id,active_job_state);}}
+if(ps_open(&ps)){ipp_reply(fd,&r,0x0507);return;}consumed=have;remain=total-consumed;if(format==IPP_DOCUMENT_PWG_RASTER){struct mb_pwg_pcl cv;int prc=0;pwg_sink_failed=0;mb_pwg_pcl_init(&cv);if(have>off)prc=mb_pwg_pcl_feed(&cv,body+off,have-off,pwg_write,ps);while(!prc&&remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){mb_pwg_pcl_reset(&cv);ps_close(ps);reply_text(fd,400,"Bad Request","truncated PWG Raster document\n");return;}prc=mb_pwg_pcl_feed(&cv,io,(size_t)n,pwg_write,ps);remain-=(size_t)n;}if(!prc)prc=mb_pwg_pcl_finish(&cv,pwg_write,ps);if(prc)fprintf(stderr,"minibox-printerd: stage=pwg-raster rc=%d\n",prc);mb_pwg_pcl_reset(&cv);if(prc){int sink_failed=pwg_sink_failed;ps_close(ps);fprintf(stderr,"minibox-printerd: stage=pwg-error kind=%s rc=%d\n",sink_failed?"usb-io":"pwg-parse-or-encode",prc);ipp_reply(fd,&r,sink_failed?0x0507:0x0400);return;}}else{if(have>off&&ps_write(ps,body+off,have-off)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}while(remain){size_t want=remain>sizeof io?sizeof io:remain;ssize_t n=minibox_recv_retry(fd,io,want);if(n<=0){ps_close(ps);reply_text(fd,400,"Bad Request","truncated print document\n");return;}if(ps_write(ps,io,(size_t)n)){ps_close(ps);ipp_reply(fd,&r,0x0507);return;}remain-=(size_t)n;}}ps_close(ps);if(r.operation==IPP_OP_SEND_DOCUMENT){if(!active_job_id){ipp_reply(fd,&r,0x0406);return;}active_job_state=9;ipp_job_reply(fd,&r,active_job_id,active_job_state);}else{uint32_t id=alloc_job_id();active_job_id=id;active_job_state=9;ipp_job_reply(fd,&r,id,active_job_state);}}
 static ssize_t chunk_read_limited(struct minibox_chunk_reader *r,unsigned char *buf,size_t cap,size_t *total){
     ssize_t n=minibox_chunk_read(r,buf,cap);
     if(n<=0)return n;
@@ -153,6 +160,7 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
     opened_ms=mono_ms();
     if(format==IPP_DOCUMENT_PWG_RASTER){
         struct mb_pwg_pcl cv;int prc=0;
+        pwg_sink_failed=0;
         mb_pwg_pcl_init(&cv);
         if(have>off)prc=mb_pwg_pcl_feed(&cv,prefix+off,have-off,pwg_write,ps);
         while(!prc){
@@ -167,7 +175,7 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
                 "minibox-printerd: stage=pwg-chunked-finish rc=%d pages=%u input_bytes=%zu elapsed_ms=%llu usb_open_ms=%llu\n",
                 prc,cv.pages,total-off,mono_ms()-started_ms,opened_ms-started_ms);
         mb_pwg_pcl_reset(&cv);
-        if(prc){ps_close(ps);ipp_reply(fd,&r,0x0400);return;}
+        if(prc){int sink_failed=pwg_sink_failed;ps_close(ps);fprintf(stderr,"minibox-printerd: stage=pwg-error kind=%s rc=%d\n",sink_failed?"usb-io":"pwg-parse-or-encode",prc);ipp_reply(fd,&r,sink_failed?0x0507:0x0400);return;}
     }else{
         if(have>off&&ps_write(ps,prefix+off,have-off)){
             ps_close(ps);ipp_reply(fd,&r,0x0507);return;
