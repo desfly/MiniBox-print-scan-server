@@ -46,7 +46,7 @@ int main(void){
     if(!method||strcmp(method,"POST")){
         error_response("405 Method Not Allowed","WSD metadata requires HTTP POST\n");return 0;
     }
-    if(read_body(body,sizeof body,&body_len)){
+    if(read_body(body,BODY_MAX,&body_len)){
         error_response("400 Bad Request","Invalid WSD metadata request\n");return 0;
     }
     if(mb_wsd_extract_message_id(body,body_len,request_id,sizeof request_id)){
