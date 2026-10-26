@@ -85,6 +85,9 @@ define Build/Compile
 		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd.c
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-wsd-cgi \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_metadata.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_print.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_mtom.c \
+		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_raw_bridge.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd_identity.c \
 		$(PKG_BUILD_DIR)/minibox-discoveryd/wsd.c
 	$(MB_CC) -o $(PKG_BUILD_DIR)/bin/minibox-scan-diag \
