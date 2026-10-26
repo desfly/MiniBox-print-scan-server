@@ -33,7 +33,9 @@ int m1522_print_write(struct m1522_print_session *s,const unsigned char *buf,siz
 if(len>SIZE_MAX-s->requested_bytes)return -2;
 s->requested_bytes+=len;
 s->submitted_hash=m1522_hash_bytes(s->submitted_hash,buf,len);
-return minibox_print_document(m1522_sink,s,buf,len,16384,5000);}
+/* Printer back-pressure exceeded 5s in the observed USB trace. Keep
+ * a bounded wait; the stream layer advances only by reported progress. */
+return minibox_print_document(m1522_sink,s,buf,len,16384,30000);}
 void m1522_print_close(struct m1522_print_session *s){if(!s)return;if(s->opened){
     fprintf(stderr,"minibox-usb: requested_bytes=%zu bulk_out_bytes=%zu calls=%u first_error=%d complete=%s\n",
             s->requested_bytes,s->usb_bytes,s->usb_calls,s->first_error,
