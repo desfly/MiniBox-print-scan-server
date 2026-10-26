@@ -36,6 +36,7 @@ static int endpoints(libusb_device*d,struct m1522_handle*h)
             rank=m1522_printer_interface_rank(x->bInterfaceClass,x->bInterfaceSubClass,x->bInterfaceProtocol,bo);
             if(rank>best){
                 h->iface=x->bInterfaceNumber;
+                h->altsetting=x->bAlternateSetting;
                 h->bulk_out=bo;
                 h->bulk_in=bi;
                 best=rank;
@@ -78,9 +79,22 @@ int m1522_open(struct m1522_handle*h){
         fprintf(stderr,"minibox-usb: open stage=claim-interface iface=%d error=%d\n",h->iface,r);
         m1522_close(h);return -5;
     }
+    h->claimed=1;
+    /* Endpoints from a non-default alternate setting are unusable until
+     * that setting is selected on the claimed interface. */
+    if(h->altsetting!=0){
+        r=libusb_set_interface_alt_setting(h->dev,h->iface,h->altsetting);
+        if(r){
+            fprintf(stderr,"minibox-usb: open stage=set-alt iface=%d alt=%d error=%d\n",
+                    h->iface,h->altsetting,r);
+            m1522_close(h);return -8;
+        }
+    }
+    fprintf(stderr,"minibox-usb: selected iface=%d alt=%d bulk_out=0x%02x bulk_in=0x%02x\n",
+            h->iface,h->altsetting,h->bulk_out,h->bulk_in);
     return 0;
 }
-void m1522_close(struct m1522_handle*h){if(!h)return;if(h->dev){if(h->iface>=0)libusb_release_interface(h->dev,h->iface);libusb_close(h->dev);}if(h->ctx)libusb_exit(h->ctx);memset(h,0,sizeof *h);h->iface=-1;}
+void m1522_close(struct m1522_handle*h){if(!h)return;if(h->dev){if(h->claimed)libusb_release_interface(h->dev,h->iface);libusb_close(h->dev);}if(h->ctx)libusb_exit(h->ctx);memset(h,0,sizeof *h);h->iface=-1;}
 int m1522_bulk_write(struct m1522_handle*h,const unsigned char*b,int n,int t){int done=0;if(!h||!h->dev||!h->bulk_out||!b||n<0)return-1;int r=libusb_bulk_transfer(h->dev,h->bulk_out,(unsigned char*)b,n,&done,t);/* libusb errors are negative. Keep them negative: the streaming layer
  * must never mistake an error for a successfully written byte count. */
 /* A timed-out bulk transfer may still have transferred done bytes.
