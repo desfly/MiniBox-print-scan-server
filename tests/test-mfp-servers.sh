@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-discoveryd/wsd_metadata.c src/minibox-discoveryd/wsd_print.c src/minibox-discoveryd/wsd_mtom.c src/minibox-discoveryd/wsd_raw_bridge.c src/minibox-discoveryd/wsd_identity.c src/minibox-discoveryd/wsd.c -o /tmp/minibox-wsd-cgi
 cc -std=c99 -Wall -Wextra -Werror -pedantic tests/test-wsd-mtom.c src/minibox-discoveryd/wsd_mtom.c -o /tmp/test-wsd-mtom
 cc -std=c99 -Wall -Wextra -Werror -pedantic tests/test-wsd-raw-bridge.c src/minibox-discoveryd/wsd_raw_bridge.c -o /tmp/test-wsd-raw-bridge
 /tmp/test-wsd-raw-bridge
