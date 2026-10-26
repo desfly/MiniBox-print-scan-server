@@ -15,6 +15,12 @@ int libusb_bulk_transfer(libusb_device_handle *dev, unsigned char endpoint,
                          unsigned int timeout) {
     (void)dev; (void)timeout;
     assert(endpoint == 0x02);
+    if(mode==2){
+        /* A zero-progress timeout must terminate this write; do not replay. */
+        *transferred=0;
+        calls++;
+        return LIBUSB_ERROR_TIMEOUT;
+    }
     if(mode==1){
         /* Disconnect is not a timeout: partial progress must NOT mask it. */
         *transferred=3;
@@ -49,6 +55,9 @@ int main(void) {
     assert(calls==2);
     assert(!memcmp(received,expected,sizeof received));
     mode=1;calls=0;
+    assert(minibox_stream_write(sink,&h,expected,sizeof expected - 1,8,5000)!=0);
+    assert(calls==1);
+    mode=2;calls=0;
     assert(minibox_stream_write(sink,&h,expected,sizeof expected - 1,8,5000)!=0);
     assert(calls==1);
     return 0;
