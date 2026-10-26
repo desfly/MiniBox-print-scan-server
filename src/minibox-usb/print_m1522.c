@@ -1,8 +1,13 @@
+#define _POSIX_C_SOURCE 200809L
 #include "print_m1522.h"
 #include "../minibox-ipp/print_job.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <time.h>
+#include <libusb-1.0/libusb.h>
+static unsigned long long print_clock_ms(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))return 0;return (unsigned long long)t.tv_sec*1000ULL+(unsigned long long)t.tv_nsec/1000000ULL;}
+
 
 /* FNV-1a diagnostics only: no buffering, no change to USB payload. */
 #define M1522_FNV_OFFSET UINT64_C(14695981039346656037)
@@ -13,7 +18,11 @@ static uint64_t m1522_hash_bytes(uint64_t hash,const unsigned char *buf,size_t l
 }
 static int m1522_sink(void *ctx,const unsigned char *buf,int len,int timeout_ms){
     struct m1522_print_session *s=ctx;
+    unsigned long long begun=print_clock_ms();
     int n=m1522_bulk_write(&s->usb,buf,len,timeout_ms);
+    unsigned long long elapsed=print_clock_ms()-begun;
+    if(n<0)fprintf(stderr,"minibox-usb: bulk error=%d (%s) request=%d timeout_ms=%d elapsed_ms=%llu accepted_total=%zu\n",n,libusb_error_name(n),len,timeout_ms,elapsed,s->usb_bytes);
+    else if(elapsed>=1000)fprintf(stderr,"minibox-usb: bulk slow request=%d returned=%d elapsed_ms=%llu accepted_total=%zu\n",len,n,elapsed,s->usb_bytes);
     s->usb_calls++;
     if(n>0){s->usb_bytes+=(size_t)n;s->accepted_hash=m1522_hash_bytes(s->accepted_hash,buf,(size_t)n);}
     else if(!s->first_error) s->first_error=n?n:-1;
