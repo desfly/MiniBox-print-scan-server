@@ -34,6 +34,9 @@ $CC -std=c11 -Wall -Wextra -Werror -pedantic -Isrc/minibox-discoveryd \
   src/minibox-discoveryd/wsd_metadata.c \
   src/minibox-discoveryd/wsd_identity.c \
   src/minibox-discoveryd/wsd.c \
+  src/minibox-discoveryd/wsd_print.c \
+  src/minibox-discoveryd/wsd_mtom.c \
+  src/minibox-discoveryd/wsd_raw_bridge.c \
   -o "$TMP/minibox-wsd-cgi"
 
 grep -q 'minibox-wsdd' package/minibox-mfp/Makefile
