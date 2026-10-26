@@ -39,7 +39,8 @@ static int boundary_of(const char *ct,char *out,size_t cap){
     p=strstr(ct,"boundary=");if(!p)return -1;p+=9;
     if(*p=='"'){p++;e=strchr(p,'"');}
     else{e=p;while(*e&&*e!=';'&&*e!=' '&&*e!='\r')e++;}
-    if(!e)return -1;n=(size_t)(e-p);
+    if(!e)return -1;
+    n=(size_t)(e-p);
     if(!n||n>=cap)return -1;
     memcpy(out,p,n);out[n]=0;return 0;
 }
