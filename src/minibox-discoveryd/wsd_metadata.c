@@ -1,6 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 #include "wsd.h"
 #include "wsd_identity.h"
+#include "wsd_mtom.h"
+#include "wsd_raw_bridge.h"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <stdint.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define BODY_MAX 8192
+#define BODY_MAX (8*1024*1024)
 #define RESPONSE_MAX 8192
 
 static void error_response(const char *status,const char *text){
@@ -35,8 +40,9 @@ static void response_id(char *out,size_t cap,const char *serial){
     (void)serial;
 }
 int main(void){
-    char body[BODY_MAX],out[RESPONSE_MAX],request_id[192],reply_id[96],action[256];
+    char *body=malloc(BODY_MAX),out[RESPONSE_MAX],request_id[192],reply_id[96],action[256];
     size_t body_len;int n;struct mb_wsd_identity id;const char *method=getenv("REQUEST_METHOD");
+    if(!body){error_response("503 Service Unavailable","Insufficient memory\n");return 0;}
     if(!method||strcmp(method,"POST")){
         error_response("405 Method Not Allowed","WSD metadata requires HTTP POST\n");return 0;
     }
@@ -53,23 +59,21 @@ int main(void){
     if(mb_wsd_get_identity(&id)){
         error_response("503 Service Unavailable","MiniBox network identity unavailable\n");return 0;
     }
-    /* Metadata must not impersonate successful print-job operations.
-     * Until a real WSD print SOAP/MTOM endpoint is implemented and tested,
-     * reject unknown actions instead of returning misleading GetResponse. */
+    response_id(reply_id,sizeof reply_id,id.serial);
+    /* WSD Print operations share the same CGI endpoint advertised by WSD. */
     {
         enum mb_wsd_http_action kind=mb_wsd_http_action_kind(action);
-        if(kind==MB_WSD_HTTP_CREATE_PRINT_JOB || kind==MB_WSD_HTTP_SEND_DOCUMENT){
-            /* Do not acknowledge print jobs until the SOAP/MTOM payload
-             * and USB write are genuinely implemented and verified. */
-            fprintf(stderr,"minibox-wsd-cgi: WS-Print operation not yet available: %s\n",action);
-            error_response("501 Not Implemented","WS-Print operation not yet available\n");return 0;
+        if(kind==MB_WSD_HTTP_CREATE_PRINT_JOB||kind==MB_WSD_HTTP_SEND_DOCUMENT){
+            extern int mb_wsd_print_operation(enum mb_wsd_http_action,
+                const unsigned char *,size_t,const char *,const char *,const char *);
+            return mb_wsd_print_operation(kind,(const unsigned char *)body,body_len,
+                     getenv("CONTENT_TYPE"),request_id,reply_id);
         }
         if(kind==MB_WSD_HTTP_UNSUPPORTED){
             fprintf(stderr,"minibox-wsd-cgi: unsupported WSD action: %s\n",action);
             error_response("501 Not Implemented","WSD action not implemented\n");return 0;
         }
     }
-    response_id(reply_id,sizeof reply_id,id.serial);
     if(mb_wsd_http_action_kind(action)==MB_WSD_HTTP_GET_PRINTER_ELEMENTS){
         n=mb_wsd_build_get_printer_elements_response(request_id,reply_id,id.serial,out,sizeof out);
     } else {
