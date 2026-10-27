@@ -29,35 +29,36 @@ static int contains(const unsigned char *b,size_t n,const char *text){
     return 0;
 }
 int main(void){
-    mb_service_t svc[2];
+    mb_service_t svc[3];
     unsigned char q[512],a[1500],ip[4]={192,168,55,250};
     size_t n;int len;
     assert(!mb_service_load("overlay/etc/minibox/services.d/ipp-printer.service",&svc[0]));
     assert(!mb_service_load("overlay/etc/minibox/services.d/scanner.service",&svc[1]));
+    assert(!mb_service_load("overlay/etc/minibox/services.d/ipp-print-subtype.service",&svc[2]));
     n=query(q,"_ipp._tcp.local",12,1);
-    len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
+    len=mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a);
     assert(len>0&&a[2]==0x84&&a[7]==4);
     assert(contains(a,(size_t)len,"HP LaserJet M1522n"));
     assert(memcmp(a+len-4,ip,4)==0); /* IPP target A record */
     n=query(q,"_print._sub._ipp._tcp.local",12,1);
-    len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
+    len=mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a);
     assert(len>0&&a[7]==4&&contains(a,(size_t)len,"M1522n NET"));
     n=query(q,"_uscan._tcp.local",12,1);
-    len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
+    len=mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a);
     assert(len>0&&a[7]==4&&contains(a,(size_t)len,"HP LaserJet M1522n"));
     n=query(q,"OpenWrt.local",1,1);
-    len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
+    len=mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a);
     assert(len>0&&memcmp(a+len-4,ip,4)==0);
     n=query(q,"unknown._tcp.local",12,1);
-    assert(mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a)==0);
+    assert(mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a)==0);
     n=query(q,"_ipp._tcp.local",12,1);
     q[n-1]=0; /* class becomes 0 (unsupported), no answer */
     q[n-2]=0;
-    assert(mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a)==0);
+    assert(mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a)==0);
     n=query(q,"_ipp._tcp.local",12,1);
-    assert(mb_mdns_build_reply(q,n-1,svc,2,"OpenWrt",ip,a,sizeof a)<0);
+    assert(mb_mdns_build_reply(q,n-1,svc,3,"OpenWrt",ip,a,sizeof a)<0);
     q[12]=0xc0;q[13]=0xff; /* out-of-bounds compression pointer */
-    assert(mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a)<0);
+    assert(mb_mdns_build_reply(q,n,svc,3,"OpenWrt",ip,a,sizeof a)<0);
     puts("mDNS DNS-SD query/response contract OK");
     return 0;
 }
