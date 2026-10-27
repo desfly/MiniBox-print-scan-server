@@ -94,8 +94,8 @@ static int stream_document(int f){
   }
   memcpy(image+image_len,buf,got);image_len+=got;
  }
- if(image_len<2||image[0]!=0xff||image[1]!=0xd8){
-  fprintf(stderr,"minibox-scand: scan job=%u stage=invalid-image bytes=%zu\n",scan.id,image_len);
+ if(image_len<4||image[0]!=0xff||image[1]!=0xd8||image[image_len-2]!=0xff||image[image_len-1]!=0xd9){
+  fprintf(stderr,"minibox-scand: scan job=%u stage=invalid-image bytes=%zu soi=%d eoi=%d\n",scan.id,image_len,image_len>=2&&image[0]==0xff&&image[1]==0xd8,image_len>=2&&image[image_len-2]==0xff&&image[image_len-1]==0xd9);
   goto fail;
  }
  rc=minibox_scan_stream_end_page(s,&more);
