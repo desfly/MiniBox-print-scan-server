@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #define MDNS_PORT 5353
+#define MDNS_IP_TTL 255
 #define MDNS_ADDR "224.0.0.251"
 #define TTL 120
 
@@ -253,6 +254,9 @@ int mb_mdns_publish_once(const mb_service_t *services,size_t count,const char *h
     if((rc=wifi_ipv4(ip,&interface_ip))||destination(&dst))return rc?rc:-EINVAL;
     fd=socket(AF_INET,SOCK_DGRAM,0);if(fd<0)return -errno;
     (void)setsockopt(fd,IPPROTO_IP,IP_MULTICAST_IF,&interface_ip,sizeof interface_ip);
+    if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&(const unsigned char){MDNS_IP_TTL},sizeof(unsigned char))) {
+        rc=-errno;close(fd);return rc;
+    }
     rc=announce(fd,&dst,services,count,host,ip);
     close(fd);return rc;
 }
@@ -276,6 +280,12 @@ int mb_mdns_run(const mb_service_t *services,size_t count,
         rc=-errno;close(fd);return rc;
     }
     (void)setsockopt(fd,IPPROTO_IP,IP_MULTICAST_IF,&interface_ip,sizeof interface_ip);
+    if(setsockopt(fd,IPPROTO_IP,IP_MULTICAST_TTL,&(const unsigned char){MDNS_IP_TTL},sizeof(unsigned char))) {
+        rc=-errno;close(fd);return rc;
+    }
+    if(setsockopt(fd,IPPROTO_IP,IP_TTL,&(const int){MDNS_IP_TTL},sizeof(int))) {
+        rc=-errno;close(fd);return rc;
+    }
     while(!*stop) {
         fd_set fds;struct timeval tv={1,0};time_t now=time(NULL);
         struct in_addr latest_addr;
