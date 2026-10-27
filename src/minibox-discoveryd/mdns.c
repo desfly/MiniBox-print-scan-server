@@ -61,13 +61,13 @@ static int packet(unsigned char *out,size_t cap,const mb_service_t *s,
     size_t p=12,rp=0,rdlen_pos,n;
     if(!s||!host||!ip||cap<12)return -1;
     if(label(type,sizeof type,s->type,".local")||
-       snprintf(instance,sizeof instance,"%s.%s",s->name,type)<0||
+       snprintf(instance,sizeof instance,"%s.%s",s->name,
+                !strcmp(s->type,"_print._sub._ipp._tcp")?"_ipp._tcp.local":type)<0||
        strlen(s->name)+1+strlen(type)>=sizeof instance||
        label(target,sizeof target,host,".local"))return -1;
     memset(out,0,12);
     out[2]=0x84; out[3]=0x00;
-    /* Driverless clients also browse the DNS-SD printer subtype. */
-    out[7]=!strcmp(s->type,"_ipp._tcp")?5:4;
+    out[7]=4;
     if(name(rdata,sizeof rdata,&rp,instance)||
        rr_head(out,cap,&p,type,12,1,(uint16_t)rp)||
        rp>cap-p)return -1;
@@ -96,15 +96,6 @@ static int packet(unsigned char *out,size_t cap,const mb_service_t *s,
     out[rdlen_pos+1]=(unsigned char)rp;
     if(rr_head(out,cap,&p,target,1,0x8001,4)||cap-p<4)return -1;
     memcpy(out+p,ip,4); p+=4;
-    if(!strcmp(s->type,"_ipp._tcp")) {
-        /* A subtype PTR MUST target the real _ipp._tcp instance, never
-         * an invented _print._sub service instance. */
-        rp=0;
-        if(name(rdata,sizeof rdata,&rp,instance)||
-           rr_head(out,cap,&p,"_print._sub._ipp._tcp.local",12,1,(uint16_t)rp)||
-           rp>cap-p)return -1;
-        memcpy(out+p,rdata,rp);p+=rp;
-    }
     return (int)p;
 }
 /* Resolve a DNS question safely, including compressed QNAME pointers. */
@@ -199,14 +190,11 @@ int mb_mdns_build_reply(const unsigned char *q,size_t len,
                 memcpy(out+op,rdata,rp);op+=rp;answers++;continue;
             }
             match=((kind==12||kind==255)&&!strcasecmp(question,type))||
-                  ((kind==12||kind==255)&&!strcmp(s->type,"_ipp._tcp")&&
-                   !strcasecmp(question,"_print._sub._ipp._tcp.local"))||
                   ((kind==33||kind==16||kind==255)&&!strcasecmp(question,inst));
             if(!match)continue;
             n=packet(record,sizeof record,s,hostname,ip);
             if(n<12||op>cap||(size_t)(n-12)>cap-op)return -1;
-            memcpy(out+op,record+12,(size_t)(n-12));op+=(size_t)(n-12);
-            answers+=!strcmp(s->type,"_ipp._tcp")?5:4;
+            memcpy(out+op,record+12,(size_t)(n-12));op+=(size_t)(n-12);answers+=4;
         }
     }
     if(!answers)return 0;
