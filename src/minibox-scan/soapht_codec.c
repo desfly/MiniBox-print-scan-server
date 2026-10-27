@@ -7,6 +7,8 @@
 
 #define SOAPHT_RAW_BUFFER 4096
 #define SOAPHT_HEADER_MAX 2048
+/* 100 ms gaps; permit up to 30 s for a physical scanner pause. */
+#define SOAPHT_RETRIEVE_IDLE_WINDOWS 300
 #define SOAPHT_CONTROL_MAX (128u * 1024u)
 
 struct body_reader {
@@ -62,7 +64,7 @@ static int raw_fill(struct body_reader *r)
          * windows. Control responses only tolerate successful zero-byte
          * windows: a real transport error must still fail immediately. */
         if (!r->tolerate_gaps || (r->tolerate_gaps == 2 && rc) ||
-            ++idle >= 30) {
+            ++idle >= SOAPHT_RETRIEVE_IDLE_WINDOWS) {
             fprintf(stderr,
                     "minibox-scand: stage=soapht-raw-read rc=%d got=%zu idle=%d\n",
                     rc, got, idle);
@@ -517,13 +519,13 @@ static int reader_begin_retrieve(struct body_reader *r,
     /*
      * M1522 may pause not only before the first RetrieveImage byte, but
      * between fragments of the HTTP response headers.  Prime the complete
-     * header here and tolerate up to 30 consecutive no-data transport
-     * windows.  Once CRLFCRLF is buffered, normal parsing/streaming resumes.
+     * header here and tolerate up to 30 seconds of consecutive no-data
+     * transport windows.  Once CRLFCRLF is buffered, normal parsing/streaming resumes.
      */
     memset(r, 0, sizeof(*r));
     r->transport = transport;
     r->tolerate_gaps = 1;
-    while (idle < 30) {
+    while (idle < SOAPHT_RETRIEVE_IDLE_WINDOWS) {
         if (r->raw_len >= SOAPHT_HEADER_MAX || r->raw_len == sizeof(r->raw))
             return -1;
         got = 0;
@@ -548,11 +550,11 @@ static int reader_begin_retrieve(struct body_reader *r,
             continue;
         }
         ++idle;
-        if (idle < 30) retrieve_retry_delay();
+        if (idle < SOAPHT_RETRIEVE_IDLE_WINDOWS) retrieve_retry_delay();
     }
     fprintf(stderr,
-            "minibox-scand: stage=soapht-retrieve-ready rc=%d got=%zu idle=%d/30 buffered=%zu\n",
-            rc, got, idle, r->raw_len);
+            "minibox-scand: stage=soapht-retrieve-ready rc=%d got=%zu idle=%d/%d buffered=%zu\n",
+            rc, got, idle, SOAPHT_RETRIEVE_IDLE_WINDOWS, r->raw_len);
     return -1;
 }
 
