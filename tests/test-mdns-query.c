@@ -36,12 +36,12 @@ int main(void){
     assert(!mb_service_load("overlay/etc/minibox/services.d/scanner.service",&svc[1]));
     n=query(q,"_ipp._tcp.local",12,1);
     len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
-    assert(len>0&&a[2]==0x84&&a[7]==5);
+    assert(len>0&&a[2]==0x84&&a[7]==4);
     assert(contains(a,(size_t)len,"HP LaserJet M1522n"));
-    assert(contains(a,(size_t)len,"_print")); /* printer subtype PTR is included */
+    assert(memcmp(a+len-4,ip,4)==0); /* IPP target A record */
     n=query(q,"_print._sub._ipp._tcp.local",12,1);
     len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
-    assert(len>0&&a[7]==5&&contains(a,(size_t)len,"M1522n NET"));
+    assert(len>0&&a[7]==4&&contains(a,(size_t)len,"M1522n NET"));
     n=query(q,"_uscan._tcp.local",12,1);
     len=mb_mdns_build_reply(q,n,svc,2,"OpenWrt",ip,a,sizeof a);
     assert(len>0&&a[7]==4&&contains(a,(size_t)len,"HP LaserJet M1522n"));
