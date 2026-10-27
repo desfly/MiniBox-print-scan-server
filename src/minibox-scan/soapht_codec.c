@@ -590,11 +590,32 @@ static int codec_read_image(struct soapht_session *transport,
         if (state.record_is_image) {
             want = cap - total;
             if (want > state.record_left) want = state.record_left;
-            if (body_read(&state.image, out + total, want, &n) || !n) return -5;
+            {
+                int read_rc = body_read(&state.image, out + total, want, &n);
+                if (read_rc || !n) {
+                    fprintf(stderr,
+                            "minibox-scand: stage=soapht-jpeg-data rc=%d got=%zu want=%zu record=%u record_left=%zu chunk_left=%zu chunked=%d raw_pending=%zu\n",
+                            read_rc, n, want, state.dime_record_no,
+                            state.record_left, state.image.chunk_left,
+                            state.image.chunked,
+                            state.image.raw_len - state.image.raw_pos);
+                    return -5;
+                }
+            }
             total += n;
         } else {
             want = state.record_left < sizeof(scratch) ? state.record_left : sizeof(scratch);
-            if (body_read(&state.image, scratch, want, &n) || !n) return -6;
+            {
+                int read_rc = body_read(&state.image, scratch, want, &n);
+                if (read_rc || !n) {
+                    fprintf(stderr,
+                            "minibox-scand: stage=soapht-dime-skip rc=%d got=%zu want=%zu record=%u record_left=%zu chunk_left=%zu raw_pending=%zu\n",
+                            read_rc, n, want, state.dime_record_no,
+                            state.record_left, state.image.chunk_left,
+                            state.image.raw_len - state.image.raw_pos);
+                    return -6;
+                }
+            }
         }
         state.record_left -= n;
     }
