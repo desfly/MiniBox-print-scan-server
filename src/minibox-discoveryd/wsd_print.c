@@ -87,9 +87,9 @@ static void soap_reply(const char *action,const char *request_id,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
         "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
         "xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
-        "xmlns:wprt=\"http://schemas.microsoft.com/windows/2005/05/wdp/print\">"
+        "xmlns:wprt=\"http://schemas.microsoft.com/windows/2006/08/wdp/print\">"
         "<s:Header><a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>"
-        "<a:Action>http://schemas.microsoft.com/windows/2005/05/wdp/print/%sResponse</a:Action>"
+        "<a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/print/%sResponse</a:Action>"
         "<a:MessageID>%s</a:MessageID><a:RelatesTo>%s</a:RelatesTo></s:Header>"
         "<s:Body><wprt:%sResponse>%s</wprt:%sResponse></s:Body></s:Envelope>",
         action,reply_id,request_id,action,body,action);
