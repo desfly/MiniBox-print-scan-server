@@ -13,7 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define BODY_MAX (8*1024*1024)
+#define BODY_MAX (24u*1024u*1024u)
 #define RESPONSE_MAX 8192
 
 static void error_response(const char *status,const char *text){
@@ -22,15 +22,22 @@ static void error_response(const char *status,const char *text){
            "Content-Length: %zu\r\nCache-Control: no-store\r\n\r\n%s",
            status,n,text);
 }
-static int read_body(char *buf,size_t cap,size_t *len){
-    const char *s=getenv("CONTENT_LENGTH");char *end=0;unsigned long want;size_t got;
-    if(!buf||cap<2||!len)return -1;
-    if(!s||!*s)return -1;
+static int read_body(char **out,size_t *len){
+    const char *s=getenv("CONTENT_LENGTH");char *end=0;unsigned long want;
+    char *buf;size_t total=0;
+    if(!out||!len||!s||!*s)return -1;
+    *out=NULL;*len=0;
     errno=0;want=strtoul(s,&end,10);
-    if(errno||!end||*end||want==0||want>=cap)return -1;
-    got=fread(buf,1,(size_t)want,stdin);
-    if(got!=(size_t)want)return -1;
-    buf[got]=0;*len=got;return 0;
+    if(errno||!end||*end||want==0||want>BODY_MAX)return -1;
+    buf=malloc((size_t)want+1);
+    if(!buf)return -2;
+    while(total<(size_t)want){
+        size_t n=fread(buf+total,1,(size_t)want-total,stdin);
+        if(!n){free(buf);return -3;}
+        total+=n;
+    }
+    buf[total]=0;
+    *out=buf;*len=total;return 0;
 }
 static void response_id(char *out,size_t cap,const char *serial){
     unsigned long t=(unsigned long)time(NULL);
@@ -40,13 +47,12 @@ static void response_id(char *out,size_t cap,const char *serial){
     (void)serial;
 }
 int main(void){
-    char *body=malloc(BODY_MAX),out[RESPONSE_MAX],request_id[192],reply_id[96],action[256];
+    char *body=NULL,out[RESPONSE_MAX],request_id[192],reply_id[96],action[256];
     size_t body_len;int n;struct mb_wsd_identity id;const char *method=getenv("REQUEST_METHOD");
-    if(!body){error_response("503 Service Unavailable","Insufficient memory\n");return 0;}
     if(!method||strcmp(method,"POST")){
         error_response("405 Method Not Allowed","WSD metadata requires HTTP POST\n");return 0;
     }
-    if(read_body(body,BODY_MAX,&body_len)){
+    if(read_body(&body,&body_len)){
         error_response("400 Bad Request","Invalid WSD metadata request\n");return 0;
     }
     if(mb_wsd_extract_message_id(body,body_len,request_id,sizeof request_id)){
