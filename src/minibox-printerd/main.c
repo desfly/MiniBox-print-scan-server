@@ -124,10 +124,25 @@ static void serve_post_chunked(int fd,const unsigned char *initial,size_t initia
         reply_text(fd,400,"Bad Request","invalid IPP header\n");return;
     }
     fprintf(stderr,"minibox-printerd: ipp operation=%s(0x%04x) request_id=%lu mode=chunked\n",ipp_operation_name(r.operation),(unsigned)r.operation,(unsigned long)r.request_id);
-    /* Attached-file chunking is the interoperability path we need. Keep
-     * non-document operations on Content-Length so they stay bounded/simple. */
+    /* RFC 8010 HTTP transport: framing is independent of the IPP operation.
+     * Metadata and job-management operations may also arrive chunked.
+     * Decode their bounded bodies before entering the shared IPP dispatcher,
+     * avoiding a second, inconsistent implementation of those operations.
+     * Document operations remain streaming to avoid buffering page data. */
     if(r.operation!=IPP_OP_PRINT_JOB&&r.operation!=IPP_OP_SEND_DOCUMENT){
-        ipp_reply(fd,&r,0x0501);return;
+        while(!cr.done){
+            n=chunk_read_limited(&cr,io,sizeof io,&total);
+            if(n==-2){reply_text(fd,413,"Payload Too Large","IPP request too large\n");return;}
+            if(n<0){reply_text(fd,400,"Bad Request","malformed chunked IPP body\n");return;}
+            if(!n)break;
+            if((size_t)n>sizeof prefix-have){
+                reply_text(fd,413,"Payload Too Large","IPP metadata too large\n");return;
+            }
+            memcpy(prefix+have,io,(size_t)n);
+            have+=(size_t)n;
+        }
+        serve_post(fd,prefix,have,have);
+        return;
     }
     for(;;){
         dr=ipp_document_offset(prefix,have,&off);
