@@ -34,6 +34,29 @@ Path('tests/minibox-pwg.ras').write_bytes(
     b'RaS2'+bytes(h)+bytes([1,249,0,255,0,255,0,255,0,255]))
 PY
 ipptool -tv -f tests/minibox-pwg.ras ipp://127.0.0.1:18631/ipp/print tests/ipp-driverless.test
+# RFC 8010 framing regression: metadata operations must work with chunked
+# transfer, not only with Content-Length. No print sink is opened.
+python3 - <<'PY'
+import socket
+body = bytes([2,0,0,11,0,0,0,73,1,3])
+request = (b'POST /ipp/print HTTP/1.1\r\nHost: 127.0.0.1:18631\r\n'
+           b'Content-Type: application/ipp\r\nTransfer-Encoding: chunked\r\n'
+           b'Connection: close\r\n\r\n'
+           + (f'{len(body):X}\r\n'.encode() + body + b'\r\n0\r\n\r\n'))
+with socket.create_connection(('127.0.0.1',18631), timeout=5) as conn:
+    conn.sendall(request)
+    conn.shutdown(socket.SHUT_WR)
+    response = b''
+    while True:
+        data = conn.recv(8192)
+        if not data: break
+        response += data
+headers, payload = response.split(b'\r\n\r\n',1)
+assert b'HTTP/1.1 200 OK' in headers, headers
+assert b'application/ipp' in headers, headers
+assert payload[:8] == bytes([2,0,0,0,0,0,0,73]), payload[:12].hex()
+assert b'printer-name' in payload, 'chunked metadata lost printer attributes'
+PY
 curl -fsS http://127.0.0.1:18080/eSCL/ScannerCapabilities >/tmp/escl-caps.xml
 curl -fsS http://127.0.0.1:18080/eSCL/ScannerStatus >/tmp/escl-status.xml
 python3 - <<'PY'
