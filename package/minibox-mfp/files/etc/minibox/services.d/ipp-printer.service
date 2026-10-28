@@ -1,7 +1,7 @@
 # MiniBox MFP DNS-SD service contract
 # Consumed by minibox-discoveryd; intentionally no CUPS dependency.
 [service]
-name=M1522n NET
+name=M1522n NET PRINTER
 type=_ipp._tcp
 port=631
 path=/ipp/print
