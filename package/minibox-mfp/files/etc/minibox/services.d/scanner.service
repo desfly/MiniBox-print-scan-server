@@ -1,6 +1,6 @@
 # MiniBox MFP scanner DNS-SD contract
 [service]
-name=M1522n NET
+name=M1522n NET SCANNER
 type=_uscan._tcp
 port=8080
 path=/eSCL
