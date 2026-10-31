@@ -14,10 +14,10 @@ struct soapht_codec {
 };
 
 /*
- * HorseThief command encoding is intentionally not implemented here until a
- * verified M1522 transcript/spec is available.  The open HPLIP frontend uses
- * a restricted bb_soapht plugin for these operations; transport and command
- * encoding therefore remain separate contracts.
+ * M1522 SOAPHT command encoding is implemented and regression-checked against
+ * the preserved 2026-09-16 USB transcript. Transport and command encoding stay
+ * separate contracts so USB retry/framing and SOAP/DIME parsing can be tested
+ * independently.
  */
 extern const struct soapht_codec *minibox_soapht_codec;
 

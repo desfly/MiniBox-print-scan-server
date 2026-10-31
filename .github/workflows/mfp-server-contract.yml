@@ -9,12 +9,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Install libusb development headers
-        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev
+      - name: Install host-only protocol test tools
+        run: sudo apt-get update -qq && sudo apt-get install -y libusb-1.0-0-dev libjpeg-dev cups-ipp-utils
       - name: Compile and exercise IPP/eSCL server transports
         run: sh tests/test-mfp-servers.sh
       - name: Validate print and protocol core
         run: sh tests/test-mfp-core.sh
+      - name: Decode and validate PWG JPEG ReadImage strips
+        run: |
+          set -euo pipefail
+          cc -std=c11 -Wall -Wextra -Werror -I src/minibox-raster tests/pwg_jpeg_strips.c src/minibox-raster/pwg_to_pcl_v2.c -ljpeg -o /tmp/pwg-strips
+          /tmp/pwg-strips
+          python3 tests/validate_m1522_generated_pclxl.py /tmp/minibox-generated-pclxl.bin
+          python3 tests/check_capture_003_prefix.py /tmp/minibox-generated-pclxl.bin
       - name: Validate M1522 USB identity backend
         run: |
           cc -std=c99 -Wall -Wextra -Werror -pedantic src/minibox-usb/usb_backend.c tests/test-usb-backend.c -o /tmp/test-usb
@@ -25,8 +32,14 @@ jobs:
           /tmp/test-stream
       - name: Compile libusb M1522 backend
         run: sh tests/compile-libusb-backend.sh
+      - name: Regress partial libusb timeout without duplicated output
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic -ffunction-sections -fdata-sections tests/test-libusb-timeout-progress.c src/minibox-usb/libusb_m1522.c src/minibox-usb/stream.c -Wl,--gc-sections -lusb-1.0 -o /tmp/test-usb-timeout
+          /tmp/test-usb-timeout
       - name: Validate procd runtime definitions
         run: sh tests/test-procd-runtime.sh
+      - name: Validate embedded web UI contract
+        run: sh tests/test-web-ui.sh
       - name: Enforce no CUPS and no usblp
         run: |
           set -euo pipefail

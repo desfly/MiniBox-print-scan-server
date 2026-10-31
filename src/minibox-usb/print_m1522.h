@@ -1,8 +1,9 @@
 #ifndef MINIBOX_PRINT_M1522_H
 #define MINIBOX_PRINT_M1522_H
 #include <stddef.h>
+#include <stdint.h>
 #include "libusb_m1522.h"
-struct m1522_print_session { struct m1522_handle usb; int opened; };
+struct m1522_print_session { struct m1522_handle usb; int opened; size_t requested_bytes; size_t usb_bytes; unsigned usb_calls; int first_error; uint64_t submitted_hash; uint64_t accepted_hash; };
 int m1522_print_open(struct m1522_print_session *s);
 int m1522_print_write(struct m1522_print_session *s,const unsigned char *buf,size_t len);
 void m1522_print_close(struct m1522_print_session *s);
