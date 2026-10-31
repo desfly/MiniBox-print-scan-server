@@ -18,6 +18,7 @@ MINIBOX_TEST_PRINT_FILE=/tmp/printed.bin /tmp/minibox-printerd 18631 >/tmp/print
 trap 'kill $P $S 2>/dev/null || true; rm -rf "$USBROOT"' EXIT INT TERM
 sleep 1
 curl -fsS http://127.0.0.1:18631/health | grep -q 'printerd ok'
+curl -fsSI http://127.0.0.1:18631/ipp/print 2>/dev/null | grep -qi '^Cache-Control: no-cache' || { curl -sS -D /tmp/ipp-cache.headers -o /dev/null http://127.0.0.1:18631/ipp/print; grep -qi '^Cache-Control: no-cache' /tmp/ipp-cache.headers; }
 curl -fsS http://127.0.0.1:18080/health | grep -q 'scand ok'
 command -v ipptool >/dev/null
 python3 - <<'PY'
