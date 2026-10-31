@@ -240,7 +240,8 @@ size_t ipp_filter_requested_attributes(unsigned char *out,size_t cap,
         if(nl>full_len-p||full_len-p-nl<2)return 0;
         const unsigned char *name=full+p;p+=nl;
         vl=((size_t)full[p]<<8)|full[p+1];p+=2;
-        if(vl>full_len-p)return 0;p+=vl;
+        if(vl>full_len-p)return 0;
+        p+=vl;
         if(group==1)keep=1;
         else if(group==4){
             if(nl){
