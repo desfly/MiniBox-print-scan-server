@@ -195,3 +195,65 @@ size_t ipp_build_job_response(unsigned char *o,size_t cap,
        put(o,cap,&p,&end,1))return 0;
     return p;
 }
+
+/* RFC 8011 requested-attributes: a collection of keyword values in the
+ * operation group. No value, or "all", retains the complete response.
+ * Filter only the printer-attributes group; mandatory operation attributes
+ * are always preserved. Reject malformed attribute framing. */
+size_t ipp_filter_requested_attributes(unsigned char *out,size_t cap,
+    const unsigned char *full,size_t full_len,
+    const unsigned char *req,size_t req_len){
+    size_t p=8,q=0,group=0,selected_count=0;
+    char selected[64][96];
+    int all=0,seen=0;
+    if(!out||!full||!req||full_len<10||req_len<9||cap<full_len)return 0;
+    while(p<req_len){
+        unsigned tag=req[p++];size_t nl,vl;
+        if(tag==3)break;
+        if(tag>=1&&tag<=5){group=tag;continue;}
+        if(req_len-p<2)return 0;
+        nl=((size_t)req[p]<<8)|req[p+1];p+=2;
+        if(nl>req_len-p||req_len-p-nl<2)return 0;
+        const unsigned char *name=req+p;p+=nl;
+        vl=((size_t)req[p]<<8)|req[p+1];p+=2;
+        if(vl>req_len-p)return 0;
+        if(group==1&&tag==0x44&&nl==20&&!memcmp(name,"requested-attributes",20)){
+            seen=1;
+            if(vl==3&&!memcmp(req+p,"all",3))all=1;
+            else if(vl&&vl<sizeof selected[0]&&selected_count<64){
+                memcpy(selected[selected_count],req+p,vl);
+                selected[selected_count][vl]=0;
+                selected_count++;
+            }else if(!vl||vl>=sizeof selected[0]||selected_count==64)return 0;
+        }
+        p+=vl;
+    }
+    if(!seen||all){memcpy(out,full,full_len);return full_len;}
+    memcpy(out,full,8);q=8;p=8;group=0;
+    int keep_more=0;
+    while(p<full_len){
+        size_t start=p;unsigned tag=full[p++],nl,vl;int keep=0;
+        if(tag==3){out[q++]=3;return q;}
+        if(tag>=1&&tag<=5){group=tag;out[q++]=(unsigned char)tag;keep_more=0;continue;}
+        if(full_len-p<2)return 0;
+        nl=((size_t)full[p]<<8)|full[p+1];p+=2;
+        if(nl>full_len-p||full_len-p-nl<2)return 0;
+        const unsigned char *name=full+p;p+=nl;
+        vl=((size_t)full[p]<<8)|full[p+1];p+=2;
+        if(vl>full_len-p)return 0;p+=vl;
+        if(group==1)keep=1;
+        else if(group==4){
+            if(nl){
+                keep=0;
+                for(size_t i=0;i<selected_count;i++){
+                    size_t z=strlen(selected[i]);
+                    if(z==nl&&!memcmp(selected[i],name,nl)){keep=1;break;}
+                    if(!strcmp(selected[i],"printer-description")||!strcmp(selected[i],"printer-defaults")||!strcmp(selected[i],"printer-state")||!strcmp(selected[i],"printer-config")||!strcmp(selected[i],"document-template")||!strcmp(selected[i],"job-template")){keep=1;break;}
+                }
+                keep_more=keep;
+            }else keep=keep_more;
+        }
+        if(keep){memcpy(out+q,full+start,p-start);q+=p-start;}
+    }
+    return 0;
+}
