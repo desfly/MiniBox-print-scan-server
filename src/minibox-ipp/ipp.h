@@ -23,4 +23,5 @@ size_t ipp_build_job_response(unsigned char *out,size_t cap,
                               const struct ipp_request *r,
                               uint32_t job_id,const char *job_uri,
                               uint32_t job_state);
+size_t ipp_filter_requested_attributes(unsigned char *out,size_t cap,const unsigned char *full,size_t full_len,const unsigned char *req,size_t req_len);
 #endif
