@@ -249,7 +249,19 @@ size_t ipp_filter_requested_attributes(unsigned char *out,size_t cap,
                 for(size_t i=0;i<selected_count;i++){
                     size_t z=strlen(selected[i]);
                     if(z==nl&&!memcmp(selected[i],name,nl)){keep=1;break;}
-                    if(!strcmp(selected[i],"printer-description")||!strcmp(selected[i],"printer-defaults")||!strcmp(selected[i],"printer-state")||!strcmp(selected[i],"printer-config")||!strcmp(selected[i],"document-template")||!strcmp(selected[i],"job-template")){keep=1;break;}
+                    /* Group selectors are not a wildcard: RFC 8011 separates
+                     * state, description, and configuration. Return only
+                     * members of the requested category. */
+                    if(!strcmp(selected[i],"printer-state")){
+                        if((nl==13&&!memcmp(name,"printer-state",13))||
+                           (nl==21&&!memcmp(name,"printer-state-reasons",21))||
+                           (nl==24&&!memcmp(name,"printer-is-accepting-jobs",24))||
+                           (nl==16&&!memcmp(name,"queued-job-count",16))){keep=1;break;}
+                    }else if(!strcmp(selected[i],"printer-description")){
+                        if(nl!=13||memcmp(name,"printer-state",13)){keep=1;break;}
+                    }else if(!strcmp(selected[i],"printer-defaults")){
+                        if(nl>=8&&!memcmp(name+nl-8,"-default",8)){keep=1;break;}
+                    }
                 }
                 keep_more=keep;
             }else keep=keep_more;
