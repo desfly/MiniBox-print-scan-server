@@ -1,0 +1,26 @@
+#!/bin/sh
+# MiniBox recovery-network invariant.
+# Normal sysupgrade preserves existing network/wireless config.
+# If config was explicitly erased (sysupgrade -n / first boot), replace only
+# OpenWrt's generic/default LAN with the known MiniBox maintenance address.
+# Existing non-default LAN settings are deliberately left untouched.
+
+lan_proto="$(uci -q get network.lan.proto)"
+lan_ip="$(uci -q get network.lan.ipaddr)"
+
+case "$lan_ip" in
+  ""|192.168.1.1)
+    uci set network.lan.proto='static'
+    uci set network.lan.ipaddr='192.168.55.251'
+    uci set network.lan.netmask='255.255.255.0'
+    uci -q delete network.lan.gateway
+    uci -q delete network.lan.dns
+    uci commit network
+    logger -t minibox-recovery "factory/default LAN replaced with maintenance IPv4 192.168.55.251/24"
+    ;;
+  *)
+    logger -t minibox-recovery "preserving existing LAN IPv4 $lan_ip ($lan_proto)"
+    ;;
+esac
+
+exit 0

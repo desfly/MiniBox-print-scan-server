@@ -16,3 +16,6 @@ typedef struct {
 
 int mb_service_load(const char *path, mb_service_t *out);
 int mb_service_validate(const mb_service_t *svc);
+int mb_service_add_escl_identity(mb_service_t *svc,
+                                 const char *uuid,
+                                 const char *hostname);
