@@ -255,7 +255,7 @@ size_t ipp_filter_requested_attributes(unsigned char *out,size_t cap,
                     if(!strcmp(selected[i],"printer-state")){
                         if((nl==13&&!memcmp(name,"printer-state",13))||
                            (nl==21&&!memcmp(name,"printer-state-reasons",21))||
-                           (nl==24&&!memcmp(name,"printer-is-accepting-jobs",24))||
+                           (nl==25&&!memcmp(name,"printer-is-accepting-jobs",25))||
                            (nl==16&&!memcmp(name,"queued-job-count",16))){keep=1;break;}
                     }else if(!strcmp(selected[i],"printer-description")){
                         if(nl!=13||memcmp(name,"printer-state",13)){keep=1;break;}
